@@ -111,11 +111,13 @@ Each milestone ends with something that runs and a check that proves it. Hours a
 
 ```
 anthropic-jobs-5186067008/
-  app/
-    backend/      FastAPI app, migrations, background worker, tests
-    frontend/     React + TypeScript (Vite)
-    simulator/    synthetic workers and the demo scenario
-    docker-compose.yml
+  README.md           what this is and how to run it
+  docker-compose.yml
+  Makefile            up, down, test, seed, logs
+  backend/            FastAPI app, migrations, background worker, tests
+  frontend/           React + TypeScript (Vite)
+  simulator/          synthetic workers and the demo scenario
+  docs/               posting, glossary, PRD, design, decisions, this plan, diagrams
 ```
 
 ## 6. Risks
