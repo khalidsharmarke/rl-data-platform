@@ -99,7 +99,13 @@ function DemoLogin({ onSignedIn }: { onSignedIn: (user: User) => void }) {
   return (
     <main className="page">
       <h1>RL Data Platform</h1>
-      <p className="muted">Demo sign-in: pick a person to see the platform as them.</p>
+      <p className="muted">Demo sign-in: pick a person to see the platform as them. After <code>make demo</code>, a good path is:</p>
+      <ol className="guide">
+        <li><strong>Sam Lindqvist</strong> (Anthropic data ops) → Scorecards: three vendors compared on the same measures, and Brightline's dip.</li>
+        <li><strong>Grace Adeyemi</strong> (Brightline's admin) → Cases: what the platform observed about one of her workers, and her decision.</li>
+        <li><strong>Sam</strong> again → Cases → the case: lineage, clean-up, and which datasets held the answers.</li>
+        <li><strong>Rae Okafor</strong> (researcher) → Review, and any <strong>worker</strong> → Work, to see the work itself.</li>
+      </ol>
       {error && <p className="error">Couldn't load demo users: {error}</p>}
       <div className="orgs">
         {orgs.map((org) => (

@@ -22,7 +22,8 @@ function acceptedShare(points: ScorePoint[]) {
     const acc = win.reduce((a, q) => a + q.accepted, 0);
     // Without gold counts (held back for vendors), fall back to all answers as the base.
     const base = win.some((q) => q.gold_n == null) ? win.reduce((a, q) => a + q.submissions, 0) : regular;
-    return { t: Date.parse(p.period_start), v: base ? acc / base : null };
+    // Too few answers in the window to say anything (for example, a run starting mid-period).
+    return { t: Date.parse(p.period_start), v: base >= 20 ? acc / base : null };
   });
 }
 

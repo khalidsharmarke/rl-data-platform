@@ -78,11 +78,11 @@ export default function Projects({ me }: { me: User }) {
                       <td>{a.vendor_name}</td>
                       <td>{Math.round(Number(a.share) * 100)}%</td>
                       {me.role === "data_ops" && <td>{c ? `$${Number(c.price).toFixed(2)} ${UNIT[c.price_unit]}` : "—"}</td>}
-                      <td>{a.routed_tasks}</td>
-                      <td>{a.submissions}</td>
+                      <td>{a.routed_tasks.toLocaleString()}</td>
+                      <td>{a.submissions.toLocaleString()}</td>
                       <td>{pct(q?.gold_accuracy)}</td>
                       <td>{pct(q?.agreement)}</td>
-                      <td>{q?.accepted ?? 0}</td>
+                      <td>{(q?.accepted ?? 0).toLocaleString()}</td>
                       <td>{a.status}</td>
                     </tr>
                   );
@@ -102,7 +102,7 @@ export default function Projects({ me }: { me: User }) {
                 Export accepted answers
               </button>
               <ul>
-                {(datasets[p.id] ?? []).map((d, i) => (
+                {(datasets[p.id] ?? []).slice(0, 5).map((d, i) => (
                   <li key={d.id}>
                     {new Date(d.created_at).toLocaleString()} · {d.row_count.toLocaleString()} rows · {d.metric_version}
                     {i === 0 ? " · current" : " · superseded"} ·{" "}
@@ -110,6 +110,7 @@ export default function Projects({ me }: { me: User }) {
                   </li>
                 ))}
               </ul>
+              {(datasets[p.id]?.length ?? 0) > 5 && <p className="muted">and {datasets[p.id].length - 5} earlier exports</p>}
             </div>
           )}
         </div>

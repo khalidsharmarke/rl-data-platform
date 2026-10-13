@@ -23,11 +23,11 @@ API = os.environ.get("API_URL", "http://api:8000")
 SPEED = int(os.environ.get("DEMO_CLOCK_SPEED", "180"))
 TASKS = int(os.environ.get("DEMO_TASKS", "3000"))
 GOLD_RATE = 0.05
-SWITCH_AT = 0.35  # share of its vendor's expected answers after which the switcher starts pasting
+SWITCH_AT = 0.5  # share of its vendor's expected answers after which the switcher starts pasting
 SEED = 2026
-# Autopilot plays the people in the story: the vendor admin suspends the flagged worker after
-# reviewing the case, data ops cleans up, and the researcher exports datasets. Turn it off to
-# do those steps by hand (for a recorded walkthrough).
+# Autopilot plays the people's decisions in the story: the vendor admin suspends the flagged
+# worker after reviewing the case, and data ops cleans up. Turn it off to make those decisions
+# by hand (for a recorded walkthrough). The researcher's routine exports always run.
 AUTOPILOT = os.environ.get("DEMO_AUTOPILOT", "true") == "true"
 REVIEW_DELAY_MINUTES = 30  # simulated time between a case opening and the admin deciding
 CLEANUP_DELAY_MINUTES = 15  # simulated time between the decision and data ops' clean-up
@@ -131,7 +131,8 @@ async def run_worker(c, project_id, truth, vendor, name, profile, progress: Prog
     headers = await as_person(c, name)
     switcher = profile == "switcher"
     behavior = "average" if switcher else profile
-    until_break = rng.randint(15, 40)
+    # Breaks follow time worked, not answers given, so a fast worker really is fast.
+    until_break = rng.uniform(20, 40) * 60
     misses = 0
     while True:
         own = progress.by_vendor.get(vendor, 0)
@@ -151,7 +152,8 @@ async def run_worker(c, project_id, truth, vendor, name, profile, progress: Prog
         misses = 0
         a = r.json()
         p = PROFILES[behavior]
-        await sim_sleep(rng.uniform(*p["seconds"]))
+        seconds = rng.uniform(*p["seconds"])
+        await sim_sleep(seconds)
         better = truth[a["task"]["payload"]["item"]]
         choice = better if rng.random() < p["accuracy"] else ("B" if better == "A" else "A")
         answer = {"choice": choice}
@@ -166,10 +168,10 @@ async def run_worker(c, project_id, truth, vendor, name, profile, progress: Prog
         s.raise_for_status()
         progress.answered += 1
         progress.by_vendor[vendor] = progress.by_vendor.get(vendor, 0) + 1
-        until_break -= 1
-        if until_break == 0:
+        until_break -= seconds
+        if until_break <= 0:
             await sim_sleep(rng.uniform(5, 25) * 60)
-            until_break = rng.randint(15, 40)
+            until_break = rng.uniform(20, 40) * 60
 
 
 async def vendor_admin(c, vendor: str, done: asyncio.Event) -> None:
@@ -190,7 +192,7 @@ async def vendor_admin(c, vendor: str, done: asyncio.Event) -> None:
 
 
 async def data_ops(c, project_id, progress: Progress, done: asyncio.Event) -> None:
-    """The researcher exports every hour; data ops cleans up after a suspension; a final export at the end."""
+    """The researcher exports every half hour; with autopilot, data ops cleans up after a suspension."""
     users = (await c.get("/auth/demo-users")).json()
     ops = await as_person(c, next(u["display_name"] for u in users if u["role"] == "data_ops"))
     researcher = await as_person(c, next(u["display_name"] for u in users if u["role"] == "researcher"))
@@ -204,7 +206,7 @@ async def data_ops(c, project_id, progress: Progress, done: asyncio.Event) -> No
             d = (await c.post(f"/projects/{project_id}/exports", headers=researcher)).json()
             print(f"  Researcher exports dataset {exports}: {d['row_count']} accepted answers", flush=True)
             next_export += EXPORT_EVERY_MINUTES * 60 / SPEED
-        for case in (await c.get("/cases?status=decided", headers=ops)).json():
+        for case in (await c.get("/cases?status=decided", headers=ops)).json() if AUTOPILOT else []:
             if case["decision"] in ("suspend", "remove") and case["id"] not in cleaned:
                 decided_at.setdefault(case["id"], loop.time())
                 if loop.time() - decided_at[case["id"]] >= CLEANUP_DELAY_MINUTES * 60 / SPEED:
@@ -245,8 +247,9 @@ async def main() -> None:
 
         tick = asyncio.create_task(ticker())
         done = asyncio.Event()
-        helpers = [asyncio.create_task(vendor_admin(c, "Brightline Annotation", done)),
-                   asyncio.create_task(data_ops(c, project_id, progress, done))] if AUTOPILOT else []
+        helpers = [asyncio.create_task(data_ops(c, project_id, progress, done))]
+        if AUTOPILOT:
+            helpers.append(asyncio.create_task(vendor_admin(c, "Brightline Annotation", done)))
         rngs = random.Random(SEED)
         await asyncio.gather(*(run_worker(c, project_id, truth, v, n, p, progress, random.Random(rngs.random()))
                                for v, n, p in workers))

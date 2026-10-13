@@ -49,7 +49,7 @@ Every product and design decision made so far, sorted by how hard it would be to
 | D7 | Detectors raise flags through the API | Rewiring one path |
 | D13 | One flag → case → action model for both levels | Splitting the case model if the two levels diverge |
 | D17 | Gold tasks routed to every vendor; regular tasks to one vendor by share | Changing the routing rule; routes for started work stay as they are |
-| D19 | Scorecard drop alerts need both size (8 points) and significance (3 standard errors) | Tuning two thresholds |
+| D19 | Scorecard drop alerts need size (8 points), significance (two-proportion z ≥ 2) and enough gold on both sides (60) | Tuning the thresholds |
 | D20 | Abuse rules look only at answers after the last decision on a worker | Changing the window rule |
 | D21 | Clean-up removes all of a worker's answers | Adding a narrower scope (for example, since the first flagged answer) |
 | D22 | Removed answers stay in scorecard history as delivered, never accepted | Changing the measure, with a new metric version (N19) |

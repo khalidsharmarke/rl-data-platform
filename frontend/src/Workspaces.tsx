@@ -12,6 +12,7 @@ export default function Workspaces({ me }: { me: User }) {
   const [selected, setSelected] = useState<string | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
   const [events, setEvents] = useState<AuditEvent[]>([]);
+  const [showExports, setShowExports] = useState(false);
   const canReadAudit = me.role === "data_ops" || me.role === "vendor_admin";
 
   useEffect(() => {
@@ -19,7 +20,7 @@ export default function Workspaces({ me }: { me: User }) {
       setOrgs(list);
       setSelected((current) => current ?? list.find((o) => o.id === me.org_id)?.id ?? list[0]?.id ?? null);
     });
-    if (canReadAudit) api<AuditEvent[]>("/audit?limit=15").then(setEvents);
+    if (canReadAudit) api<AuditEvent[]>("/audit?limit=200").then(setEvents);
   }, [me.org_id, canReadAudit]);
 
   useEffect(() => {
@@ -72,6 +73,9 @@ export default function Workspaces({ me }: { me: User }) {
       {canReadAudit && (
         <section>
           <h2>Recent audit events</h2>
+          <label className="muted toggle">
+            <input type="checkbox" checked={showExports} onChange={(e) => setShowExports(e.target.checked)} /> Show dataset exports
+          </label>
           <table>
             <thead>
               <tr>
@@ -82,7 +86,7 @@ export default function Workspaces({ me }: { me: User }) {
               </tr>
             </thead>
             <tbody>
-              {events.map((e) => (
+              {events.filter((e) => showExports || e.action !== "dataset.exported").slice(0, 15).map((e) => (
                 <tr key={e.id}>
                   <td>{new Date(e.at).toLocaleString()}</td>
                   <td className="mono">{e.action}</td>

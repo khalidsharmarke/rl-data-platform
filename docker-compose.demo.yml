@@ -20,6 +20,8 @@ services:
     environment:
       API_URL: http://api:8000
       DEMO_CLOCK_SPEED: "180"
+      # Set DEMO_AUTOPILOT=false to make the admin's and data ops' decisions by hand.
+      DEMO_AUTOPILOT: ${DEMO_AUTOPILOT:-true}
     volumes:
       - ./backend/app/demo_content.py:/sim/demo_content.py:ro
     depends_on:

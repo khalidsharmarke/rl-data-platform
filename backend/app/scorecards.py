@@ -79,10 +79,13 @@ class Point:
         return self.agreed / self.compared if self.compared else None
 
 
-def drop_alerts(points: list[Point], *, window: int = 4, min_gold: int = 30, drop: float = 0.08, z: float = 3.0) -> list[dict]:
+def drop_alerts(points: list[Point], *, window: int = 4, min_gold: int = 60, drop: float = 0.08, z: float = 2.0) -> list[dict]:
     """Flag periods where gold accuracy over the last `window` periods falls at least `drop` below
-    the vendor's accuracy over everything before that window, by at least `z` standard errors of
-    the recent window (VP3). Both conditions matter: the size of the drop, and that it isn't noise."""
+    the vendor's accuracy over everything before that window (VP3, D19).
+
+    The drop must also be significant by a two-proportion z-test, which counts the uncertainty
+    on both sides: a baseline of one lucky early period is as noisy as a short recent window.
+    Each side needs at least `min_gold` gold answers."""
     alerts = []
     for i in range(window, len(points)):
         recent = points[i - window + 1 : i + 1]
@@ -92,7 +95,8 @@ def drop_alerts(points: list[Point], *, window: int = 4, min_gold: int = 30, dro
             continue
         r_acc = sum(p.gold_correct for p in recent) / r_n
         b_acc = sum(p.gold_correct for p in before) / b_n
-        se = (b_acc * (1 - b_acc) / r_n) ** 0.5
+        pooled = (sum(p.gold_correct for p in recent) + sum(p.gold_correct for p in before)) / (r_n + b_n)
+        se = (pooled * (1 - pooled) * (1 / r_n + 1 / b_n)) ** 0.5
         if b_acc - r_acc >= drop and (se == 0 or (b_acc - r_acc) / se >= z):
             alerts.append({"period_start": points[i].period_start, "metric": "gold_accuracy",
                            "recent": round(r_acc, 3), "baseline": round(b_acc, 3)})

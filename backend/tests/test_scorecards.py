@@ -99,16 +99,29 @@ async def test_worker_gold_accuracy_needs_enough_gold_results(client, login, ses
     assert all(r["display_name"] is None for r in as_ops)  # pseudonymous to Anthropic
 
 
+def at(i, gold_n, gold_correct):
+    return Point(datetime(2026, 1, 1, tzinfo=UTC) + timedelta(minutes=15 * i), 100, gold_n, gold_correct, 0, 0, 0, 0, 80, 80.0)
+
+
 def test_drop_alert_fires_when_recent_gold_accuracy_falls():
-    start = datetime(2026, 1, 1, tzinfo=UTC)
-    steady = [Point(start + timedelta(minutes=15 * i), 40, 10, 9, 0, 0, 0, 0, 30, 30.0) for i in range(8)]
-    falling = [Point(start + timedelta(minutes=15 * (8 + i)), 40, 10, 6, 0, 0, 0, 0, 30, 30.0) for i in range(4)]
-    noisy = [Point(start + timedelta(minutes=15 * (8 + i)), 40, 10, 8, 0, 0, 0, 0, 30, 30.0) for i in range(4)]
+    steady = [at(i, 20, 18) for i in range(8)]  # 90% on 160 gold answers
+    falling = [at(8 + i, 20, 12) for i in range(4)]  # 60% on 80
     assert drop_alerts(steady) == []
     alerts = drop_alerts(steady + falling)
     assert alerts and alerts[-1]["baseline"] == 0.9 and alerts[-1]["recent"] == 0.6
-    # 90% -> 80% on 40 gold answers is 2.1 standard errors: a real-looking dip, but within noise.
-    assert drop_alerts(steady + noisy) == []
+
+
+def test_small_dips_are_not_alerts():
+    steady = [at(i, 20, 18) for i in range(8)]
+    slight = [at(8 + i, 20, 17) for i in range(4)]  # 90% -> 85%: under the 8-point bar
+    assert drop_alerts(steady + slight) == []
+
+
+def test_a_lucky_first_period_is_not_a_baseline():
+    # Seen in the demo: one early period at 95% on 32 gold answers, then a normal 82% on 140.
+    # Judged against the recent window's uncertainty alone, that looked like a 5.8-sigma drop.
+    points = [at(0, 32, 30)] + [at(1 + i, 35, 29) for i in range(4)]
+    assert drop_alerts(points) == []
 
 
 async def test_job_queue_dedupes_and_runs_scorecards(client, login, session):

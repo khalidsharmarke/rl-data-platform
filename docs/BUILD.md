@@ -2,10 +2,10 @@
 
 | | |
 |---|---|
-| Status | In progress: M0–M7 done |
+| Status | Complete: M0–M8 done. Stretch goals not started |
 | Timebox | About a week: ~33 hours across nine milestones |
 | Stack | Python (FastAPI, async) · Postgres · React + TypeScript (Vite) · Docker Compose |
-| Delivered as | This repo, runnable with `docker compose up`, plus a 2–3 minute recorded walkthrough embedded in the README |
+| Delivered as | This repo, runnable with `make demo`, plus an 80-second recorded walkthrough linked from the README |
 | Related | [`PRD.md`](PRD.md) · [`DESIGN.md`](DESIGN.md) · [`DECISIONS.md`](DECISIONS.md) · [`GLOSSARY.md`](GLOSSARY.md) |
 
 ## 1. What the build shows
@@ -22,7 +22,7 @@ The seeded scenario runs on its own, so a reviewer can watch it from start to fi
 4. The project view compares the three vendors on quality, volume, cost per accepted unit and turnaround, using one measure for all.
 5. Partway through, one worker at Vendor C starts pasting answers far faster than anyone could read the task.
 6. Vendor C's gold accuracy and agreement drop. The speed and paste rules flag the worker, a case opens, and the worker's pending answers are **held** automatically.
-7. Vendor C's admin sees the case with its evidence and suspends the worker. Data ops can see the case and its outcome. (`make demo` plays the people in the story: the admin's decision after a review delay, data ops' clean-up and the researcher's exports. Set `DEMO_AUTOPILOT=false` to do those steps by hand.)
+7. Vendor C's admin sees the case with its evidence and suspends the worker. Data ops can see the case and its outcome. (`make demo` plays the people's decisions too: the admin's suspension after a review delay and data ops' clean-up. Set `DEMO_AUTOPILOT=false` to make them by hand; the researcher's half-hourly exports run either way.)
 8. Data ops runs the clean-up: lineage finds every answer the worker submitted, they're removed, and the dataset is re-exported without them.
 9. The audit log shows every step, and Vendor C's scorecard shows the dip and the recovery.
 
@@ -99,7 +99,7 @@ Each milestone ends with something that runs and a check that proves it. Hours a
 | M5 | Scorecards | Roll-up jobs on the Postgres queue with metric versions; project comparison, vendor scorecard over time, vendor's own view with PD2's split | The project view ranks the three vendors; Vendor C's dip is visible; vendor views hide per-task gold results | 4 | Done |
 | M6 | Abuse and cases | Versioned worker rules (speed, paste, near-duplicate), flags, cases with evidence, automatic holds, vendor-admin decisions and actions, data ops' read-only view | The AI-paster is flagged, held and suspended in the scenario; every action links to its case | 5 | Done |
 | M7 | Clean-up and export | Lineage query, clean-up of a decided case, dataset export and re-export | Re-exported dataset contains none of the removed worker's answers; the audit log shows the chain | 3 | Done |
-| M8 | Polish and walkthrough | UI pass across the four role views (researcher, data ops, vendor admin, worker), README with screenshots, recorded walkthrough | Someone new can run the demo from the README alone; the recording covers the nine-step story | 4 | |
+| M8 | Polish and walkthrough | UI pass across the four role views (researcher, data ops, vendor admin, worker), README with screenshots, recorded walkthrough | Someone new can run the demo from the README alone; the recording covers the nine-step story | 4 | Done |
 | | | | **Total** | **33** | |
 
 ### Stretch, in order

@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Draft: requirements and high-level design. First build scoped in [`BUILD.md`](BUILD.md) |
+| Status | Requirements and high-level design; first slice built (see [`BUILD.md`](BUILD.md)) |
 | Date | 2026-10-13 |
 | Source | [`POSTING.md`](POSTING.md), Anthropic's Full-Stack Software Engineer, Reinforcement Learning posting |
 | Related | [`PRD.md`](PRD.md) (product requirements) · [`GLOSSARY.md`](GLOSSARY.md) (terms) · [`DECISIONS.md`](DECISIONS.md) (decision register, by reversibility) |
@@ -324,7 +324,7 @@ Each step lists the components involved, what each one is for, and what breaks w
 | D16 | Data is protected automatically; people are acted on by people. An open case triggers reversible holds (AB8); suspensions, removals and vendor actions need a recorded decision | Damage from abuse is contained within minutes without punishing anyone on a false positive (N18, PRD PD4) | Held data delays exports; a burst of false flags can stall a project until cases are reviewed |
 | D17 | Regular tasks are routed to one vendor in proportion to its allocation share, interleaved through the claim order (smooth weighted round-robin); gold tasks are routed to every allocated vendor. Changing an allocation re-routes only tasks nobody has started | Every vendor is measured on the same gold tasks, so gold accuracy is comparable (N16, VP2); interleaving keeps gold evenly mixed into each vendor's stream, where contiguous blocks would end a vendor's stream in a run of gold (D8); work already started stays with the vendor that started it | Gold tasks are answered once per vendor, which costs more than answering them once; agreement on regular tasks is measured within a vendor |
 | D18 | Acceptance (metric quality-v1): an answer on a regular task is accepted unless a reviewer rejected it or its worker's gold accuracy is below the project's quality bar, once the worker has enough gold results to judge | Ties accepted volume, and so cost per accepted unit (PRD PD3), to measured quality rather than to volume alone | A worker's later gold results can change whether their earlier answers count; the metric version (N19) makes that explainable |
-| D19 | A vendor scorecard raises an alert when gold accuracy over the last hour falls at least 8 points below the vendor's earlier accuracy, and the drop is at least 3 standard errors of the recent window | Data ops needs early warning of real changes (VP3) without chasing noise: a 2-standard-error dip happens by chance in a long series | A small vendor's real drop takes longer to reach significance; worker-level rules (AB1) catch individual abuse sooner |
+| D19 | A vendor scorecard raises an alert when gold accuracy over the last hour falls at least 8 points below the vendor's earlier accuracy, the drop is significant by a two-proportion z-test (z ≥ 2), and each side has at least 60 gold answers | Data ops needs early warning of real changes (VP3) without chasing noise. Testing against the recent window's uncertainty alone treated a lucky early baseline as exact and raised false alarms; the two-proportion test counts both sides | A small vendor's real drop takes longer to reach significance; worker-level rules (AB1) catch individual abuse sooner |
 | D20 | After a case is decided, the abuse rules judge only the worker's answers submitted after the decision | A cleared or reinstated worker isn't re-flagged on evidence a person has already weighed (N18) | Abuse that continues right after a decision needs a fresh window of answers (10) before it's flagged again |
 | D21 | Clean-up removes every answer the worker gave, not only the flagged ones; re-label also reopens those tasks for other workers at the same vendor | Nobody can tell exactly when abuse began, and answers given before detection may already be in exported datasets; lineage says which (AB6) | Honest early work by the same worker is lost, and re-labeling costs another answer per task |
 | D22 | Removed answers still count as delivered in the vendor's scorecard history, but are never accepted or exported | The vendor's record stays truthful: the dip happened. Only the data used for training changes | Delivered volume includes answers that were later thrown away; acceptance shows the difference |
@@ -380,6 +380,6 @@ Each step lists the components involved, what each one is for, and what breaks w
 
 ## 10. Next steps
 
-1. **Build the first slice.** [`BUILD.md`](BUILD.md) scopes it: multi-vendor human data (core flows 2, 4 and 5), with the stand-ins listed there.
-2. **Next slice after that:** the environment pipeline and training observability (flows 1 and 3), starting with immutable environment versions and sandboxed validation.
+1. **First slice: built.** Multi-vendor human data (core flows 2, 4 and 5), scoped in [`BUILD.md`](BUILD.md) and described in the [project README](../README.md).
+2. **Next slice:** the environment pipeline and training observability (flows 1 and 3), starting with immutable environment versions and sandboxed validation.
 3. **Deeper diagrams if needed:** the environment-version state machine (D3), the case life cycle (D13), and sequence diagrams for the five core flows.

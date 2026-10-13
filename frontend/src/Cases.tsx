@@ -8,6 +8,8 @@ const DECISIONS = [
   { value: "remove", label: "Remove worker" },
 ];
 
+const OUTCOME: Record<string, string> = { suspend: "Suspended", remove: "Removed", warn: "Warned", clear: "Cleared" };
+
 const when = (t: string) => new Date(t).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 
 export default function Cases({ me }: { me: User }) {
@@ -93,7 +95,14 @@ export default function Cases({ me }: { me: User }) {
               </td>
               <td>{c.observations.length} signal{c.observations.length === 1 ? "" : "s"}</td>
               <td>
-                {c.status === "open" ? <span className="badge warn">Open{c.held ? " · data held" : ""}</span> : <span className="badge">{c.decision}</span>}
+                {c.status === "open" ? (
+                  <span className="badge warn">Open{c.held ? " · data held" : ""}</span>
+                ) : (
+                  <span className="badge">
+                    {OUTCOME[c.decision ?? ""] ?? c.decision}
+                    {c.held ? " · data held" : ""}
+                  </span>
+                )}
               </td>
             </tr>
           ))}
