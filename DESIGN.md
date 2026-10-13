@@ -175,6 +175,55 @@ Source: [`diagrams/architecture.excalidraw`](diagrams/architecture.excalidraw) (
 
 The system splits into three planes, because the scale estimate shows three loads that behave differently: low-volume state changes that must be correct, compute-heavy validation, and a high-volume stream of training results.
 
+### How it works, step by step
+
+**The goal in one line:** Claude improves by practicing tasks and getting scored on them. Many of those tasks, and the human judgments used to score answers, come from outside contractors. A broken task or a careless judgment teaches Claude the wrong lesson. So the system is a **quality-control line** for training material, plus a **monitor** that watches how the material behaves once training uses it.
+
+Each step lists the components involved, what each one is for, and what breaks without it.
+
+**1. Outside people get in, and only see what's theirs.** A vendor company signs up; its engineers and labelers get accounts, and its scripts get API keys.
+- *Web app:* one site where every kind of user works. Without it, vendors and labelers, many of them non-technical, would need custom tooling.
+- *API gateway:* checks who each request comes from and what they may see. Without it, every part of the system would repeat its own permission checks, and one missed check would expose one vendor's work to another. It can be middleware inside the API service; it's drawn separately to show the responsibility.
+- *Orgs and tokens module:* creates companies, invites people, issues and revokes keys. Without it, ops would set up every vendor by hand, which contradicts *"ramp up in hours, not weeks"*.
+
+**2. A vendor builds a practice task.** The vendor writes the task ("fix this bug"), packages the code it runs in as a container, and includes an answer key: a reference solution plus the grader that scores attempts.
+- *Container registry:* stores each vendor's packaged code.
+- *Environments module and Postgres:* record the task. Every edit creates a new version, and old versions never change. Without that rule, training would say "I used task #42" and nobody could tell which #42.
+
+**3. Machines check the task before any person spends time on it.** Like checking an exam before giving it: the answer key should score full marks, a blank answer should score zero, and grading the same answer twice should give the same score.
+- *Job queue (a Postgres table):* checks take minutes each and thousands arrive a day, so they wait in line. Submitting a task and queueing its checks happen in one database transaction, so a task can never be "submitted" with no check started (D2). Workers take the next job from whichever vendor has the fewest running, so one vendor's 500 submissions can't push everyone else to the back.
+- *Sandbox workers:* run the vendor's code in a sealed box with no internet access and strict time and memory limits. Without them, we'd be running strangers' code on our own machines.
+
+**4. A researcher looks at it.** Machines catch tasks that are broken. People catch tasks that work but aren't worth training on: too easy, off-topic, or teaching the wrong skill.
+- *Review module:* a queue of tasks for researchers to browse, grade and comment on. Feedback goes back to the vendor, who fixes the task and resubmits, which sends it back to step 3.
+
+**5. Approved tasks become available to training.**
+- *Catalog API:* training asks for "all approved tasks" and gets exact versions. Without it, training would read our database directly, and the two systems couldn't change independently.
+- *Code task generator:* creates coding tasks in bulk and submits them through the same front door as a vendor, so they get the same checks. Without that reuse, we'd build and maintain a second quality pipeline.
+
+**6. Alongside: people produce judgments.** A researcher posts a batch of questions, such as "which of these two answers is better?", and thousands of labelers answer them.
+- *Collection and QA module:* hands out work, collects answers, and measures labeler quality three ways: questions with known answers (gold), questions sent to several labelers for comparison, and reviewer spot checks. Without QA, careless or rushed labels go straight into training.
+- *Gold answers in a separate table:* labelers can never see them. Without the separation, the quality test could be gamed.
+- *Object storage (exports):* finished, checked batches are saved as files for training to download.
+
+**7. Training sends back reports.** Every attempt Claude makes on a task produces a report: which task, what score, how long it took, and the full transcript. That's about a thousand reports a second.
+- *Results intake:* receives reports in batches and ignores duplicates, so a resent report isn't counted twice.
+- *Durable log:* a shock absorber. It accepts reports immediately, even when the parts behind it are slow or down. Without it, a slow dashboard could slow down training, which this system must never do.
+- *Separate path that skips the gateway:* this flood never touches the database behind the website, so the site stays fast.
+
+**8. Reports become something people can read.**
+- *Stream processor:* rolls raw reports up into per-task and per-run statistics.
+- *Analytics store:* a database built for questions like "average score for this task over the last hour". Without it, crunching millions of rows in Postgres would slow down everything else on it.
+- *Object storage (transcripts):* holds full transcripts, which are too big to keep anywhere else.
+- *Dashboard API:* charts plus a live feed, so researchers can watch a training run as it happens.
+
+**9. Catch cheating, then send the task back.** "Reward hacking" is when the model gets full marks without solving the problem, like a student editing the answer key.
+- *Reward-hack detector:* watches the report stream for suspicious patterns, such as perfect scores on very short attempts or edits to test files.
+- *Quarantine through the API:* a flagged task is pulled from training and goes back to review (step 4), using the same route a person would. The record shows what was pulled, by whom or by which rule, and why. Without this, problems show up on a chart and nothing changes.
+
+**Throughout: the paper trail.**
+- *Audit log:* an append-only record of every approval, quarantine and permission change. When something looks wrong in training, it traces back to the exact task version, the vendor who built it, and the reviewer who approved it.
+
 ### Components
 
 | Component | Plane | Job | Requirements |
@@ -248,6 +297,6 @@ The system splits into three planes, because the scale estimate shows three load
 
 ## 10. Next steps
 
-1. **Scope the build**: which flow or flows, the timebox and the stack.
+1. **Scope the build**: which flow or flows, the timebox and the stack. Some components can be small stand-ins in the build while keeping the same boundaries: the gateway as middleware in the API service, the durable log as a Postgres table, the analytics store as summary tables in Postgres, and the registry as local Docker.
 2. **Decide which NFRs get shown in code versus written up.** N4–N9 and N12 are cheap to demonstrate and are the hard parts. The scale targets (N1–N3, N10) are better written up from the estimates above.
 3. **Deeper diagrams if needed**: the environment-version state machine (D3) and sequence diagrams for the three core flows.
