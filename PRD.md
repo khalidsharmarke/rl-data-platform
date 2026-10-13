@@ -73,7 +73,7 @@ Both sides benefit when quality is **measured the same way, visible to both, and
 - Paying vendors or workers. The platform supplies the numbers that billing would use but doesn't move money.
 - Recruiting workers. That's the vendor's business.
 - Running model training. Training is a separate system the platform connects to.
-- Holding workers' real identities. Vendors keep those (see open question Q1).
+- Holding workers' real identities. Vendors keep those (PD1).
 
 ## 5. Capabilities
 
@@ -96,17 +96,18 @@ Priority: **P0** is needed for the product to make sense, **P1** makes it good, 
 ### C3. Measuring quality
 | # | Capability | Who | Priority | Design |
 |---|---|---|---|---|
-| C3.1 | Hidden **gold tasks** and overlap between workers, applied the same way across vendors | Platform | P0 | DC4 |
+| C3.1 | Hidden **gold tasks**, rotated regularly, and overlap between workers, applied the same way across vendors | Platform | P0 | DC4 |
 | C3.2 | Researcher review and grading of human data and environments | Researcher | P0 | EC5 |
 | C3.3 | Automated environment **validation** | Platform | P0 | EC3 |
 | C3.4 | Training outcomes (reward hacking, solve rates) attributed back to the environment and vendor | Platform | P1 | TO7 |
+| C3.5 | Time on task measured by the platform for every submission | Platform | P1 | DC9 |
 
 ### C4. Performance views
 | # | Capability | Who | Priority | Design |
 |---|---|---|---|---|
-| C4.1 | **Project view:** vendors side by side on one project (quality, volume, cost, turnaround) | Data ops, researcher | P0 | VP2 |
+| C4.1 | **Project view:** vendors side by side on one project (quality, volume, cost per accepted unit, turnaround) | Data ops, researcher | P0 | VP2 |
 | C4.2 | **Vendor scorecard:** one vendor's performance over time, across projects, with alerts on significant drops | Data ops | P0 | VP3 |
-| C4.3 | **Vendor's own view:** the vendor sees its scorecard as Anthropic sees it, broken down by worker | Vendor admin | P0 | VP4 |
+| C4.3 | **Vendor's own view:** the vendor sees its scorecard as Anthropic sees it, broken down by worker. Reviewer feedback and agreement are live; gold-task accuracy is a daily running score (PD2) | Vendor admin | P0 | VP4 |
 | C4.4 | Worker quality history within a vendor | Vendor admin, vendor reviewer | P1 | VP4 DC4 |
 
 ### C5. Abuse: detect, investigate, act
@@ -114,11 +115,14 @@ Priority: **P0** is needed for the product to make sense, **P1** makes it good, 
 |---|---|---|---|---|
 | C5.1 | Detect **worker abuse**: answers faster than reading time, near-duplicate answers, AI-generated text where human judgment is required, colluding answer patterns, gold-task farming | Platform → vendor admin | P0 | AB1 |
 | C5.2 | Detect **vendor abuse**: quality falling while volume rises, banned workers returning, environments with gameable graders or copied benchmark content | Platform → data ops | P1 | AB2 TO3 |
-| C5.3 | Case handling: a flag opens a case with evidence; the owner records a decision | Vendor admin, data ops | P0 | AB3 |
+| C5.3 | Case handling: an abuse flag opens a case with evidence; the owner records a decision. Low-quality signals feed scorecards and feedback instead (PD4) | Vendor admin, data ops | P0 | AB3 |
 | C5.4 | Actions on workers: warn, retrain, suspend, remove | Vendor admin | P0 | AB4 |
-| C5.5 | Actions on vendors: lower allocation, pause, offboard | Data ops | P1 | AB5 |
+| C5.5 | Actions on vendors: lower allocation, pause, offboard, after the vendor has had a chance to respond | Data ops | P1 | AB5 |
 | C5.6 | Clean up data: find everything a flagged worker, vendor or environment produced (lineage), then discard it, re-label it or **quarantine** it | Data ops | P0 | AB6 TO6 |
 | C5.7 | Anthropic can see vendor-level abuse cases and how each vendor resolved them | Data ops | P1 | AB7 |
+| C5.8 | While a case is open, affected data is protected automatically and reversibly: a flagged worker's pending answers are held out of exports, a flagged environment is quarantined (PD4) | Platform | P0 | AB8 |
+| C5.9 | Vendor-private abuse rules that open cases only inside the vendor's workspace and never affect scorecards (PD5) | Vendor admin | P2 | AB9 |
+| C5.10 | Cross-vendor worker match on a keyed hash, used as evidence in cases (PD1) | Data ops | P2 | AB10 |
 
 ### C6. Vendor workspace
 | # | Capability | Who | Priority | Design |
@@ -144,15 +148,15 @@ These are proposed targets, to be checked against real baselines.
 | Vendor-reported and platform-measured acceptance rate | Data ops | Same number, because both read the same measure |
 | Time for a new vendor to reach first accepted work | Data ops, vendor admin | < 1 day |
 
-## 7. Open questions
+## 7. Product decisions
 
-| # | Question | Why it matters |
-|---|---|---|
-| Q1 | How much worker detail can Anthropic see? A pseudonymous worker ID is enough to trace data and spot patterns, but not to stop a banned worker from joining another vendor | Privacy and vendor trust versus catching repeat offenders across vendors |
-| Q2 | Do vendors see their own quality numbers in real time, or after a delay? | Real time helps them fix problems; it also helps them reverse-engineer gold tasks |
-| Q3 | How is cost measured: per task, per accepted task, or per hour? | Determines how fairly vendors can be compared |
-| Q4 | Which signals count as abuse versus low quality, and who decides? | A false abuse finding against a worker or vendor has real consequences |
-| Q5 | Is the abuse detector shared across vendors, or can vendors add their own rules? | Shared rules make comparisons fair; vendor rules catch vendor-specific patterns |
+| # | Question | Decision | Why | Trade-off accepted |
+|---|---|---|---|---|
+| PD1 | How much worker detail can Anthropic see? | Workers are pseudonymous: Anthropic sees an ID scoped to the worker's vendor, never a name. The ID scheme leaves room to add a cross-vendor match on a keyed hash of a stable identifier later (C5.10); a match would be evidence in a case, not an automatic ban, since many contractors legitimately work for several vendors | Workers' privacy and vendors' rosters stay with the vendor; Anthropic doesn't hold personal data for thousands of contractors | Until the match exists, a worker removed by one vendor can join another unseen |
+| PD2 | How quickly do vendors see their quality numbers? | Split by signal. Reviewer feedback and agreement are shown live. Gold-task accuracy is shown only as a running score per worker, once the worker has about 20 gold results, refreshed daily. Gold tasks are rotated | Per-task, instant right/wrong feedback would reveal which tasks are gold, and workers who can spot tests can game them | Vendors learn about accuracy problems up to a day later than they could |
+| PD3 | How is cost compared? | Each contract is stored in its own unit (per hour, per task or per environment) and compared as cost per accepted unit. Hourly contracts are converted using time on task measured by the platform, not vendor timesheets | Vendors are priced differently in practice (experts hourly, labeling per task); one normalized measure keeps comparisons fair | Comparisons depend on the platform's time measurement being accurate |
+| PD4 | What counts as abuse versus low quality, and who decides? | Low quality (honest but poor work) feeds scorecards and feedback and opens no case. Abuse signals open a case. The vendor admin decides worker cases; data ops decides vendor and environment cases, after the vendor can respond. The platform protects data automatically and reversibly while a case is open; any action against a person or vendor needs a human decision. Anthropic can always decline data, whatever a vendor decides about its worker | Intent can't be measured, only evidence; holds limit damage quickly without punishing anyone on a false positive | A burst of false flags can hold back data until cases are reviewed |
+| PD5 | Who writes abuse-detection rules? | Shared platform rules are the only ones that affect scorecards and Anthropic's decisions. Later (C5.9), vendors can add private rules that open cases only inside their own workspace | Every vendor is measured by the same rules; vendors can still catch patterns specific to their workforce | Vendors can't influence the shared rules directly |
 
 ## Sources
 

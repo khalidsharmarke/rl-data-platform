@@ -62,11 +62,12 @@ Personas are described in the [PRD](PRD.md#3-who-cares-about-what). Each vendor 
 | DC1 | A researcher creates a collection project: task type, instructions, answer schema (rate, compare, write, trajectory review), quality bar, volume and deadline | *"labeling workflows"*; *"many task types"*; *"complex agentic tasks"* | |
 | DC2 | Tasks are assigned to workers within the vendors allocated to the project (VP1) | *"human data collection at scale"* | |
 | DC3 | Workers complete tasks in a UI built for non-technical users | *"interfaces that are intuitive for both technical researchers and non-technical labelers"* | |
-| DC4 | QA: gold tasks with known answers, overlapping assignments to measure agreement, reviewer spot checks, and a quality score per worker, computed the same way for every vendor (N16) | *"quality assurance systems"* | A13 |
+| DC4 | QA: gold tasks with known answers (rotated regularly), overlapping assignments to measure agreement, reviewer spot checks, and a quality score per worker, computed the same way for every vendor (N16) | *"quality assurance systems"* | A13 |
 | DC5 | Workers can flag broken tasks, and disagreement spikes raise alerts | *"feedback mechanisms that surface reward signal integrity issues early"* | A13 |
 | DC6 | QA-passed data is exported for training | *"connect environment authoring tools, data collection systems, and RL training infrastructure"* | A23 |
 | DC7 | Progress and throughput are tracked per project and per vendor | *"data collection progress"* | |
 | DC8 | A vendor reviewer can check and correct workers' output before it's submitted to Anthropic. Vendor review adds to platform QA and doesn't replace it | PRD C2.2 | A29 |
+| DC9 | The platform records time on task (assignment to submission) for every submission | PRD C3.5; PRD PD3 | |
 
 ### Training observability
 
@@ -85,21 +86,24 @@ Personas are described in the [PRD](PRD.md#3-who-cares-about-what). Each vendor 
 | # | Requirement | Source | Assumes |
 |---|---|---|---|
 | VP1 | Data ops allocates a project across vendors whose capabilities match, and changes the allocation while it runs | PRD C1.2; *"vendor management workflows"* | A24 |
-| VP2 | Project view: vendors side by side on one project, comparing quality, volume, cost and turnaround | PRD C4.1 | A28 |
-| VP3 | Vendor scorecard: one vendor's performance over time and across projects, with alerts on significant drops | PRD C4.2 | A28 |
-| VP4 | Vendor's own view: vendor admins see their scorecard as Anthropic sees it, broken down by worker, with each worker's quality history | PRD C4.3, C4.4 | A26 |
+| VP2 | Project view: vendors side by side on one project, comparing quality, volume, cost per accepted unit and turnaround. Hourly contracts are converted using time on task (DC9) | PRD C4.1; PRD PD3 | |
+| VP3 | Vendor scorecard: one vendor's performance over time and across projects, with alerts on significant drops | PRD C4.2; PRD PD3 | |
+| VP4 | Vendor's own view: vendor admins see their scorecard as Anthropic sees it, broken down by worker, with each worker's quality history. Reviewer feedback and agreement are live; gold-task accuracy appears only as a per-worker running score after ~20 gold results, refreshed daily | PRD C4.3, C4.4; PRD PD2 | |
 
 ### Abuse
 
 | # | Requirement | Source | Assumes |
 |---|---|---|---|
-| AB1 | Detect worker abuse (answering faster than reading time, near-duplicate answers, AI-generated text where human judgment is required, colluding answer patterns, gold-task farming) and flag it to the vendor admin | PRD C5.1; *"surface reward signal integrity issues early"* | A27 |
-| AB2 | Detect vendor abuse (quality falling while volume rises, removed workers returning, environments with gameable graders or copied benchmark content) and flag it to data ops | PRD C5.2 | A25, A27 |
-| AB3 | A flag opens a case with its evidence. The owner records a decision: the vendor admin for worker cases, data ops for vendor cases | PRD C5.3 | |
+| AB1 | Detect worker abuse (answering faster than reading time, near-duplicate answers, AI-generated text where human judgment is required, colluding answer patterns, gold-task farming) and flag it to the vendor admin, using the shared platform rules | PRD C5.1; *"surface reward signal integrity issues early"* | A27 |
+| AB2 | Detect vendor abuse (quality falling while volume rises, removed workers returning, environments with gameable graders or copied benchmark content) and flag it to data ops, using the shared platform rules | PRD C5.2; PRD PD1 | A27 |
+| AB3 | An abuse flag opens a case with its evidence; low-quality signals feed scorecards and feedback and don't open cases. The owner records a decision: the vendor admin for worker cases, data ops for vendor cases | PRD C5.3 | |
 | AB4 | Actions on workers: warn, retrain, suspend, remove | PRD C5.4 | |
-| AB5 | Actions on vendors: lower allocation, pause, offboard | PRD C5.5 | |
+| AB5 | Actions on vendors: lower allocation, pause, offboard, each after the vendor has had a chance to respond | PRD C5.5 | |
 | AB6 | Clean-up: find everything a flagged worker, vendor or environment version produced (lineage), then discard, re-label or quarantine it | PRD C5.6; *"audit trails"* | |
-| AB7 | Data ops can see vendors' worker-abuse cases and how they were resolved | PRD C5.7 | A25 |
+| AB7 | Data ops can see vendors' worker-abuse cases and how they were resolved | PRD C5.7; PRD PD1 | |
+| AB8 | While a case is open, the subject's data is protected automatically and reversibly: a worker's unexported submissions are held out of exports, an environment version is quarantined. Actions against people or vendors (AB4, AB5) always need a recorded human decision | PRD C5.8; PRD PD4 | |
+| AB9 | Vendors can add private abuse rules that open cases only inside their own workspace and never feed scorecards (P2) | PRD C5.9; PRD PD5 | |
+| AB10 | Cross-vendor worker match: vendors submit a keyed hash of a stable identifier, and matches across vendors become case evidence, never an automatic action (P2) | PRD C5.10; PRD PD1 | |
 
 ### Workspaces and platform
 
@@ -146,23 +150,23 @@ The system is light on reads, heavy on writes for training results, and compute-
 | N6 | Reproducibility | Environment versions are immutable; every episode and dataset references an exact version | An approved environment can't change under a running training job | |
 | N7 | Consistency | Strong for state changes (approve, quarantine, assign); eventual for aggregates and dashboards | Double-assigned items or double approvals corrupt QA; a stats lag doesn't | |
 | N8 | Isolation of vendor code | Sandboxed runs: no network, CPU/memory/time limits, killed on timeout | Vendors submit arbitrary containers | A15 |
-| N9 | Tenant isolation | Vendors see only their own data; Anthropic sees workers only by pseudonymous ID; workers never see gold answers; vendors never see held-out evaluation data | *"multi-tenant platforms with role-based access"*; leaked gold answers let QA be gamed | A16, A18, A25 |
+| N9 | Tenant isolation | Vendors see only their own data; Anthropic sees workers only by pseudonymous ID; workers never see gold answers; vendors never see held-out evaluation data | *"multi-tenant platforms with role-based access"*; leaked gold answers let QA be gamed; PRD PD1 | A16, A18 |
 | N10 | Fairness between tenants | Per-vendor quotas and fair queueing for validation compute | One vendor flooding submissions mustn't starve the rest | A17 |
 | N11 | Credential security | Tokens are scoped, hashed at rest, rotatable and revocable | *"API token management"* | |
 | N12 | Audit and lineage | Append-only change log; any episode traces back to its environment version, vendor and reviewer | *"audit trails"*; the trace is how a *"reward signal integrity"* issue is pinned to its source | A18 |
 | N13 | Adaptability | New task types and environment schemas ship without a database migration (schema-driven forms and configs); deploys happen many times a day | *"priorities shift"*; *"many task types"*; *"react to what researchers need next"* | |
 | N14 | Fast onboarding | A new vendor goes from invite to first passing environment in < 1 day, without help | *"ramp up in hours, not weeks"* | A22 |
 | N15 | Monitoring the platform itself | Metrics and alerts on queue backlog, sandbox failure rate, ingestion lag | A dashboard that silently goes stale is worse than none | |
-| N16 | Consistent measurement | Quality, volume, cost and turnaround are computed by the platform from its own records, the same way for every vendor. Vendor-reported numbers are never an input | Vendors can only be compared fairly on an identical measure (PRD G2) | A28 |
-| N17 | Detection secrecy | Which tasks are gold, and how abuse detectors work, is never visible to vendors or workers; they see results, not the method | Known gold tasks and known rules can be gamed | A26 |
-| N18 | Due process | Every abuse action is tied to a case holding the evidence behind it, and can be reviewed and reversed | A false finding against a worker or vendor has real consequences (PRD Q4) | |
+| N16 | Consistent measurement | Quality, volume, cost and turnaround are computed by the platform from its own records, the same way for every vendor. Vendor-reported numbers are never an input | Vendors can only be compared fairly on an identical measure (PRD G2); PRD PD3 | |
+| N17 | Detection secrecy | Which tasks are gold, and how abuse detectors work, is never visible to vendors or workers; they see results, not the method. Gold accuracy is shown only in aggregate (VP4) and gold tasks are rotated | Known gold tasks and known rules can be gamed; PRD PD2 | |
+| N18 | Due process | Every abuse action is tied to a case holding the evidence behind it, and can be reviewed and reversed | A false finding against a worker or vendor has real consequences (PRD PD4) | |
 
 ## 7. Out of scope
 
 - Actually training models. Training infrastructure is simulated by a script that pulls approved environments and sends episode results (A23).
 - Grading with a model (LLM-as-judge).
 - Paying vendors or workers. The platform produces the numbers billing would use.
-- Recruiting workers and holding their real identities. Vendors own both (A25).
+- Recruiting workers and holding their real identities. Vendors own both (PRD PD1).
 
 ## 8. Assumptions
 
@@ -206,10 +210,7 @@ Each assumption names the requirements that depend on it and what changes if it'
 | A22 | "Hours, not weeks" onboarding means under a day, end to end, without help | VM3, N14 | |
 | A23 | Training infrastructure is a separate system: it pulls approved environments and data and pushes episode results | EC6, DC6, TO1, N4 | If it's tightly coupled, ingestion could read from its storage instead of receiving pushes |
 | A24 | A vendor supplies human work, environments, or both, and data ops sets each vendor's capabilities rather than vendors declaring their own. The market has both kinds of vendor, and several large ones do both (see [PRD §2](PRD.md#2-problem)) | Actors, VM6, VP1 | If vendors self-declare, a capability needs checking (for example, a trial project) before work is allocated against it |
-| A25 | Anthropic sees workers only by a pseudonymous ID, stable within one vendor; vendors keep real identities (PRD Q1) | N9, AB2, AB7 | With shared identities, AB2 could catch removed workers moving between vendors, at a cost to privacy and vendor trust |
-| A26 | Vendors see their own quality numbers aggregated and with a delay, so individual gold tasks can't be identified (PRD Q2) | VP4, N17 | Real-time, per-task results help vendors fix problems faster but let them reverse-engineer gold tasks |
 | A27 | The abuse signals listed in AB1 and AB2 are starting points; real ones come from investigating cases | AB1, AB2 | As with A14, detectors must be pluggable so new signals can be added without a redeploy |
-| A28 | Cost is measured per accepted task (PRD Q3) | VP2, VP3, N16 | Per-hour cost would need time records from vendors, which the platform would have to verify |
 | A29 | Some vendors review their workers' output before submitting it; the platform supports this but doesn't require it | DC8 | If every vendor must review, DC8 becomes a mandatory step in the labeling workflow |
 
 ## 9. High-level design
@@ -252,7 +253,7 @@ Each step lists the components involved, what each one is for, and what breaks w
 
 **7. Workers produce judgments.** Workers at each allocated vendor answer tasks. Some vendors have their own reviewers check the answers before they go to Anthropic.
 - *Collection and QA module:* hands out tasks, collects answers, and measures each worker's quality three ways: tasks with known answers (gold), tasks sent to several workers for comparison, and reviewer spot checks. The measurement is identical for every vendor. Without QA, careless or rushed answers go straight into training.
-- *Gold answers in a separate table:* workers never see them, and vendors never learn which tasks were gold. Without that, the quality test could be gamed.
+- *Gold answers in a separate table:* workers never see them, vendors never learn which tasks were gold, and the gold set is rotated. Without that, the quality test could be gamed.
 - *Lineage on every answer:* each accepted answer records the task, the worker's ID, the vendor and the review. Without it, removing a bad worker's answers later would be guesswork.
 - *Object storage (exports):* finished, checked batches are saved as files for training to download.
 
@@ -262,8 +263,8 @@ Each step lists the components involved, what each one is for, and what breaks w
 - *Separate path that skips the gateway:* this flood never touches the database behind the website, so the site stays fast.
 - *Stream processor:* rolls raw reports up into per-task and per-run statistics, and credits each result to the vendor that built the task.
 
-**9. Everyone sees the same scoreboard.** Data ops compares vendors on one project and follows each vendor over time. Each vendor admin sees their own scorecard, the same numbers Anthropic sees, broken down by worker.
-- *Scorecard jobs:* background jobs that roll human-data quality, volume, cost and turnaround up per vendor, per project and per worker. The platform computes every number from its own records; vendors' own reports are never an input. Without that, vendors couldn't be compared fairly.
+**9. Everyone sees the same scoreboard.** Data ops compares vendors on one project and follows each vendor over time. Each vendor admin sees their own scorecard, the same numbers Anthropic sees, broken down by worker. Reviewer feedback and agreement show up as they happen; gold-task accuracy shows up as a daily running score, so no single task can be identified as a test.
+- *Scorecard jobs:* background jobs that roll human-data quality, volume, cost per accepted unit and turnaround up per vendor, per project and per worker. The platform computes every number from its own records; vendors' own reports are never an input. Without that, vendors couldn't be compared fairly.
 - *Analytics store:* a database built for questions like "this vendor's acceptance rate by week". Without it, crunching millions of rows in Postgres would slow down everything else on it.
 - *Dashboard API:* scorecards, comparisons, run dashboards and a live feed, so researchers can watch a training run as it happens.
 - *Object storage (transcripts):* holds full transcripts, which are too big to keep anywhere else.
@@ -271,7 +272,7 @@ Each step lists the components involved, what each one is for, and what breaks w
 **10. Catch abuse at both levels, then clean up.** Abuse means making data look better, larger or more human than it is. Vendors police their workers; Anthropic polices vendors.
 - *Abuse detection jobs:* rules over workers' answers (answering faster than anyone could read, near-duplicates, AI-written text where a human judgment is required, coordinated answers) and over vendors (quality falling as volume rises, removed workers coming back).
 - *Reward-hack detector:* watches the training report stream for a model scoring full marks without solving the problem, such as perfect scores on very short attempts or edits to test files.
-- *Cases module:* every flag opens a case with its evidence. Worker cases go to the vendor admin; vendor and environment cases go to data ops, who can also see how vendors handled their own cases. Every action, from a warning to offboarding a vendor, is tied to a case and can be reviewed and reversed.
+- *Cases module:* every flag opens a case with its evidence. Worker cases go to the vendor admin; vendor and environment cases go to data ops, who can also see how vendors handled their own cases. While a case is open, the platform automatically holds the affected data back from training, which can be undone. Every action against a person or vendor, from a warning to offboarding, needs a recorded decision, is tied to its case, and can be reviewed and reversed. Low quality on its own doesn't open a case; it shows up on the scorecard instead.
 - *Clean-up through lineage:* once a case is decided, a lineage query finds everything the worker, vendor or environment produced, and it's discarded, re-labeled or quarantined. A quarantined task goes back to review (step 4).
 
 **Throughout: the paper trail.**
@@ -312,11 +313,12 @@ Each step lists the components involved, what each one is for, and what breaks w
 | D8 | Gold answers live in their own table, which worker- and vendor-facing endpoints never read | Workers and vendors can't identify gold tasks, so QA can't be gamed (N9, N17) | QA scoring needs a separate, privileged code path |
 | D9 | Task types and environment configs are described by JSON schemas stored as data | New task types ship without a migration or a new UI form (N13) | Validation and rendering are generic, so very custom task UIs need extension points |
 | D10 | Training pulls approved environments from a catalog API and downloads datasets via short-lived signed URLs | Training stays decoupled (A23); large files never pass through the API (DC6) | Signed URLs must expire and be scoped to one dataset |
-| D11 | Every performance number is computed by the platform, by one code path for all vendors, and vendors read the same numbers Anthropic does | Fair comparison needs an identical measure (N16, VP2, VP3); vendors can only fix what they can see (VP4) | Scorecards lag by the roll-up interval, and vendor views are further delayed and aggregated around gold tasks (A26) |
-| D12 | Workers are pseudonymous outside their vendor: each has a platform ID scoped to the vendor, and identity fields live only in the vendor's workspace | Anthropic can trace data and spot patterns without holding personal data (N9, A25) | A worker removed by one vendor can't be recognized at another |
-| D13 | One flag → case → action model serves both levels. The case owner follows the subject: worker cases to the vendor admin, vendor and environment cases to data ops | One audited path for every enforcement decision (AB3–AB5, N18, VM4); data ops can review vendors' cases (AB7) | The case model is generic, so level-specific workflows need care |
+| D11 | Every performance number is computed by the platform, by one code path for all vendors, and vendors read the same numbers Anthropic does | Fair comparison needs an identical measure (N16, VP2, VP3); vendors can only fix what they can see (VP4) | Scorecards lag by the roll-up interval, and gold-task accuracy reaches vendors only as a daily aggregate (PRD PD2) |
+| D12 | Workers are pseudonymous outside their vendor: each has a platform ID scoped to the vendor, and identity fields live only in the vendor's workspace | Anthropic can trace data and spot patterns without holding personal data (N9, PRD PD1) | A worker removed by one vendor can't be recognized at another until the keyed-hash match (AB10) is added |
+| D13 | One flag → case → action model serves both levels. The case owner follows the subject: worker cases to the vendor admin, vendor and environment cases to data ops | One audited path for every enforcement decision (AB3–AB5, N18, VM4); data ops can review vendors' cases (AB7). Low-quality signals never open cases (PRD PD4) | The case model is generic, so level-specific workflows need care |
 | D14 | Lineage is recorded when data is created: every accepted submission stores task, worker ID, vendor, project and review; every dataset row and episode references its source | Clean-up after abuse is a query, not an investigation (AB6, N12) | Wider rows; datasets must be re-exportable without removed items |
-| D15 | Abuse detectors are pluggable rules, run as background jobs (AB1, AB2) and over the episode stream (TO3). Rule definitions are never exposed through vendor-facing APIs | New signals ship without a redeploy (A27); published rules could be gamed (N17) | Vendors see the outcome of a rule, not its logic, which can feel opaque; case evidence (N18) has to make up for it |
+| D15 | Abuse detectors are pluggable rules, run as background jobs (AB1, AB2) and over the episode stream (TO3). Shared rules are the only ones that feed scorecards; vendor-private rules (AB9) run inside one workspace. Rule definitions are never exposed through vendor-facing APIs | New signals ship without a redeploy (A27); every vendor is measured by the same rules (N16, PRD PD5); published rules could be gamed (N17) | Vendors see the outcome of a rule, not its logic, which can feel opaque; case evidence (N18) has to make up for it |
+| D16 | Data is protected automatically; people are acted on by people. An open case triggers reversible holds (AB8); suspensions, removals and vendor actions need a recorded decision | Damage from abuse is contained within minutes without punishing anyone on a false positive (N18, PRD PD4) | Held data delays exports; a burst of false flags can stall a project until cases are reviewed |
 
 ### Core entities
 
@@ -330,15 +332,15 @@ Each step lists the components involved, what each one is for, and what breaks w
 | ValidationRun | id, version, check (reference, no-op, repeat), result, logs_uri | |
 | Review | id, subject (version or submission), reviewer, grade, rubric scores, feedback | Researcher or vendor reviewer (EC5, DC8) |
 | Project | id, task_type schema, instructions, quality bar, volume, deadline, overlap, gold rate | DC1 |
-| Allocation | id, project, vendor, share, status | VP1 |
-| Task / Assignment / Submission | task payload; assignment to a worker; the answer, with worker ID, vendor, review and acceptance | One open assignment per worker and task (N7); lineage (D14) |
+| Allocation | id, project, vendor, share, price, price unit (hour, task or environment), status | VP1, PRD PD3 |
+| Task / Assignment / Submission | task payload; assignment to a worker; the answer, with worker ID, vendor, review, acceptance, time on task and hold status | One open assignment per worker and task (N7); lineage (D14) |
 | GoldAnswer | task, answer | Separate table (D8) |
 | Dataset | id, project, filter, uri, created_at | An exported snapshot (DC6) |
 | TrainingRun / Episode | run; episode_id, version, vendor, reward, passed, length, transcript_uri | Episodes live in the analytics store, not Postgres (D5) |
-| Flag | id, subject (worker, vendor or version), rule or person, evidence | AB1 AB2 TO3 |
-| Case | id, subject, owner, flags, status, decision, decided_by | D13, N18 |
+| Flag | id, subject (worker, vendor or version), rule (shared or vendor-private) or person, evidence | AB1 AB2 TO3 |
+| Case | id, subject, owner, flags, holds, vendor response, status, decision, decided_by | D13, N18 |
 | Action | id, case, type (warn, retrain, suspend, remove, lower allocation, pause, offboard, discard, re-label, quarantine) | AB4–AB6 |
-| Scorecard row | vendor, project, worker (optional), period, quality, volume, cost per accepted task, turnaround | Analytics store (D11) |
+| Scorecard row | vendor, project, worker (optional), period, quality, volume, cost per accepted unit, turnaround | Analytics store (D11) |
 | AuditEvent | id, actor, action, entity, before, after, at | Append-only (VM4) |
 
 ### API sketch
@@ -358,7 +360,7 @@ Each step lists the components involved, what each one is for, and what breaks w
 | `GET /projects/{id}/quality`, `POST /projects/{id}/exports` | Researcher | DC4 DC6 DC7 |
 | `GET /projects/{id}/vendors` | Data ops, researcher | VP2 |
 | `GET /vendors/{id}/scorecard`, `GET /workers/{id}/quality` | Data ops; vendor admin (own vendor only) | VP3 VP4 |
-| `GET /cases`, `POST /cases/{id}/decision`, `POST /cases/{id}/actions` | Vendor admin, data ops | AB3–AB5 AB7 |
+| `GET /cases`, `POST /cases/{id}/responses`, `POST /cases/{id}/decision`, `POST /cases/{id}/actions` | Vendor admin, data ops | AB3–AB5 AB7 AB8 |
 | `GET /lineage`, `POST /cleanups` | Data ops | AB6 |
 | `POST /ingest/episodes` (batch) | Training | TO1 N5 |
 | `GET /runs/{id}/stats`, `GET /runs/{id}/live` (SSE), `GET /episodes/{id}` | Researcher | TO2 TO4 TO5 |

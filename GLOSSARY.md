@@ -61,9 +61,15 @@ Terms used in [`POSTING.md`](POSTING.md), [`PRD.md`](PRD.md) and [`DESIGN.md`](D
 | **Acceptance rate** | The share of a vendor's (or worker's) submissions that pass QA | |
 | **Vendor performance** | How a vendor does on quality, volume, cost and turnaround, per project and over time | |
 | **Scorecard** | A view of one vendor's performance over time, comparable across vendors | |
+| **Cost per accepted unit** | What Anthropic pays for each accepted task, environment or hour of accepted work, normalized so vendors priced differently can be compared | |
+| **Time on task** | How long a worker spent on a task, measured by the platform from assignment to submission | |
 | **Throughput** | Accepted work per unit of time | *"data collection progress"* |
 | **Turnaround** | Time from a project or task being issued to accepted work coming back | *"a loop that closes in hours and days"* |
 | **Abuse** | Deliberate behavior that makes data look better, larger or more human than it is, or that misuses the platform. Happens at two levels: worker abuse and vendor abuse | |
 | **Worker abuse** | Abuse by individual workers, for example AI-generated answers where human judgment is required, answering without reading, multiple or shared accounts, colluding to game agreement, false claims of expertise, leaking tasks. Vendors detect and act first | |
 | **Vendor abuse** | Abuse by a vendor as an organization, for example padding volume with low-quality work, re-admitting banned workers, subcontracting without saying so, submitting environments with gameable graders or copied benchmark content. Anthropic detects and acts | |
+| **Case** | The record opened when abuse is suspected: the flags and evidence, the owner who decides (vendor admin for worker cases, data ops for vendor and environment cases), any response, and the decision | |
+| **Hold** | Automatic, reversible protection while a case is open: a flagged worker's pending answers are kept out of exports, or a flagged environment is quarantined | |
+| **Low quality** | Honest but poor work. It lowers a worker's or vendor's scores and gets feedback, but doesn't open a case. Contrast with abuse | |
+| **Cross-vendor match** | A possible later feature: vendors submit a keyed hash of a stable identifier, so Anthropic can tell that a worker at one vendor is the same person as a worker at another without learning who they are | |
 | **Lineage** | The trace from a piece of training data back to the task, worker (pseudonymous), vendor, environment version and reviewer it came from. Used to clean up after abuse is found | *"audit trails"* |
