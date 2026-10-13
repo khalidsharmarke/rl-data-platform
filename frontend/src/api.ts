@@ -1,6 +1,7 @@
 export type User = {
   id: string;
   display_name: string;
+  handle: string;
   role: string;
   org_id: string;
   org_name: string;
@@ -34,3 +35,28 @@ export async function api<T>(path: string, init: RequestInit = {}, token = saved
   if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
   return response.json() as Promise<T>;
 }
+
+export type Org = {
+  id: string;
+  name: string;
+  kind: "internal" | "vendor";
+  capabilities: string[];
+  domains: string[];
+};
+
+export type Member = {
+  id: string;
+  handle: string;
+  role: string;
+  display_name: string | null;
+};
+
+export type AuditEvent = {
+  id: number;
+  at: string;
+  actor_id: string | null;
+  action: string;
+  entity_type: string;
+  entity_id: string;
+  org_id: string | null;
+};

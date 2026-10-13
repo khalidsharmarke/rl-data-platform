@@ -66,3 +66,16 @@ async def client(session: AsyncSession, monkeypatch) -> AsyncIterator[AsyncClien
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         yield c
     app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def login(client):
+    """Sign in as a seeded person by name; returns request headers."""
+
+    async def as_person(display_name: str) -> dict[str, str]:
+        users = (await client.get("/auth/demo-users")).json()
+        user = next(u for u in users if u["display_name"] == display_name)
+        token = (await client.post("/auth/demo-login", json={"user_id": user["id"]})).json()["access_token"]
+        return {"Authorization": f"Bearer {token}"}
+
+    return as_person

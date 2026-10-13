@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { api, saveToken, savedToken, type User } from "./api";
+import Workspaces from "./Workspaces";
 
-const ROLE_LABELS: Record<string, string> = {
+export const ROLE_LABELS: Record<string, string> = {
   researcher: "Researcher",
   data_ops: "Data ops",
   vendor_admin: "Vendor admin",
@@ -34,7 +35,7 @@ export default function App() {
         </span>
         <button onClick={() => (saveToken(null), setMe(null))}>Sign out</button>
       </header>
-      <p className="muted">Signed in. Role-specific views arrive in later milestones.</p>
+      <Workspaces me={me} />
     </main>
   );
 }

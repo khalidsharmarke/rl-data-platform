@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | In progress: M0 done |
+| Status | In progress: M0–M1 done |
 | Timebox | About a week: ~33 hours across nine milestones |
 | Stack | Python (FastAPI, async) · Postgres · React + TypeScript (Vite) · Docker Compose |
 | Delivered as | This repo, runnable with `docker compose up`, plus a 2–3 minute recorded walkthrough embedded in the README |
@@ -32,7 +32,7 @@ The seeded scenario runs on its own, so a reviewer can watch it from start to fi
 
 | Area | Requirements | Notes |
 |---|---|---|
-| Workspaces and roles | VM1, VM4, VM6, N9 | Seeded demo logins per role instead of real SSO. Workspace scoping is enforced in API middleware, which stands in for the gateway |
+| Workspaces and roles | VM1, VM4, VM6, N9 | Seeded demo logins per role instead of real SSO. Workspace scoping is enforced by a shared scoping module that every route goes through (FastAPI dependencies), which stands in for the gateway |
 | Projects, contracts and allocation | DC1, VP1, VM7 | Contracts hold price and price unit (PD3); each allocation points to a contract |
 | Doing the work | DC2, DC3, DC9 | Assignment uses the Postgres job-queue pattern (`SKIP LOCKED`, D2). Time on task is recorded on every submission. Workers see reviewer rejections with reasons, never per-task gold results |
 | Measuring quality | DC4, DC7, N16, N17 | Hidden, rotatable gold tasks, overlap and agreement, worker quality scores |
@@ -48,7 +48,7 @@ These keep the boundaries from [`DESIGN.md`](DESIGN.md) but use simpler parts:
 
 | Design component | In the build |
 |---|---|
-| API gateway | Middleware in the FastAPI app |
+| API gateway | Authentication and a shared scoping module in the FastAPI app |
 | Analytics store | Summary tables in Postgres |
 | Object storage | A local directory mounted into the container |
 | Background jobs | An async worker process claiming jobs from the Postgres queue table |
@@ -91,7 +91,7 @@ Each milestone ends with something that runs and a check that proves it. Hours a
 | # | Milestone | Delivers | Done when | Hours | Status |
 |---|---|---|---|---|---|
 | M0 | Skeleton | Docker Compose with Postgres, the FastAPI app, migrations, the React app, a test runner and seeded demo logins | `docker compose up` serves a login page and a health endpoint; tests run in one command | 2 | Done |
-| M1 | Workspaces, roles and audit | Orgs with capabilities, users and roles, vendor-scoped worker IDs, workspace-scoping middleware, append-only audit log | A test shows Vendor A's admin can't read Vendor B's data; every write creates an audit event | 3 | |
+| M1 | Workspaces, roles and audit | Orgs with capabilities, users and roles, vendor-scoped worker IDs, workspace scoping, append-only audit log | A test shows Vendor A's admin can't read Vendor B's data; every write creates an audit event | 3 | Done |
 | M2 | Projects, contracts and work | Projects with schema versions, tasks, hidden gold answers, contracts with price and unit, allocations pointing to contracts, assignment queue, submissions with lineage and time on task | A worker can claim and answer tasks through the API; each submission carries full lineage | 4 | |
 | M3 | Quality | Gold scoring, overlap and agreement, researcher spot checks with reasons, acceptance, worker quality scores, gold-set rotation, the worker's feedback view | Seeded answers produce the expected accuracy and agreement; workers see spot-check rejections with reasons; no worker or vendor endpoint returns gold data (tested) | 5 | |
 | M4 | Simulator | Synthetic workers with profiles (careful, average, sloppy, AI-paster) driving the public API; the demo scenario script | One command runs the full demo scenario against a fresh database | 3 | |

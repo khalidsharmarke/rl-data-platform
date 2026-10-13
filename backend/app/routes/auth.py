@@ -17,6 +17,7 @@ router = APIRouter(prefix="/auth")
 class UserOut(BaseModel):
     id: uuid.UUID
     display_name: str
+    handle: str
     role: str
     org_id: uuid.UUID
     org_name: str
@@ -27,6 +28,7 @@ class UserOut(BaseModel):
         return cls(
             id=user.id,
             display_name=user.display_name,
+            handle=user.handle,
             role=user.role,
             org_id=user.org_id,
             org_name=user.org.name,
