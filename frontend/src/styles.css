@@ -77,3 +77,13 @@ body { background: var(--bg); color: var(--text); }
 .alerts { display: grid; gap: 6px; margin: 8px 0 12px; }
 .alert { margin: 0; padding: 8px 12px; border: 1px solid #e0a100; border-radius: 8px; background: color-mix(in srgb, #eda100 10%, var(--card)); }
 .alert span { color: #b77d00; }
+tr.clickable { cursor: pointer; }
+tr.clickable:hover td { background: var(--bg); }
+.badge { font-size: 0.8rem; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); }
+.badge.warn { border-color: #e0a100; background: color-mix(in srgb, #eda100 12%, var(--card)); }
+.case { margin-top: 16px; display: grid; gap: 6px; }
+.case h4 { margin: 12px 0 0; font-size: 0.95rem; }
+.history { margin: 0; padding-left: 18px; font-size: 0.9rem; }
+.decide { display: flex; gap: 8px; margin-top: 12px; }
+.decide input { flex: 1; font: inherit; padding: 8px; border: 1px solid var(--line); border-radius: 8px; }
+.decide select { font: inherit; padding: 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--text); }

@@ -62,6 +62,7 @@ class User(Base):
     role: Mapped[str] = mapped_column(Text)
     display_name: Mapped[str] = mapped_column(Text)
     handle: Mapped[str] = mapped_column(Text, unique=True, default=new_handle)
+    suspended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     org: Mapped[Org] = relationship(back_populates="users")

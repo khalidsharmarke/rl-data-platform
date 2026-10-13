@@ -69,3 +69,17 @@ async def answer_all(client, headers, project_id, generated, *, correct: bool, r
         assert s.status_code == 201, s.text
         done.append({"submission_id": s.json()["id"], "task_id": a["task"]["id"], "item": item})
     return done
+
+
+async def answer_like(client, headers, project_id, *, n: int, pasted: bool, reason: str | None) -> list[str]:
+    """Answer up to n tasks with a fixed behavior. Returns submission ids."""
+    ids = []
+    for _ in range(n):
+        r = await client.post("/assignments/next", headers=headers, json={"project_id": project_id})
+        if r.status_code != 200:
+            break
+        a = r.json()
+        answer = {"choice": "A", **({"rationale": reason} if reason else {})}
+        s = await client.post(f"/assignments/{a['id']}/submit", headers=headers, json={"answer": answer, "client_signals": {"pasted": pasted}})
+        ids.append(s.json()["id"])
+    return ids

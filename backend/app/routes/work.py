@@ -74,6 +74,8 @@ class LineageOut(BaseModel):
 async def next_task(
     body: NextIn, user: User = Depends(require_roles(Role.WORKER)), session: AsyncSession = Depends(get_session)
 ):
+    if user.suspended_at is not None:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Your account is suspended; contact your vendor admin")
     assignment = await claim_next(session, worker_id=user.id, vendor_id=user.org_id, project_id=body.project_id)
     if assignment is None:
         await session.rollback()
@@ -99,6 +101,8 @@ async def submit(
     user: User = Depends(require_roles(Role.WORKER)),
     session: AsyncSession = Depends(get_session),
 ) -> SubmissionOut:
+    if user.suspended_at is not None:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Your account is suspended; contact your vendor admin")
     assignment = await session.scalar(select(Assignment).where(Assignment.id == assignment_id).with_for_update())
     if assignment is None or assignment.worker_id != user.id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Not found")

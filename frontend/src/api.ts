@@ -186,3 +186,25 @@ export type WorkerQuality = {
   gold_accuracy: number | null;
   gold_n: number | null;
 };
+
+export type CaseSummary = {
+  id: string;
+  vendor_name: string;
+  subject_type: string;
+  subject_handle: string;
+  subject_name: string | null;
+  owner: string;
+  status: string;
+  opened_at: string;
+  decision: string | null;
+  decided_at: string | null;
+  held: boolean;
+  observations: string[];
+};
+
+export type CaseDetail = CaseSummary & {
+  decision_reason: string | null;
+  flags: { observation: string; rule: string | null; rule_version: string | null }[];
+  samples: { submission_id: string; prompt: string; answer: { choice: string; rationale?: string }; time_on_task_s: number; pasted: boolean }[];
+  actions: { action: string; by: string; note: string | null; at: string }[];
+};

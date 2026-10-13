@@ -7,8 +7,9 @@ Metric definition "quality-v1" (N19):
   answer of at least one other worker at the same vendor on the same task, out of answers
   that had another answer to compare with.
 - Rejected: the latest researcher review of the submission is a rejection.
-- Accepted: a regular-task answer that isn't rejected, whose worker is not below the
-  project's quality bar (gold accuracy), once the worker has enough gold results to judge.
+- Accepted: a regular-task answer that isn't rejected or held (an open abuse case, AB8),
+  whose worker is not below the project's quality bar (gold accuracy), once the worker has
+  enough gold results to judge.
 """
 
 import uuid
@@ -53,14 +54,15 @@ facts AS (
            (lr.verdict = 'rejected') IS TRUE AS rejected,
            (lr.verdict IS NOT NULL) AS reviewed,
            coalesce(wg.gold_n, 0) AS worker_gold_n,
-           coalesce(wg.gold_correct, 0) AS worker_gold_correct
+           coalesce(wg.gold_correct, 0) AS worker_gold_correct,
+           EXISTS (SELECT 1 FROM holds h WHERE h.worker_id = s.worker_id AND h.released_at IS NULL) AS held
     FROM s
     LEFT JOIN agreement a ON a.id = s.id
     LEFT JOIN latest_review lr ON lr.submission_id = s.id
     LEFT JOIN worker_gold wg ON wg.worker_id = s.worker_id
 )
 SELECT f.*,
-       (NOT f.is_gold AND NOT f.rejected AND (
+       (NOT f.is_gold AND NOT f.rejected AND NOT f.held AND (
             f.worker_gold_n < p.min_gold_results
             OR f.worker_gold_correct::numeric / f.worker_gold_n >= p.quality_bar
        )) AS accepted

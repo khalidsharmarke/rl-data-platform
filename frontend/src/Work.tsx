@@ -14,9 +14,14 @@ export default function Work() {
     setChoice(null);
     setRationale("");
     setPasted(false);
-    const claimed = await api<Assignment | null>("/assignments/next", { method: "POST", body: "{}" });
-    setAssignment(claimed);
-    if (!claimed) setMessage("No tasks available right now.");
+    try {
+      const claimed = await api<Assignment | null>("/assignments/next", { method: "POST", body: "{}" });
+      setAssignment(claimed);
+      if (!claimed) setMessage("No tasks available right now.");
+    } catch (e) {
+      setAssignment(null);
+      setMessage(e instanceof Error ? e.message : String(e));
+    }
   }
 
   async function submit() {

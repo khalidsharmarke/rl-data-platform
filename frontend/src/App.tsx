@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import Cases from "./Cases";
 import Feedback from "./Feedback";
 import Projects from "./Projects";
 import Review from "./Review";
@@ -51,6 +52,7 @@ function Views({ me }: { me: User }) {
     ...(me.role !== "worker" ? ["Projects"] : []),
     ...(["data_ops", "researcher", "vendor_admin"].includes(me.role) ? ["Scorecards"] : []),
     ...(me.role === "researcher" ? ["Review"] : []),
+    ...(["data_ops", "vendor_admin"].includes(me.role) ? ["Cases"] : []),
     "Workspaces",
   ];
   const [tab, setTab] = useState(tabs[0]);
@@ -68,6 +70,7 @@ function Views({ me }: { me: User }) {
       {tab === "Projects" && <Projects me={me} />}
       {tab === "Review" && <Review />}
       {tab === "Scorecards" && <Scorecards me={me} />}
+      {tab === "Cases" && <Cases me={me} />}
       {tab === "Workspaces" && <Workspaces me={me} />}
     </>
   );

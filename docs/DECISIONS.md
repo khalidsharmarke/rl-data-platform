@@ -50,6 +50,7 @@ Every product and design decision made so far, sorted by how hard it would be to
 | D13 | One flag → case → action model for both levels | Splitting the case model if the two levels diverge |
 | D17 | Gold tasks routed to every vendor; regular tasks to one vendor by share | Changing the routing rule; routes for started work stay as they are |
 | D19 | Scorecard drop alerts need both size (8 points) and significance (3 standard errors) | Tuning two thresholds |
+| D20 | Abuse rules look only at answers after the last decision on a worker | Changing the window rule |
 | | Three planes (control, execution, ingestion); Postgres, an analytics store and object storage | Replacing a store means a data migration, which is costly but loses nothing |
 | | Web app in React and TypeScript | A rewrite of the front end; the API (VM5) is unaffected |
 | B1 | The first build covers multi-vendor human data (flows 2, 4, 5), not the environment pipeline ([`BUILD.md`](BUILD.md)) | The environment slice can follow; nothing in slice A blocks it |

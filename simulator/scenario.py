@@ -25,6 +25,9 @@ TASKS = int(os.environ.get("DEMO_TASKS", "3000"))
 GOLD_RATE = 0.05
 SWITCH_AT = 0.35  # share of its vendor's expected answers after which the switcher starts pasting
 SEED = 2026
+# The vendor admin reviews open cases and suspends the worker. Off when deciding by hand on camera.
+ADMIN_DECIDES = os.environ.get("DEMO_ADMIN_DECIDES", "true") == "true"
+REVIEW_DELAY_MINUTES = 45  # simulated time between a case opening and the admin deciding
 
 PROFILES = {
     # accuracy on the better answer, simulated seconds per task, writes a reason, pastes it
@@ -165,6 +168,23 @@ async def run_worker(c, project_id, truth, vendor, name, profile, progress: Prog
             until_break = rng.randint(15, 40)
 
 
+async def vendor_admin(c, vendor: str, done: asyncio.Event) -> None:
+    """Brightline's admin checks for open cases and, after reviewing, suspends the worker."""
+    users = (await c.get("/auth/demo-users")).json()
+    headers = await as_person(c, next(u["display_name"] for u in users if u["role"] == "vendor_admin" and u["org_name"] == vendor))
+    seen: dict[str, float] = {}
+    loop = asyncio.get_running_loop()
+    while not done.is_set():
+        for case in (await c.get("/cases?status=open", headers=headers)).json():
+            seen.setdefault(case["id"], loop.time())
+            if loop.time() - seen[case["id"]] >= REVIEW_DELAY_MINUTES * 60 / SPEED:
+                detail = (await c.get(f"/cases/{case['id']}", headers=headers)).json()
+                reason = "Reviewed the evidence: " + " ".join(f["observation"] for f in detail["flags"])
+                await c.post(f"/cases/{case['id']}/decision", headers=headers, json={"decision": "suspend", "reason": reason[:1000]})
+                print(f"  {vendor} admin suspends {case['subject_name']} after reviewing the case", flush=True)
+        await sim_sleep(10 * 60)
+
+
 async def report(c, project_id) -> None:
     users = (await c.get("/auth/demo-users")).json()
     ops = await as_person(c, next(u["display_name"] for u in users if u["role"] == "data_ops"))
@@ -192,10 +212,15 @@ async def main() -> None:
                 print(f"  {progress.answered}/{progress.expected} answers", flush=True)
 
         tick = asyncio.create_task(ticker())
+        done = asyncio.Event()
+        admin = asyncio.create_task(vendor_admin(c, "Brightline Annotation", done)) if ADMIN_DECIDES else None
         rngs = random.Random(SEED)
         await asyncio.gather(*(run_worker(c, project_id, truth, v, n, p, progress, random.Random(rngs.random()))
                                for v, n, p in workers))
         tick.cancel()
+        done.set()
+        if admin:
+            await admin
         print(f"Done: {progress.answered} answers", flush=True)
         await report(c, project_id)
 
