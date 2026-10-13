@@ -5,7 +5,7 @@
 | Status | Draft: requirements and high-level design. No build scope yet |
 | Date | 2026-10-13 |
 | Source | [`POSTING.md`](POSTING.md), Anthropic's Full-Stack Software Engineer, Reinforcement Learning posting |
-| Related | [`PRD.md`](PRD.md) (product requirements) · [`GLOSSARY.md`](GLOSSARY.md) (terms) |
+| Related | [`PRD.md`](PRD.md) (product requirements) · [`GLOSSARY.md`](GLOSSARY.md) (terms) · [`DECISIONS.md`](DECISIONS.md) (decision register, by reversibility) |
 
 This is the engineering design: *how* the product described in [`PRD.md`](PRD.md) gets built. Requirements are derived from the posting and the PRD, and tied back to them by quotation or capability ID (`C#`). Anything the posting doesn't say outright is listed in the [Assumptions](#8-assumptions) register and cited by ID (`A#`).
 
@@ -160,6 +160,7 @@ The system is light on reads, heavy on writes for training results, and compute-
 | N16 | Consistent measurement | Quality, volume, cost and turnaround are computed by the platform from its own records, the same way for every vendor. Vendor-reported numbers are never an input | Vendors can only be compared fairly on an identical measure (PRD G2); PRD PD3 | |
 | N17 | Detection secrecy | Which tasks are gold, and how abuse detectors work, is never visible to vendors or workers; they see results, not the method. Gold accuracy is shown only in aggregate (VP4) and gold tasks are rotated | Known gold tasks and known rules can be gamed; PRD PD2 | |
 | N18 | Due process | Every abuse action is tied to a case holding the evidence behind it, and can be reviewed and reversed | A false finding against a worker or vendor has real consequences (PRD PD4) | |
+| N19 | Versioned definitions | Metric definitions, abuse rules and task and config schemas are versioned, and every score, flag, task and config records the version that produced it | A definition can then change without rewriting history: old and new versions can run side by side, and past numbers stay explainable ([decision register](DECISIONS.md)) | |
 
 ## 7. Out of scope
 
@@ -331,16 +332,16 @@ Each step lists the components involved, what each one is for, and what breaks w
 | EnvironmentVersion | id, environment, number, config (JSON), image digest, status | Immutable (D3) |
 | ValidationRun | id, version, check (reference, no-op, repeat), result, logs_uri | |
 | Review | id, subject (version or submission), reviewer, grade, rubric scores, feedback | Researcher or vendor reviewer (EC5, DC8) |
-| Project | id, task_type schema, instructions, quality bar, volume, deadline, overlap, gold rate | DC1 |
+| Project | id, task_type schema and schema version, instructions, quality bar, volume, deadline, overlap, gold rate | DC1 |
 | Allocation | id, project, vendor, share, price, price unit (hour, task or environment), status | VP1, PRD PD3 |
 | Task / Assignment / Submission | task payload; assignment to a worker; the answer, with worker ID, vendor, review, acceptance, time on task and hold status | One open assignment per worker and task (N7); lineage (D14) |
 | GoldAnswer | task, answer | Separate table (D8) |
 | Dataset | id, project, filter, uri, created_at | An exported snapshot (DC6) |
 | TrainingRun / Episode | run; episode_id, version, vendor, reward, passed, length, transcript_uri | Episodes live in the analytics store, not Postgres (D5) |
-| Flag | id, subject (worker, vendor or version), rule (shared or vendor-private) or person, evidence | AB1 AB2 TO3 |
+| Flag | id, subject (worker, vendor or version), rule (shared or vendor-private) and rule version, or person; evidence | AB1 AB2 TO3 |
 | Case | id, subject, owner, flags, holds, vendor response, status, decision, decided_by | D13, N18 |
 | Action | id, case, type (warn, retrain, suspend, remove, lower allocation, pause, offboard, discard, re-label, quarantine) | AB4–AB6 |
-| Scorecard row | vendor, project, worker (optional), period, quality, volume, cost per accepted unit, turnaround | Analytics store (D11) |
+| Scorecard row | vendor, project, worker (optional), period, metric version, quality, volume, cost per accepted unit, turnaround | Analytics store (D11) |
 | AuditEvent | id, actor, action, entity, before, after, at | Append-only (VM4) |
 
 ### API sketch

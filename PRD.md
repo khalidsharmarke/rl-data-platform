@@ -4,7 +4,7 @@
 |---|---|
 | Status | Draft |
 | Date | 2026-10-13 |
-| Related | [`POSTING.md`](POSTING.md) (source) · [`GLOSSARY.md`](GLOSSARY.md) (terms) · [`DESIGN.md`](DESIGN.md) (engineering design) |
+| Related | [`POSTING.md`](POSTING.md) (source) · [`GLOSSARY.md`](GLOSSARY.md) (terms) · [`DESIGN.md`](DESIGN.md) (engineering design) · [`DECISIONS.md`](DECISIONS.md) (decision register) |
 
 This document says *what* the product is and *why*: the problem, who it serves, what each of them needs, and how we'd know it works. [`DESIGN.md`](DESIGN.md) says *how* it's built. Glossary terms are in bold on first use and are defined in the [glossary](GLOSSARY.md).
 
@@ -132,7 +132,7 @@ Priority: **P0** is needed for the product to make sense, **P1** makes it good, 
 | C6.3 | API keys and registry credentials for the vendor's own tooling | Vendor admin | P1 | VM2 |
 
 ### C7. Platform basics
-Sign-in, permissions, tenant isolation, audit trail and API access. These are standard for running any multi-tenant platform. They're specified in [`DESIGN.md`](DESIGN.md) (VM1, VM4, VM5, N9, N11, N12, N16–N18) and not repeated here.
+Sign-in, permissions, tenant isolation, audit trail and API access. These are standard for running any multi-tenant platform. They're specified in [`DESIGN.md`](DESIGN.md) (VM1, VM4, VM5, N9, N11, N12, N16–N19) and not repeated here.
 
 ## 6. How we'd know it works
 
