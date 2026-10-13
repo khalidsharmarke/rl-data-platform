@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Draft: requirements and high-level design. No build scope yet |
+| Status | Draft: requirements and high-level design. First build scoped in [`BUILD.md`](BUILD.md) |
 | Date | 2026-10-13 |
 | Source | [`POSTING.md`](POSTING.md), Anthropic's Full-Stack Software Engineer, Reinforcement Learning posting |
 | Related | [`PRD.md`](PRD.md) (product requirements) · [`GLOSSARY.md`](GLOSSARY.md) (terms) · [`DECISIONS.md`](DECISIONS.md) (decision register, by reversibility) |
@@ -368,6 +368,6 @@ Each step lists the components involved, what each one is for, and what breaks w
 
 ## 10. Next steps
 
-1. **Scope the build**: which flow or flows, the timebox and the stack. Some components can be small stand-ins in the build while keeping the same boundaries: the gateway as middleware in the API service, the durable log as a Postgres table, the analytics store as summary tables in Postgres, and the registry as local Docker.
-2. **Decide which NFRs get shown in code versus written up.** N4–N9 and N12 are cheap to demonstrate and are the hard parts. The scale targets (N1–N3, N10) are better written up from the estimates above.
-3. **Deeper diagrams if needed**: the environment-version state machine (D3), the case life cycle (D13), and sequence diagrams for the five core flows.
+1. **Build the first slice.** [`BUILD.md`](BUILD.md) scopes it: multi-vendor human data (core flows 2, 4 and 5), with the stand-ins listed there.
+2. **Next slice after that:** the environment pipeline and training observability (flows 1 and 3), starting with immutable environment versions and sandboxed validation.
+3. **Deeper diagrams if needed:** the environment-version state machine (D3), the case life cycle (D13), and sequence diagrams for the five core flows.

@@ -1,6 +1,6 @@
 # Decision register
 
-Every product and design decision made so far, sorted by how hard it would be to undo. Product decisions (`PD#`) are explained in [`PRD.md`](PRD.md#7-product-decisions); design decisions (`D#`) and assumptions (`A#`) in [`DESIGN.md`](DESIGN.md). Framing decisions (`F#`) shape both documents and are recorded only here.
+Every product and design decision made so far, sorted by how hard it would be to undo. Product decisions (`PD#`) are explained in [`PRD.md`](PRD.md#7-product-decisions); design decisions (`D#`) and assumptions (`A#`) in [`DESIGN.md`](DESIGN.md). Framing decisions (`F#`) shape both documents and are recorded only here; build decisions (`B#`) are explained in [`BUILD.md`](BUILD.md).
 
 ## How decisions are classified
 
@@ -49,6 +49,9 @@ Every product and design decision made so far, sorted by how hard it would be to
 | D13 | One flag → case → action model for both levels | Splitting the case model if the two levels diverge |
 | | Three planes (control, execution, ingestion); Postgres, an analytics store and object storage | Replacing a store means a data migration, which is costly but loses nothing |
 | | Web app in React and TypeScript | A rewrite of the front end; the API (VM5) is unaffected |
+| B1 | The first build covers multi-vendor human data (flows 2, 4, 5), not the environment pipeline ([`BUILD.md`](BUILD.md)) | The environment slice can follow; nothing in slice A blocks it |
+| B2 | Build stack: FastAPI (async Python), Postgres, React + TypeScript, Docker Compose | Rewriting the backend in another language; the API contract and data model carry over |
+| B3 | Delivered as a runnable repo plus a recorded walkthrough, not a hosted demo | Hosting can be added later without code changes |
 
 ## What this means for the first build
 
