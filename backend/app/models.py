@@ -122,6 +122,8 @@ class Project(Base):
     deadline: Mapped[date | None] = mapped_column(Date)
     overlap: Mapped[int] = mapped_column(Integer)
     gold_rate: Mapped[Decimal] = mapped_column(Numeric(4, 3))
+    quality_bar: Mapped[Decimal] = mapped_column(Numeric(4, 3), default=Decimal("0.800"))
+    min_gold_results: Mapped[int] = mapped_column(Integer, default=5)
     status: Mapped[str] = mapped_column(Text, default="active")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
@@ -207,3 +209,23 @@ class Submission(Base):
     assigned_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     submitted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     time_on_task_ms: Mapped[int] = mapped_column(Integer)
+
+
+class Review(Base):
+    __tablename__ = "reviews"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid())
+    submission_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("submissions.id"))
+    reviewer_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
+    verdict: Mapped[str] = mapped_column(Text)
+    reason: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class GoldRetirement(Base):
+    __tablename__ = "gold_retirements"
+
+    task_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("gold_answers.task_id"), primary_key=True)
+    retired_by: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
+    reason: Mapped[str] = mapped_column(Text)
+    retired_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

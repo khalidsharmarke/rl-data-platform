@@ -91,6 +91,7 @@ CLAIM = text(
       AND a.status = 'active'
       AND (CAST(:project_id AS uuid) IS NULL OR p.id = CAST(:project_id AS uuid))
       AND r.task_id <> ALL(CAST(:skip AS uuid[]))
+      AND NOT EXISTS (SELECT 1 FROM gold_retirements g WHERE g.task_id = r.task_id)
       AND NOT EXISTS (SELECT 1 FROM assignments x WHERE x.task_id = r.task_id AND x.worker_id = :worker_id)
       AND (
         SELECT count(*) FROM assignments x

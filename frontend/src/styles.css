@@ -43,3 +43,6 @@ h3 { font-size: 1rem; margin: 8px 0; }
 .field { display: grid; gap: 4px; color: var(--muted); font-size: 0.9rem; }
 .field input { font: inherit; padding: 8px; border: 1px solid var(--line); border-radius: 8px; }
 @media (max-width: 640px) { .choices { grid-template-columns: 1fr; } }
+.row { display: flex; gap: 8px; align-items: center; }
+.row input { flex: 1; font: inherit; padding: 8px; border: 1px solid var(--line); border-radius: 8px; }
+div.choice { border: 1px solid var(--line); border-radius: 8px; }

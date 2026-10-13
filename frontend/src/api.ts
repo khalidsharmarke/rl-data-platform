@@ -106,3 +106,38 @@ export type Assignment = {
     payload: { prompt: string; response_a: string; response_b: string };
   };
 };
+
+export type QualityRow = {
+  id: string;
+  label: string;
+  submissions: number;
+  gold_n: number;
+  gold_accuracy: number | null;
+  compared: number;
+  agreement: number | null;
+  reviewed: number;
+  rejected: number;
+  accepted: number;
+};
+
+export type Quality = { metric_version: string; vendors: QualityRow[]; workers: QualityRow[] };
+
+export type ReviewItem = {
+  submission_id: string;
+  vendor_name: string;
+  worker_handle: string;
+  submitted_at: string;
+  payload: { prompt: string; response_a: string; response_b: string };
+  answer: { choice: string; rationale?: string };
+};
+
+export type FeedbackItem = {
+  submission_id: string;
+  project_name: string;
+  prompt: string;
+  your_answer: { choice: string; rationale?: string };
+  reason: string;
+  reviewed_at: string;
+};
+
+export const pct = (x: number | null | undefined) => (x == null ? "—" : `${Math.round(x * 100)}%`);

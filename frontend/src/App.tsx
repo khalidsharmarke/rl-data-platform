@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
+import Feedback from "./Feedback";
 import Projects from "./Projects";
+import Review from "./Review";
 import Work from "./Work";
 import { api, saveToken, savedToken, type User } from "./api";
 import Workspaces from "./Workspaces";
@@ -44,8 +46,9 @@ export default function App() {
 
 function Views({ me }: { me: User }) {
   const tabs = [
-    ...(me.role === "worker" ? ["Work"] : []),
+    ...(me.role === "worker" ? ["Work", "Feedback"] : []),
     ...(me.role !== "worker" ? ["Projects"] : []),
+    ...(me.role === "researcher" ? ["Review"] : []),
     "Workspaces",
   ];
   const [tab, setTab] = useState(tabs[0]);
@@ -59,7 +62,9 @@ function Views({ me }: { me: User }) {
         ))}
       </nav>
       {tab === "Work" && <Work />}
+      {tab === "Feedback" && <Feedback />}
       {tab === "Projects" && <Projects me={me} />}
+      {tab === "Review" && <Review />}
       {tab === "Workspaces" && <Workspaces me={me} />}
     </>
   );

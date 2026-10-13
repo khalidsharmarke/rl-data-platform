@@ -54,3 +54,18 @@ async def allocate(client, login, project_id: str, vendor: str, share: str, cont
         f"/projects/{project_id}/allocations", headers=ops,
         json={"vendor_id": vendor_id, "contract_id": contract_id, "share": share},
     )
+
+
+async def answer_all(client, headers, project_id, generated, *, correct: bool, rationale: str | None = None) -> list[dict]:
+    """Claim and answer every available task as one worker. Returns [{submission_id, task_id, item}]."""
+    truth = {g.payload["item"]: g.better for g in generated}
+    done = []
+    while (r := await client.post("/assignments/next", headers=headers, json={"project_id": project_id})).status_code == 200:
+        a = r.json()
+        item = a["task"]["payload"]["item"]
+        choice = truth[item] if correct else ("B" if truth[item] == "A" else "A")
+        answer = {"choice": choice, **({"rationale": rationale} if rationale else {})}
+        s = await client.post(f"/assignments/{a['id']}/submit", headers=headers, json={"answer": answer})
+        assert s.status_code == 201, s.text
+        done.append({"submission_id": s.json()["id"], "task_id": a["task"]["id"], "item": item})
+    return done

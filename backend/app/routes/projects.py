@@ -29,6 +29,8 @@ class ProjectIn(BaseModel):
     deadline: date | None = None
     overlap: int = Field(ge=1, le=10)
     gold_rate: Decimal = Field(ge=0, lt=1)
+    quality_bar: Decimal = Field(default=Decimal("0.8"), ge=0, le=1)
+    min_gold_results: int = Field(default=5, ge=1)
 
 
 class ProjectOut(BaseModel):
@@ -39,6 +41,7 @@ class ProjectOut(BaseModel):
     target_volume: int
     deadline: date | None
     overlap: int
+    quality_bar: Decimal
     status: str
 
 
@@ -74,6 +77,11 @@ class AllocationOut(BaseModel):
     submissions: int
 
 
+def vendor_visible(routing: dict[str, int]) -> dict[str, int]:
+    """Routing stats safe for an audit event a vendor can read: no gold counts (N17)."""
+    return {k: v for k, v in routing.items() if "gold" not in k}
+
+
 def project_out(p: Project) -> ProjectOut:
     return ProjectOut.model_validate(p, from_attributes=True)
 
@@ -102,6 +110,7 @@ async def create_project(
     project = Project(
         name=body.name, created_by=user.id, task_type=body.task_type, current_schema_version=1,
         target_volume=body.target_volume, deadline=body.deadline, overlap=body.overlap, gold_rate=body.gold_rate,
+        quality_bar=body.quality_bar, min_gold_results=body.min_gold_results,
     )
     session.add(project)
     await session.flush()
@@ -204,7 +213,7 @@ async def allocate(
     await session.flush()
     routing = await route_tasks(session, project)
     record(session, actor=user, action="allocation.created", entity_type="allocation", entity_id=allocation.id, org_id=vendor.id,
-           after={"project_id": str(project.id), "contract_id": str(contract.id), "share": str(allocation.share), **routing})
+           after={"project_id": str(project.id), "contract_id": str(contract.id), "share": str(allocation.share), **vendor_visible(routing)})
     await session.commit()
     return await allocation_rows(session, project)
 
@@ -229,6 +238,6 @@ async def change_allocation(
     await session.flush()
     routing = await route_tasks(session, project)
     record(session, actor=user, action="allocation.changed", entity_type="allocation", entity_id=allocation.id, org_id=allocation.vendor_id,
-           before=before, after={"share": str(allocation.share), "status": allocation.status, **routing})
+           before=before, after={"share": str(allocation.share), "status": allocation.status, **vendor_visible(routing)})
     await session.commit()
     return await allocation_rows(session, project)
