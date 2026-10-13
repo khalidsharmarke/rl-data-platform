@@ -154,15 +154,6 @@ These are proposed targets, to be checked against real baselines.
 | Q4 | Which signals count as abuse versus low quality, and who decides? | A false abuse finding against a worker or vendor has real consequences |
 | Q5 | Is the abuse detector shared across vendors, or can vendors add their own rules? | Shared rules make comparisons fair; vendor rules catch vendor-specific patterns |
 
-## 8. Impact on the engineering design
-
-This PRD changes several things in [`DESIGN.md`](DESIGN.md), which will be updated separately:
-
-- **A24 is wrong.** It assumed one vendor model for both kinds of vendor. Vendors need a capability setting: workforce, environments, or both.
-- **New requirements:** project allocation (C1.2), cross-vendor comparison and scorecards (C4.1–C4.3), the vendor reviewer role (C2.2), abuse detection, cases and actions at both levels (C5).
-- **Changed emphasis:** training observability matters mainly as an input to vendor performance and abuse detection (C3.4, C5.2), not as a stand-alone dashboard.
-- **Visibility boundary (Q1):** affects the data model (pseudonymous worker IDs) and tenant isolation (N9).
-
 ## Sources
 
 - [TechCrunch: Silicon Valley bets big on 'environments' to train AI agents](https://techcrunch.com/2025/09/21/silicon-valley-bets-big-on-environments-to-train-ai-agents/) (environment vendors, Mechanize and Anthropic, the $1B figure, workforce vendors moving into environments)
