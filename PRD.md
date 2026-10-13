@@ -83,14 +83,14 @@ Priority: **P0** is needed for the product to make sense, **P1** makes it good, 
 | # | Capability | Who | Priority | Design |
 |---|---|---|---|---|
 | C1.1 | Create a project: task type, instructions, quality bar, volume, deadline | Researcher | P0 | DC1 |
-| C1.2 | Allocate a project across vendors by **vendor capability**; change allocation while it runs | Data ops | P0 | (new) |
+| C1.2 | Allocate a project across vendors by **vendor capability**; change allocation while it runs | Data ops | P0 | VP1 VM6 |
 | C1.3 | See project progress: volume, acceptance, turnaround, per vendor | Researcher, data ops | P0 | DC7 |
 
 ### C2. Doing the work
 | # | Capability | Who | Priority | Design |
 |---|---|---|---|---|
 | C2.1 | Receive tasks, answer them, see feedback on rejected work | Worker | P0 | DC2 DC3 |
-| C2.2 | Review workers' output before it goes to Anthropic | Vendor reviewer | P1 | (new) |
+| C2.2 | Review workers' output before it goes to Anthropic | Vendor reviewer | P1 | DC8 |
 | C2.3 | Submit an environment, see validation results and reviewer feedback, resubmit | Environment builder | P0 | EC1–EC4 |
 
 ### C3. Measuring quality
@@ -99,26 +99,26 @@ Priority: **P0** is needed for the product to make sense, **P1** makes it good, 
 | C3.1 | Hidden **gold tasks** and overlap between workers, applied the same way across vendors | Platform | P0 | DC4 |
 | C3.2 | Researcher review and grading of human data and environments | Researcher | P0 | EC5 |
 | C3.3 | Automated environment **validation** | Platform | P0 | EC3 |
-| C3.4 | Training outcomes (reward hacking, solve rates) attributed back to the environment and vendor | Platform | P1 | TO1–TO3 |
+| C3.4 | Training outcomes (reward hacking, solve rates) attributed back to the environment and vendor | Platform | P1 | TO7 |
 
 ### C4. Performance views
 | # | Capability | Who | Priority | Design |
 |---|---|---|---|---|
-| C4.1 | **Project view:** vendors side by side on one project (quality, volume, cost, turnaround) | Data ops, researcher | P0 | (new) |
-| C4.2 | **Vendor scorecard:** one vendor's performance over time, across projects, with alerts on significant drops | Data ops | P0 | (new) |
-| C4.3 | **Vendor's own view:** the vendor sees its scorecard as Anthropic sees it, broken down by worker | Vendor admin | P0 | (new) |
-| C4.4 | Worker quality history within a vendor | Vendor admin, vendor reviewer | P1 | DC4 |
+| C4.1 | **Project view:** vendors side by side on one project (quality, volume, cost, turnaround) | Data ops, researcher | P0 | VP2 |
+| C4.2 | **Vendor scorecard:** one vendor's performance over time, across projects, with alerts on significant drops | Data ops | P0 | VP3 |
+| C4.3 | **Vendor's own view:** the vendor sees its scorecard as Anthropic sees it, broken down by worker | Vendor admin | P0 | VP4 |
+| C4.4 | Worker quality history within a vendor | Vendor admin, vendor reviewer | P1 | VP4 DC4 |
 
 ### C5. Abuse: detect, investigate, act
 | # | Capability | Who | Priority | Design |
 |---|---|---|---|---|
-| C5.1 | Detect **worker abuse**: answers faster than reading time, near-duplicate answers, AI-generated text where human judgment is required, colluding answer patterns, gold-task farming | Platform → vendor admin | P0 | (new) |
-| C5.2 | Detect **vendor abuse**: quality falling while volume rises, banned workers returning, environments with gameable graders or copied benchmark content | Platform → data ops | P1 | TO3 (partly) |
-| C5.3 | Case handling: a flag opens a case with evidence; the owner records a decision | Vendor admin, data ops | P0 | (new) |
-| C5.4 | Actions on workers: warn, retrain, suspend, remove | Vendor admin | P0 | (new) |
-| C5.5 | Actions on vendors: lower allocation, pause, offboard | Data ops | P1 | (new) |
-| C5.6 | Clean up data: find everything a flagged worker, vendor or environment produced (lineage), then discard it, re-label it or **quarantine** it | Data ops | P0 | TO6 N12 |
-| C5.7 | Anthropic can see vendor-level abuse cases and how each vendor resolved them | Data ops | P1 | (new) |
+| C5.1 | Detect **worker abuse**: answers faster than reading time, near-duplicate answers, AI-generated text where human judgment is required, colluding answer patterns, gold-task farming | Platform → vendor admin | P0 | AB1 |
+| C5.2 | Detect **vendor abuse**: quality falling while volume rises, banned workers returning, environments with gameable graders or copied benchmark content | Platform → data ops | P1 | AB2 TO3 |
+| C5.3 | Case handling: a flag opens a case with evidence; the owner records a decision | Vendor admin, data ops | P0 | AB3 |
+| C5.4 | Actions on workers: warn, retrain, suspend, remove | Vendor admin | P0 | AB4 |
+| C5.5 | Actions on vendors: lower allocation, pause, offboard | Data ops | P1 | AB5 |
+| C5.6 | Clean up data: find everything a flagged worker, vendor or environment produced (lineage), then discard it, re-label it or **quarantine** it | Data ops | P0 | AB6 TO6 |
+| C5.7 | Anthropic can see vendor-level abuse cases and how each vendor resolved them | Data ops | P1 | AB7 |
 
 ### C6. Vendor workspace
 | # | Capability | Who | Priority | Design |
@@ -128,7 +128,7 @@ Priority: **P0** is needed for the product to make sense, **P1** makes it good, 
 | C6.3 | API keys and registry credentials for the vendor's own tooling | Vendor admin | P1 | VM2 |
 
 ### C7. Platform basics
-Sign-in, permissions, tenant isolation, audit trail and API access. These are standard for running any multi-tenant platform. They're specified in [`DESIGN.md`](DESIGN.md) (VM1, VM4, VM5, N9, N11, N12) and not repeated here.
+Sign-in, permissions, tenant isolation, audit trail and API access. These are standard for running any multi-tenant platform. They're specified in [`DESIGN.md`](DESIGN.md) (VM1, VM4, VM5, N9, N11, N12, N16–N18) and not repeated here.
 
 ## 6. How we'd know it works
 

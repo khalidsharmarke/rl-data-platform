@@ -5,33 +5,41 @@
 | Status | Draft: requirements and high-level design. No build scope yet |
 | Date | 2026-10-13 |
 | Source | [`POSTING.md`](POSTING.md), Anthropic's Full-Stack Software Engineer, Reinforcement Learning posting |
+| Related | [`PRD.md`](PRD.md) (product requirements) · [`GLOSSARY.md`](GLOSSARY.md) (terms) |
 
-Requirements are derived from the posting and tied back to it by quotation. Anything the posting doesn't say outright is listed in the [Assumptions](#8-assumptions) register and cited by ID (`A#`).
+This is the engineering design: *how* the product described in [`PRD.md`](PRD.md) gets built. Requirements are derived from the posting and the PRD, and tied back to them by quotation or capability ID (`C#`). Anything the posting doesn't say outright is listed in the [Assumptions](#8-assumptions) register and cited by ID (`A#`).
 
 ## 1. Problem area
 
 The posting summarizes the job in one sentence: build the platforms, tools and interfaces that power *"environment creation, data collection, and training observability"*. The reason it matters: *"The quality of Claude's next generation depends on the quality of the data we train it on"*.
 
-Put another way: outside contributors (vendors and labelers) produce training environments and human data at scale, and researchers need to trust that output before and during training. The system has three pillars and one cross-cutting layer:
+The [PRD](PRD.md) sets out the product problem. Anthropic needs high-quality, high-volume training data and sources it through **vendors**, which differ in what they can supply and how well. Anthropic has to compare vendors on the same work, follow their performance over time, and catch abuse. Vendors have to manage their own people and catch abuse among their own workers.
 
-| Pillar | Job |
+For engineering, that splits into four areas and one cross-cutting layer:
+
+| Area | Job |
 |---|---|
 | Environment creation | Get correct, well-calibrated training environments from vendors (and generators) into training |
-| Data collection | Get high-quality human data from thousands of labelers into training |
-| Training observability | Show whether environments and runs behave as intended, and catch reward hacks |
-| Vendor management and platform (cross-cutting) | Tenancy, access, credentials, onboarding, audit, APIs |
+| Data collection | Get high-quality human data from vendors' workers into training |
+| Training observability | Show whether environments and runs behave as intended, catch reward hacks, and attribute training outcomes back to vendors |
+| Vendor performance and integrity | Allocate work across vendors, measure every vendor the same way over time, and detect and act on abuse by workers and by vendors |
+| Platform (cross-cutting) | Vendor workspaces, access, credentials, onboarding, audit, APIs |
 
-**How the requirements were derived.** The *What You'll Do* (8 bullets) and *Representative Projects* (6 bullets) sections were grouped by the system each bullet describes, then sorted under the three pillars named in the role summary. Items from *Strong Candidates May Also Have* are nice-to-haves. Where one became a requirement, it's marked (A18). One *What You'll Do* bullet (*"Partner closely with RL researchers…"*) describes how the role works, not something to build, so it produced no requirement.
+**How the requirements were derived.** The *What You'll Do* (8 bullets) and *Representative Projects* (6 bullets) sections of the posting were grouped by the system each bullet describes and sorted under the areas above. The vendor performance and integrity requirements come from the PRD's capabilities (C1, C4, C5), grounded in the posting's *"vendor management workflows"* and *"quality assurance systems"*. Items from *Strong Candidates May Also Have* are nice-to-haves; where one became a requirement, it's marked (A18). One *What You'll Do* bullet (*"Partner closely with RL researchers…"*) describes how the role works, not something to build, so it produced no requirement.
 
 ## 2. Actors
 
-| Actor | Who | Source |
-|---|---|---|
-| Vendor | External partner that builds environments, and (A24) supplies labelers | *"let external partners create, submit, and iterate on training environments"* |
-| Labeler | One of thousands of human experts, often non-technical | *"thousands of data labelers"*; *"non-technical labelers"* |
-| Researcher | Reviews environments, defines data collection, watches training runs | *"researchers, external vendors, and thousands of data labelers use every day"* |
-| Ops / vendor manager | Onboards and manages vendors | *"data operations, and vendor management"* |
-| Training infrastructure | System actor: consumes approved environments and data, reports run results (A23) | *"RL training infrastructure"* |
+Personas are described in the [PRD](PRD.md#3-who-cares-about-what). Each vendor has a capability setting: human work, environments, or both (A24).
+
+| Actor | Side | Role on the platform | Source |
+|---|---|---|---|
+| Researcher | Anthropic | Defines projects, reviews environments and data, watches training runs | *"researchers, external vendors, and thousands of data labelers use every day"* |
+| Data ops | Anthropic | Sets up vendors, allocates work, compares performance, handles vendor abuse | *"data operations, and vendor management"* |
+| Vendor admin | Vendor | Manages the vendor's users and quality; handles worker abuse | *"vendor management workflows"* |
+| Vendor reviewer | Vendor | Checks workers' output before it goes to Anthropic (some vendors only) | PRD C2.2 (A29) |
+| Worker | Vendor | A labeler or expert doing tasks | *"thousands of data labelers"*; *"non-technical labelers"* |
+| Environment builder | Vendor | Creates and submits environments | *"let external partners create, submit, and iterate on training environments"* |
+| Training infrastructure | System | Consumes approved environments and data; reports run results (A23) | *"RL training infrastructure"* |
 
 ## 3. Functional requirements
 
@@ -39,10 +47,10 @@ Put another way: outside contributors (vendors and labelers) produce training en
 
 | # | Requirement | Source | Assumes |
 |---|---|---|---|
-| EC1 | A vendor can define an environment: task prompt, container image, grader or reward function, and metadata (language, intended difficulty) | *"environment configuration"* | |
+| EC1 | An environment builder can define an environment: task prompt, container image, grader or reward function, and metadata (language, intended difficulty) | *"environment configuration"* | |
 | EC2 | Every change creates an immutable version; history and diffs are viewable | *"versioning"* | |
 | EC3 | Submitting a version triggers automated checks: the reference solution passes, a no-op solution fails, repeated runs agree, and difficulty is estimated | *"validate correctness and difficulty calibration before environments hit production training"* | A11, A12 |
-| EC4 | A vendor sees check results and reviewer feedback, then fixes and resubmits | *"iterate on training environments with minimal friction"* | |
+| EC4 | An environment builder sees check results and reviewer feedback, then fixes and resubmits | *"iterate on training environments with minimal friction"* | |
 | EC5 | A researcher browses environments (filter by status, vendor, difficulty), grades them against a rubric and leaves feedback | *"let researchers browse, grade, and provide feedback on training environments"* | A20 |
 | EC6 | Approved versions are promoted and exposed to training infrastructure through an API | *"connect environment authoring tools, data collection systems, and RL training infrastructure"* | A23 |
 | EC7 | Programming tasks are generated in bulk across languages and difficulty levels, each with tests as the reward signal, and pass through EC3 | *"scalable code data generation pipelines, producing diverse programming tasks with robust reward signals"* | A21 |
@@ -51,13 +59,14 @@ Put another way: outside contributors (vendors and labelers) produce training en
 
 | # | Requirement | Source | Assumes |
 |---|---|---|---|
-| DC1 | A researcher creates a collection project: task type, instructions, answer schema (rate, compare, write, trajectory review) | *"labeling workflows"*; *"many task types"*; *"complex agentic tasks"* | |
-| DC2 | Items are queued and assigned to labelers across vendors | *"human data collection at scale"* | A24 |
-| DC3 | Labelers complete items in a UI built for non-technical users | *"interfaces that are intuitive for both technical researchers and non-technical labelers"* | |
-| DC4 | QA: gold items with known answers, overlapping assignments to measure agreement, reviewer spot checks, a quality score per labeler | *"quality assurance systems"* | A13 |
-| DC5 | Labelers can flag broken items, and disagreement spikes raise alerts | *"feedback mechanisms that surface reward signal integrity issues early"* | A13 |
+| DC1 | A researcher creates a collection project: task type, instructions, answer schema (rate, compare, write, trajectory review), quality bar, volume and deadline | *"labeling workflows"*; *"many task types"*; *"complex agentic tasks"* | |
+| DC2 | Tasks are assigned to workers within the vendors allocated to the project (VP1) | *"human data collection at scale"* | |
+| DC3 | Workers complete tasks in a UI built for non-technical users | *"interfaces that are intuitive for both technical researchers and non-technical labelers"* | |
+| DC4 | QA: gold tasks with known answers, overlapping assignments to measure agreement, reviewer spot checks, and a quality score per worker, computed the same way for every vendor (N16) | *"quality assurance systems"* | A13 |
+| DC5 | Workers can flag broken tasks, and disagreement spikes raise alerts | *"feedback mechanisms that surface reward signal integrity issues early"* | A13 |
 | DC6 | QA-passed data is exported for training | *"connect environment authoring tools, data collection systems, and RL training infrastructure"* | A23 |
 | DC7 | Progress and throughput are tracked per project and per vendor | *"data collection progress"* | |
+| DC8 | A vendor reviewer can check and correct workers' output before it's submitted to Anthropic. Vendor review adds to platform QA and doesn't replace it | PRD C2.2 | A29 |
 
 ### Training observability
 
@@ -69,24 +78,49 @@ Put another way: outside contributors (vendors and labelers) produce training en
 | TO4 | Live dashboard and alerts while a run is in progress | *"real-time feedback during production training"* | A9 |
 | TO5 | Drill down from a run to an environment to a single episode transcript | *"browsing and analyzing training run results"* | |
 | TO6 | From a flag, quarantine an environment and send it back to review (EC5) | Inferred: closes the loop from observability back to environment creation | A19 |
+| TO7 | Training outcomes (reward hacks, solve rates) are attributed to the environment version and its vendor, and feed the vendor scorecard (VP3) | PRD C3.4; *"surface reward signal integrity issues early"* | |
 
-### Vendor management and platform
+### Vendor performance
 
 | # | Requirement | Source | Assumes |
 |---|---|---|---|
-| VM1 | Ops creates vendor orgs, invites users and assigns roles; vendors see only their own data | *"multi-tenant platforms with role-based access"* (nice-to-have) | A18 |
+| VP1 | Data ops allocates a project across vendors whose capabilities match, and changes the allocation while it runs | PRD C1.2; *"vendor management workflows"* | A24 |
+| VP2 | Project view: vendors side by side on one project, comparing quality, volume, cost and turnaround | PRD C4.1 | A28 |
+| VP3 | Vendor scorecard: one vendor's performance over time and across projects, with alerts on significant drops | PRD C4.2 | A28 |
+| VP4 | Vendor's own view: vendor admins see their scorecard as Anthropic sees it, broken down by worker, with each worker's quality history | PRD C4.3, C4.4 | A26 |
+
+### Abuse
+
+| # | Requirement | Source | Assumes |
+|---|---|---|---|
+| AB1 | Detect worker abuse (answering faster than reading time, near-duplicate answers, AI-generated text where human judgment is required, colluding answer patterns, gold-task farming) and flag it to the vendor admin | PRD C5.1; *"surface reward signal integrity issues early"* | A27 |
+| AB2 | Detect vendor abuse (quality falling while volume rises, removed workers returning, environments with gameable graders or copied benchmark content) and flag it to data ops | PRD C5.2 | A25, A27 |
+| AB3 | A flag opens a case with its evidence. The owner records a decision: the vendor admin for worker cases, data ops for vendor cases | PRD C5.3 | |
+| AB4 | Actions on workers: warn, retrain, suspend, remove | PRD C5.4 | |
+| AB5 | Actions on vendors: lower allocation, pause, offboard | PRD C5.5 | |
+| AB6 | Clean-up: find everything a flagged worker, vendor or environment version produced (lineage), then discard, re-label or quarantine it | PRD C5.6; *"audit trails"* | |
+| AB7 | Data ops can see vendors' worker-abuse cases and how they were resolved | PRD C5.7 | A25 |
+
+### Workspaces and platform
+
+| # | Requirement | Source | Assumes |
+|---|---|---|---|
+| VM1 | Data ops creates vendor workspaces; vendor admins invite users and assign roles (admin, reviewer, worker, environment builder); vendors see only their own data | *"multi-tenant platforms with role-based access"* (nice-to-have) | A18 |
 | VM2 | Vendors manage scoped API tokens and container registry credentials: create, rotate, revoke | *"Docker registry access, API token management"* | |
 | VM3 | Self-serve onboarding checks setup: token works, image pushes, sample environment passes | *"onboarding automation and documentation tooling so new vendors and internal users ramp up in hours, not weeks"* | A22 |
 | VM4 | Every state change is recorded with who, what and when | *"audit trails"* (nice-to-have) | A18 |
 | VM5 | Everything in the UI is also available through the API | *"backend services and APIs"* | |
+| VM6 | Data ops sets each vendor's capabilities (human work, environments, or both, plus domains), which decide what it can be allocated | PRD C1.2 | A24 |
 
 ## 4. Core flows
 
-Three flows carry most of the value. They share one central entity, the **environment version**.
+Five flows carry most of the value. Two entities anchor them: the **vendor workspace** (who supplied the work) and the **environment version** or **task** (what was supplied). Lineage links every piece of training data to both.
 
 1. **Submit → validate → review → approve** (EC1–EC6)
-2. **Collect → QA → export** (DC1–DC6)
-3. **Run → monitor → flag → quarantine** (TO1–TO6), which loops back into flow 1
+2. **Allocate → collect → QA → export** (VP1, DC1–DC8)
+3. **Run → monitor → flag → quarantine** (TO1–TO7), which loops back into flow 1
+4. **Measure → compare → reallocate** (VP2–VP4, TO7): every vendor scored the same way, per project and over time
+5. **Detect → case → act → clean up** (AB1–AB7), at two levels: vendors over their workers, Anthropic over vendors
 
 ## 5. Scale estimate
 
@@ -96,13 +130,15 @@ Three flows carry most of the value. They share one central entity, the **enviro
 | Validation | 50 vendors (A3), 5k version submissions/day (A4), 5 sandbox runs of ~5 min each (A5) | 25k runs × 5 min ≈ 125k container-minutes/day ≈ 90 containers running at once | Compute is the bottleneck, not the API |
 | Training results | 1k episodes/s peak across runs (A6); ~1 KB metadata plus 100 KB–1 MB transcript each (A7) | ~1 MB/s metadata; 100 GB+/day of transcripts | The heaviest write path. Transcripts go in object storage, metadata in an analytics store |
 
+Worker-abuse checks (AB1) run on labeling submissions, batched per worker every few minutes, so they add well under 14 jobs/s to the job queue (D2). Vendor-level checks (AB2) and scorecards (VP3) are periodic rollups over data already collected.
+
 The system is light on reads, heavy on writes for training results, and compute-heavy for validation. Those three loads need separate paths.
 
 ## 6. Non-functional requirements
 
 | # | Quality | Requirement | Why | Assumes |
 |---|---|---|---|---|
-| N1 | Latency (labelers) | UI actions < 200 ms p95; the next item loads in < 1 s | Labelers are paid by time, so friction is a direct cost | A10 |
+| N1 | Latency (workers) | UI actions < 200 ms p95; the next item loads in < 1 s | Labelers are paid by time, so friction is a direct cost | A10 |
 | N2 | Latency (feedback) | Validation results within minutes; dashboard data 10–30 s behind training | *"real-time feedback during production training"*; *"a loop that closes in hours and days"* | A9 |
 | N3 | Availability | Labeling 99.9%; vendor portal 99.5%; dashboards may degrade | An outage idles thousands of paid people; dashboards are read-only, so brief staleness is acceptable | A8 |
 | N4 | Decoupling | Training infrastructure is never blocked by this platform; results are buffered and processed asynchronously | Losing visibility is acceptable; stalling training isn't | A23 |
@@ -110,19 +146,23 @@ The system is light on reads, heavy on writes for training results, and compute-
 | N6 | Reproducibility | Environment versions are immutable; every episode and dataset references an exact version | An approved environment can't change under a running training job | |
 | N7 | Consistency | Strong for state changes (approve, quarantine, assign); eventual for aggregates and dashboards | Double-assigned items or double approvals corrupt QA; a stats lag doesn't | |
 | N8 | Isolation of vendor code | Sandboxed runs: no network, CPU/memory/time limits, killed on timeout | Vendors submit arbitrary containers | A15 |
-| N9 | Tenant isolation | Vendors see only their own data; labelers never see gold answers; vendors never see held-out evaluation data | *"multi-tenant platforms with role-based access"*; leaked gold answers let QA be gamed | A16, A18 |
+| N9 | Tenant isolation | Vendors see only their own data; Anthropic sees workers only by pseudonymous ID; workers never see gold answers; vendors never see held-out evaluation data | *"multi-tenant platforms with role-based access"*; leaked gold answers let QA be gamed | A16, A18, A25 |
 | N10 | Fairness between tenants | Per-vendor quotas and fair queueing for validation compute | One vendor flooding submissions mustn't starve the rest | A17 |
 | N11 | Credential security | Tokens are scoped, hashed at rest, rotatable and revocable | *"API token management"* | |
 | N12 | Audit and lineage | Append-only change log; any episode traces back to its environment version, vendor and reviewer | *"audit trails"*; the trace is how a *"reward signal integrity"* issue is pinned to its source | A18 |
 | N13 | Adaptability | New task types and environment schemas ship without a database migration (schema-driven forms and configs); deploys happen many times a day | *"priorities shift"*; *"many task types"*; *"react to what researchers need next"* | |
 | N14 | Fast onboarding | A new vendor goes from invite to first passing environment in < 1 day, without help | *"ramp up in hours, not weeks"* | A22 |
 | N15 | Monitoring the platform itself | Metrics and alerts on queue backlog, sandbox failure rate, ingestion lag | A dashboard that silently goes stale is worse than none | |
+| N16 | Consistent measurement | Quality, volume, cost and turnaround are computed by the platform from its own records, the same way for every vendor. Vendor-reported numbers are never an input | Vendors can only be compared fairly on an identical measure (PRD G2) | A28 |
+| N17 | Detection secrecy | Which tasks are gold, and how abuse detectors work, is never visible to vendors or workers; they see results, not the method | Known gold tasks and known rules can be gamed | A26 |
+| N18 | Due process | Every abuse action is tied to a case holding the evidence behind it, and can be reviewed and reversed | A false finding against a worker or vendor has real consequences (PRD Q4) | |
 
 ## 7. Out of scope
 
 - Actually training models. Training infrastructure is simulated by a script that pulls approved environments and sends episode results (A23).
 - Grading with a model (LLM-as-judge).
-- Paying vendors or labelers.
+- Paying vendors or workers. The platform produces the numbers billing would use.
+- Recruiting workers and holding their real identities. Vendors own both (A25).
 
 ## 8. Assumptions
 
@@ -161,11 +201,16 @@ Each assumption names the requirements that depend on it and what changes if it'
 |---|---|---|---|
 | A18 | Multi-tenancy and audit trails are required, though the posting lists them as nice-to-haves | VM1, VM4, N9, N12 | Both are cheap to design in and expensive to add later, so they stay unless scope forces a cut |
 | A19 | A flag in observability should be able to quarantine an environment | TO6 | The posting stops at "catch"; without TO6 the pillars don't connect |
-| A20 | Researchers reviewing environments and labelers producing data are separate workflows with separate users | EC5, DC1–DC5 | They could share a generic task-and-review engine, which would cut build effort |
+| A20 | Researchers reviewing environments and workers producing data are separate workflows with separate users | EC5, DC1–DC5 | They could share a generic task-and-review engine, which would cut build effort |
 | A21 | Generated programming tasks go through the same validation as vendor environments | EC7 | A separate pipeline would duplicate EC3 |
 | A22 | "Hours, not weeks" onboarding means under a day, end to end, without help | VM3, N14 | |
 | A23 | Training infrastructure is a separate system: it pulls approved environments and data and pushes episode results | EC6, DC6, TO1, N4 | If it's tightly coupled, ingestion could read from its storage instead of receiving pushes |
-| A24 | The same vendor model covers environment builders and labeling suppliers | Actors, DC2 | Two vendor types would need separate onboarding and roles |
+| A24 | A vendor supplies human work, environments, or both, and data ops sets each vendor's capabilities rather than vendors declaring their own. The market has both kinds of vendor, and several large ones do both (see [PRD §2](PRD.md#2-problem)) | Actors, VM6, VP1 | If vendors self-declare, a capability needs checking (for example, a trial project) before work is allocated against it |
+| A25 | Anthropic sees workers only by a pseudonymous ID, stable within one vendor; vendors keep real identities (PRD Q1) | N9, AB2, AB7 | With shared identities, AB2 could catch removed workers moving between vendors, at a cost to privacy and vendor trust |
+| A26 | Vendors see their own quality numbers aggregated and with a delay, so individual gold tasks can't be identified (PRD Q2) | VP4, N17 | Real-time, per-task results help vendors fix problems faster but let them reverse-engineer gold tasks |
+| A27 | The abuse signals listed in AB1 and AB2 are starting points; real ones come from investigating cases | AB1, AB2 | As with A14, detectors must be pluggable so new signals can be added without a redeploy |
+| A28 | Cost is measured per accepted task (PRD Q3) | VP2, VP3, N16 | Per-hour cost would need time records from vendors, which the platform would have to verify |
+| A29 | Some vendors review their workers' output before submitting it; the platform supports this but doesn't require it | DC8 | If every vendor must review, DC8 becomes a mandatory step in the labeling workflow |
 
 ## 9. High-level design
 
