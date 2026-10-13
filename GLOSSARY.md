@@ -29,6 +29,7 @@ Terms used in [`POSTING.md`](POSTING.md), [`PRD.md`](PRD.md) and [`DESIGN.md`](D
 | **Project** | A unit of work defined by a researcher: what to produce, instructions, quality bar, volume and deadline. Can be split across several vendors | |
 | **Task** | One unit of human work inside a project, such as "compare these two answers". Engineering term: *item* | *"many task types"* |
 | **Submission** | A worker's answer to a task, or a vendor's upload of an environment version | *"create, submit, and iterate"* |
+| **Contract** | The commercial terms between Anthropic and a vendor for one kind of work: price, the unit it's priced in (per hour, per task or per environment) and the dates it applies. Allocations point to a contract | |
 | **Allocation** | How much of a project each vendor receives | |
 | **Human data** | Data produced by workers: labels, ratings, comparisons, written answers, reviews of model transcripts | *"human data collection"* |
 | **Labeling workflow** | The steps a task goes through: assignment, answer, review, acceptance or rejection | *"labeling workflows"* |

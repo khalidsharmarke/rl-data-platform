@@ -21,7 +21,7 @@ Every product and design decision made so far, sorted by how hard it would be to
 | VM4 / N12 | The audit log is append-only | Events that were never recorded, or were overwritten, can't be recovered | Write audit events from the first state change |
 | PD2 | Gold-task accuracy is shown to vendors only as a daily aggregate | Tightening this later is easy. **Loosening** it is one-way: once per-task gold results are shown, those gold tasks are known and have to be retired | Rotate gold tasks (DC4), so any exposed set is replaced over time |
 | D8, D15 | Gold answers and detector rules are never exposed to vendors or workers | Same as PD2: a leaked gold set or a published rule can't be made secret again | Rotate gold tasks; keep rules pluggable (A27) so a known rule can be replaced |
-| PD3 | Cost is compared per accepted unit, using platform-measured time on task | The comparison itself is two-way (it's a calculation). What's one-way is **recording the inputs**: a contract's price and unit, and each submission's time on task (DC9). Data not captured can't be recomputed under a different definition | Store raw inputs, never only the computed cost |
+| PD3 | Cost is compared per accepted unit, using platform-measured time on task | The comparison itself is two-way (it's a calculation). What's one-way is **recording the inputs**: each contract's price and unit (VM7), and each submission's time on task (DC9). Data not captured can't be recomputed under a different definition | Store raw inputs, never only the computed cost |
 
 ## Hardens
 
@@ -40,7 +40,7 @@ Every product and design decision made so far, sorted by how hard it would be to
 | ID | Decision | What changing it would cost |
 |---|---|---|
 | F2 / A24 | Vendors have capabilities (human work, environments, or both), set by data ops | A setting and its admin screen |
-| F3 / A23 | Training is a separate system; the build simulates it | Replacing the simulator with a real integration (see D5, D10 for the contract) |
+| F3 / A23 | Training is a separate system; a script stands in for it until a real integration exists | Replacing the stand-in with a real integration (see D5, D10 for the contract) |
 | PD4 / D16 | Low quality opens no case; abuse opens a case; data is held automatically, people are acted on only by human decision | Policy and workflow code. The holds themselves are reversible by design. Individual actions against people aren't, which is exactly why they need a human |
 | D1 | The control plane is one modular service | Splitting a module into its own service. Cheap while module boundaries stay clean, expensive if they blur |
 | D2 | The job queue is a Postgres table | Moving to a dedicated broker plus an outbox. The jobs themselves are idempotent, so no data is lost |
