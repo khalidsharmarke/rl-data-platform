@@ -32,7 +32,11 @@ export async function api<T>(path: string, init: RequestInit = {}, token = saved
   if (token) headers.set("Authorization", `Bearer ${token}`);
   if (init.body) headers.set("Content-Type", "application/json");
   const response = await fetch(`/api${path}`, { ...init, headers });
-  if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+  if (!response.ok) {
+    const detail = await response.json().then((b) => b.detail, () => null);
+    throw new Error(typeof detail === "string" ? detail : `${response.status} ${response.statusText}`);
+  }
+  if (response.status === 204) return null as T;
   return response.json() as Promise<T>;
 }
 
@@ -59,4 +63,46 @@ export type AuditEvent = {
   entity_type: string;
   entity_id: string;
   org_id: string | null;
+};
+
+export type Project = {
+  id: string;
+  name: string;
+  task_type: string;
+  current_schema_version: number;
+  target_volume: number;
+  overlap: number;
+  status: string;
+};
+
+export type Allocation = {
+  id: string;
+  vendor_id: string;
+  vendor_name: string;
+  contract_id: string;
+  share: string;
+  status: string;
+  routed_tasks: number;
+  submissions: number;
+};
+
+export type Contract = {
+  id: string;
+  vendor_id: string;
+  kind: string;
+  price: string;
+  price_unit: string;
+};
+
+export type Assignment = {
+  id: string;
+  expires_at: string;
+  task: {
+    id: string;
+    project_id: string;
+    project_name: string;
+    schema_version: number;
+    instructions: string;
+    payload: { prompt: string; response_a: string; response_b: string };
+  };
 };

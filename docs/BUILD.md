@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | In progress: M0–M1 done |
+| Status | In progress: M0–M2 done |
 | Timebox | About a week: ~33 hours across nine milestones |
 | Stack | Python (FastAPI, async) · Postgres · React + TypeScript (Vite) · Docker Compose |
 | Delivered as | This repo, runnable with `docker compose up`, plus a 2–3 minute recorded walkthrough embedded in the README |
@@ -92,7 +92,7 @@ Each milestone ends with something that runs and a check that proves it. Hours a
 |---|---|---|---|---|---|
 | M0 | Skeleton | Docker Compose with Postgres, the FastAPI app, migrations, the React app, a test runner and seeded demo logins | `docker compose up` serves a login page and a health endpoint; tests run in one command | 2 | Done |
 | M1 | Workspaces, roles and audit | Orgs with capabilities, users and roles, vendor-scoped worker IDs, workspace scoping, append-only audit log | A test shows Vendor A's admin can't read Vendor B's data; every write creates an audit event | 3 | Done |
-| M2 | Projects, contracts and work | Projects with schema versions, tasks, hidden gold answers, contracts with price and unit, allocations pointing to contracts, assignment queue, submissions with lineage and time on task | A worker can claim and answer tasks through the API; each submission carries full lineage | 4 | |
+| M2 | Projects, contracts and work | Projects with schema versions, tasks, hidden gold answers, contracts with price and unit, allocations pointing to contracts, assignment queue, submissions with lineage and time on task | A worker can claim and answer tasks through the API; each submission carries full lineage | 4 | Done |
 | M3 | Quality | Gold scoring, overlap and agreement, researcher spot checks with reasons, acceptance, worker quality scores, gold-set rotation, the worker's feedback view | Seeded answers produce the expected accuracy and agreement; workers see spot-check rejections with reasons; no worker or vendor endpoint returns gold data (tested) | 5 | |
 | M4 | Simulator | Synthetic workers with profiles (careful, average, sloppy, AI-paster) driving the public API; the demo scenario script | One command runs the full demo scenario against a fresh database | 3 | |
 | M5 | Scorecards | Roll-up jobs on the Postgres queue with metric versions; project comparison, vendor scorecard over time, vendor's own view with PD2's split | The project view ranks the three vendors; Vendor C's dip is visible; vendor views hide per-task gold results | 4 | |

@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import Projects from "./Projects";
+import Work from "./Work";
 import { api, saveToken, savedToken, type User } from "./api";
 import Workspaces from "./Workspaces";
 
@@ -35,8 +37,31 @@ export default function App() {
         </span>
         <button onClick={() => (saveToken(null), setMe(null))}>Sign out</button>
       </header>
-      <Workspaces me={me} />
+      <Views me={me} />
     </main>
+  );
+}
+
+function Views({ me }: { me: User }) {
+  const tabs = [
+    ...(me.role === "worker" ? ["Work"] : []),
+    ...(me.role !== "worker" ? ["Projects"] : []),
+    "Workspaces",
+  ];
+  const [tab, setTab] = useState(tabs[0]);
+  return (
+    <>
+      <nav className="tabs">
+        {tabs.map((t) => (
+          <button key={t} className={t === tab ? "tab active" : "tab"} onClick={() => setTab(t)}>
+            {t}
+          </button>
+        ))}
+      </nav>
+      {tab === "Work" && <Work />}
+      {tab === "Projects" && <Projects me={me} />}
+      {tab === "Workspaces" && <Workspaces me={me} />}
+    </>
   );
 }
 

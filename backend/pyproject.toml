@@ -10,6 +10,7 @@ dependencies = [
     "alembic==1.14.0",
     "pydantic-settings==2.7.0",
     "pyjwt==2.10.1",
+    "jsonschema==4.23.0",
 ]
 
 [project.optional-dependencies]

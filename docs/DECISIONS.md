@@ -47,6 +47,7 @@ Every product and design decision made so far, sorted by how hard it would be to
 | D4 | Validation runs in fair-share sandboxes | Swapping the sandbox technology or the fairness rule |
 | D7 | Detectors raise flags through the API | Rewiring one path |
 | D13 | One flag → case → action model for both levels | Splitting the case model if the two levels diverge |
+| D17 | Gold tasks routed to every vendor; regular tasks to one vendor by share | Changing the routing rule; routes for started work stay as they are |
 | | Three planes (control, execution, ingestion); Postgres, an analytics store and object storage | Replacing a store means a data migration, which is costly but loses nothing |
 | | Web app in React and TypeScript | A rewrite of the front end; the API (VM5) is unaffected |
 | B1 | The first build covers multi-vendor human data (flows 2, 4, 5), not the environment pipeline ([`BUILD.md`](BUILD.md)) | The environment slice can follow; nothing in slice A blocks it |

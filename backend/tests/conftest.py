@@ -18,27 +18,32 @@ from app.seed import seed
 TEST_DB = "rl_test"
 
 
-async def recreate_database(url) -> None:
+async def recreate_database(url, name: str) -> None:
     conn = await asyncpg.connect(
         user=url.username, password=url.password, host=url.host, port=url.port, database="postgres"
     )
     try:
-        await conn.execute(f"DROP DATABASE IF EXISTS {TEST_DB} WITH (FORCE)")
-        await conn.execute(f"CREATE DATABASE {TEST_DB}")
+        await conn.execute(f"DROP DATABASE IF EXISTS {name} WITH (FORCE)")
+        await conn.execute(f"CREATE DATABASE {name}")
     finally:
         await conn.close()
+
+
+def fresh_database(name: str) -> str:
+    """Create (or recreate) a database, migrate it to head, and return its URL. Call outside an event loop."""
+    url = make_url(settings.database_url)
+    asyncio.run(recreate_database(url, name))
+    db_url = url.set(database=name).render_as_string(hide_password=False)
+    config = Config("alembic.ini")
+    config.set_main_option("sqlalchemy.url", db_url)
+    command.upgrade(config, "head")
+    return db_url
 
 
 @pytest.fixture(scope="session")
 def test_database_url() -> str:
     """A fresh, fully migrated database for the whole test run."""
-    url = make_url(settings.database_url)
-    asyncio.run(recreate_database(url))
-    test_url = url.set(database=TEST_DB).render_as_string(hide_password=False)
-    config = Config("alembic.ini")
-    config.set_main_option("sqlalchemy.url", test_url)
-    command.upgrade(config, "head")
-    return test_url
+    return fresh_database(TEST_DB)
 
 
 @pytest.fixture
