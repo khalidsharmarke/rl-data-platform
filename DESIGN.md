@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Draft: requirements only. No high-level design or build scope yet |
+| Status | Draft: requirements and high-level design. No build scope yet |
 | Date | 2026-10-13 |
 | Source | [`POSTING.md`](POSTING.md), Anthropic's Full-Stack Software Engineer, Reinforcement Learning posting |
 
@@ -167,8 +167,87 @@ Each assumption names the requirements that depend on it and what changes if it'
 | A23 | Training infrastructure is a separate system: it pulls approved environments and data and pushes episode results | EC6, DC6, TO1, N4 | If it's tightly coupled, ingestion could read from its storage instead of receiving pushes |
 | A24 | The same vendor model covers environment builders and labeling suppliers | Actors, DC2 | Two vendor types would need separate onboarding and roles |
 
-## 9. Next steps
+## 9. High-level design
 
-1. **High-level design**: entities, APIs, and the three planes the NFRs point to: a control plane (Postgres; N7, N12), an execution plane (job queue and sandboxed workers; N8, N10) and an ingestion plane (buffered pipeline, analytics store, object storage; N2, N4, N5).
-2. **Scope the build**: which flow or flows, the timebox and the stack.
-3. **Decide which NFRs get shown in code versus written up.** N4–N9 and N12 are cheap to demonstrate and are the hard parts. The scale targets (N1–N3, N10) are better written up from the estimates above.
+![High-level architecture](diagrams/architecture.png)
+
+Source: [`diagrams/architecture.excalidraw`](diagrams/architecture.excalidraw) (open at excalidraw.com, edit, then re-export the PNG).
+
+The system splits into three planes, because the scale estimate shows three loads that behave differently: low-volume state changes that must be correct, compute-heavy validation, and a high-volume stream of training results.
+
+### Components
+
+| Component | Plane | Job | Requirements |
+|---|---|---|---|
+| Web app | Edge | One React + TS app with four surfaces: vendor portal, labeling UI, review UI, dashboards | EC4 EC5 DC3 TO4 TO5 |
+| API gateway | Edge | Authenticates (SSO for staff and labelers, API tokens for vendors and services), applies roles and tenant scoping, rate-limits | VM1 VM2 N9 N11 |
+| API service | Control | One service split into modules: environments and versions, review and quarantine, collection and QA, orgs and tokens, audit | EC1–EC6 DC1–DC7 VM1–VM5 TO6 |
+| Postgres | Control | Source of truth: immutable versions, the version state machine, assignments, the audit log, and an outbox table for jobs | N6 N7 N12 |
+| Validation job queue | Execution | Holds validation jobs; hands them out with a fair share per vendor | N10 |
+| Sandbox workers | Execution | Run each submitted version: reference solution must pass, no-op must fail, repeat runs must agree, difficulty estimated. No network; CPU, memory and time limits | EC3 N8 |
+| Container registry | Execution | Vendor images, with per-vendor push and pull credentials | VM2 |
+| Code task generator | Execution | Generates programming tasks and submits them through the public API, like any vendor | EC7 A21 |
+| Results intake | Ingestion | Accepts batches of episode results from training; deduplicates by episode id; acknowledges once written to the log | TO1 N5 |
+| Durable log | Ingestion | Buffers bursts so training is never slowed by downstream processing | N4 |
+| Stream processor | Ingestion | Aggregates per-environment and per-run stats; writes transcripts to object storage | TO1 TO2 |
+| Reward-hack detector | Ingestion | Pluggable rules over the episode stream; raises flags through the API | TO3 A14 |
+| Analytics store | Ingestion | Stats tables built for time-range queries (e.g. ClickHouse) | TO2 |
+| Dashboard API | Ingestion | Queries for dashboards and drill-down, plus a live feed over server-sent events | TO2 TO4 TO5 |
+| Object storage | Shared | Episode transcripts, exported datasets, validation logs | TO5 DC6 |
+
+### Key decisions
+
+| # | Decision | Why | Trade-off |
+|---|---|---|---|
+| D1 | The control plane is one modular service, not microservices | Priorities shift fast (N13); one deploy and one database keep iteration quick | Modules must keep clean boundaries so the ingestion or execution side can split off later |
+| D2 | State change and job creation are written in one Postgres transaction (outbox), and a relay moves outbox rows to the queue | A version can't end up "submitted" with no validation job, or a job for a version that was rolled back (N5, N7) | Adds a relay process and at-least-once delivery, so workers must be idempotent |
+| D3 | Environment versions are immutable, and their status changes only through a state machine (draft → submitted → validating → failed or in review → approved → quarantined) | Training always refers to an exact, unchanging version (N6); every transition is a single audited event (N12) | Fixing a typo means a new version |
+| D4 | Validation runs in sandboxes pulled from a fair-share queue | Vendor code is untrusted (N8, A15); one vendor can't starve the rest (N10) | Sandboxing (e.g. gVisor or Firecracker) adds startup time to each run |
+| D5 | Training results bypass the gateway and the control plane: intake → durable log → processors | Training is never blocked by the platform (N4); the heaviest write path stays off the control database | Two paths to secure and monitor; dashboards are eventually consistent (N7) |
+| D6 | Intake deduplicates by episode id, and every processor is idempotent | Retries can't double-count results (N5) | Producers must assign stable episode ids |
+| D7 | The hack detector raises flags through the API, not by writing to the database directly | Quarantine goes through the same state machine and audit trail as a human decision (TO6, VM4) | One extra network hop on a path that isn't latency-sensitive |
+| D8 | Gold answers live in their own table, which labeler-facing endpoints never read | Labelers can't see gold answers, so QA can't be gamed (N9) | QA scoring needs a separate, privileged code path |
+| D9 | Task types and environment configs are described by JSON schemas stored as data | New task types ship without a migration or a new UI form (N13) | Validation and rendering are generic, so very custom task UIs need extension points |
+| D10 | Training pulls approved environments from a catalog API and downloads datasets via short-lived signed URLs | Training stays decoupled (A23); large files never pass through the API (DC6) | Signed URLs must expire and be scoped to one dataset |
+
+### Core entities
+
+| Entity | Key fields | Notes |
+|---|---|---|
+| Org | id, name, kind (vendor or internal) | Tenant boundary (VM1) |
+| User | id, org, role (vendor, labeler, researcher, ops) | |
+| ApiToken | id, org, scopes, hash, expires_at, revoked_at | Stored hashed (N11) |
+| Environment | id, org, name | Groups versions |
+| EnvironmentVersion | id, environment, number, config (JSON), image digest, status | Immutable; the central entity (D3) |
+| ValidationRun | id, version, check (reference, no-op, repeat), result, logs_uri | |
+| Review | id, version, reviewer, grade, rubric scores, feedback | |
+| CollectionProject | id, task_type schema, instructions, overlap, gold rate | |
+| Item / Assignment / Label | item payload; assignment to a labeler; the submitted answer | One open assignment per labeler and item (N7) |
+| GoldAnswer | item, answer | Separate table (D8) |
+| Dataset | id, project, filter, uri, created_at | An exported snapshot (DC6) |
+| TrainingRun / Episode | run; episode_id, version, reward, passed, length, transcript_uri | Episodes live in the analytics store, not Postgres (D5) |
+| Flag | id, version, run, rule, evidence, status | Raised by the detector or a person (TO3, TO6) |
+| AuditEvent | id, actor, action, entity, before, after, at | Append-only (VM4) |
+
+### API sketch
+
+| Call | Who | Requirements |
+|---|---|---|
+| `POST /environments`, `POST /environments/{id}/versions` | Vendor | EC1 EC2 |
+| `POST /versions/{id}/submit`, `GET /versions/{id}` | Vendor | EC3 EC4 |
+| `GET /versions?status=in_review`, `POST /versions/{id}/reviews` | Researcher | EC5 |
+| `POST /versions/{id}/approve`, `POST /versions/{id}/quarantine` | Researcher, detector | EC6 TO6 |
+| `GET /catalog` | Training | EC6 |
+| `POST /projects`, `POST /projects/{id}/items` | Researcher | DC1 DC2 |
+| `POST /assignments/next`, `POST /assignments/{id}/label`, `POST /items/{id}/flag` | Labeler | DC2 DC3 DC5 |
+| `GET /projects/{id}/quality`, `POST /projects/{id}/exports` | Researcher | DC4 DC6 DC7 |
+| `POST /ingest/episodes` (batch) | Training | TO1 N5 |
+| `GET /runs/{id}/stats`, `GET /runs/{id}/live` (SSE), `GET /episodes/{id}` | Researcher | TO2 TO4 TO5 |
+| `POST /orgs`, `POST /orgs/{id}/invites`, `POST /orgs/{id}/tokens`, `DELETE /tokens/{id}` | Ops, vendor | VM1 VM2 |
+| `GET /onboarding/checks` | Vendor | VM3 |
+
+## 10. Next steps
+
+1. **Scope the build**: which flow or flows, the timebox and the stack.
+2. **Decide which NFRs get shown in code versus written up.** N4–N9 and N12 are cheap to demonstrate and are the hard parts. The scale targets (N1–N3, N10) are better written up from the estimates above.
+3. **Deeper diagrams if needed**: the environment-version state machine (D3) and sequence diagrams for the three core flows.
