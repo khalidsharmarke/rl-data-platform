@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app import clock
 from app.audit import record
 from app.db import get_session
 from app.models import GoldAnswer, GoldRetirement, Org, Review, Role, Submission, Task, TaskSchema, User
@@ -130,7 +131,7 @@ async def review_submission(
     reason = (body.reason or "").strip() or None
     if body.verdict == "rejected" and reason is None:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "A rejection needs a reason the worker can learn from")
-    review = Review(submission_id=submission.id, reviewer_id=user.id, verdict=body.verdict, reason=reason)
+    review = Review(submission_id=submission.id, reviewer_id=user.id, verdict=body.verdict, reason=reason, created_at=clock.now())
     session.add(review)
     await session.flush()
     record(session, actor=user, action=f"submission.{body.verdict}", entity_type="submission", entity_id=submission.id,
@@ -182,7 +183,7 @@ async def rotate_gold(
     project_gold = select(GoldAnswer.task_id).join(Task, Task.id == GoldAnswer.task_id).where(Task.project_id == project.id)
     active = (await session.scalars(project_gold.where(GoldAnswer.task_id.not_in(select(GoldRetirement.task_id))))).all()
     for task_id in active:
-        session.add(GoldRetirement(task_id=task_id, retired_by=user.id, reason=body.reason))
+        session.add(GoldRetirement(task_id=task_id, retired_by=user.id, reason=body.reason, retired_at=clock.now()))
     version = (await session.scalar(select(func.max(GoldAnswer.gold_set_version)).where(GoldAnswer.task_id.in_(project_gold)))) or 0
     for t in body.tasks:
         task = Task(project_id=project.id, schema_version=project.current_schema_version, payload=t.payload)

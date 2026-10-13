@@ -1,8 +1,22 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
+
+from app import clock
+from app.db import SessionLocal
 
 from app.routes import audit, auth, contracts, health, orgs, projects, quality, work
 
-app = FastAPI(title="RL Data Platform")
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    async with SessionLocal() as session:
+        await clock.start(session)
+    yield
+
+
+app = FastAPI(title="RL Data Platform", lifespan=lifespan)
 app.include_router(health.router)
 app.include_router(auth.router)
 app.include_router(orgs.router)

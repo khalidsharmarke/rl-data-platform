@@ -62,3 +62,24 @@ async def test_only_researchers_create_projects(client, login):
         "name": "x", "task_type": demo_content.TASK_TYPE, "answer_schema": demo_content.ANSWER_SCHEMA,
         "instructions": "x", "target_volume": 1, "overlap": 1, "gold_rate": "0"})
     assert response.status_code == 403
+
+
+async def test_gold_is_spread_evenly_through_each_vendors_stream(client, login, session):
+    """Regular tasks must be interleaved across vendors. If each vendor got a contiguous block,
+    a vendor's stream would end in a run of gold tasks, which makes gold recognizable (D8)."""
+    from tests.people import NORTHWIND_WORKER
+
+    project_id, _ = await make_project(client, login, tasks=300, gold_every=10)  # 270 regular, 30 gold
+    for vendor in ("Northwind Data", "Kestrel Labs", "Brightline Annotation"):
+        await allocate(client, login, project_id, vendor, "0.333")
+    gold = {str(t) for t in await session.scalars(text(
+        "SELECT g.task_id FROM gold_answers g JOIN tasks t ON t.id = g.task_id WHERE t.project_id = :p"), {"p": project_id})}
+
+    worker = await login(NORTHWIND_WORKER)
+    stream = []
+    while (r := await client.post("/assignments/next", headers=worker, json={"project_id": project_id})).status_code == 200:
+        stream.append(r.json()["task"]["id"] in gold)
+    assert len(stream) == 120 and sum(stream) == 30  # 90 regular + every gold task
+    quarter = len(stream) // 4
+    # Evenly mixed, each quarter holds about a quarter of the gold (7-8 of 30).
+    assert all(sum(stream[i * quarter:(i + 1) * quarter]) <= 12 for i in range(4)), stream

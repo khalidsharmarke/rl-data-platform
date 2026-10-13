@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app import clock
 from app.audit import record
 from app.auth import current_user
 from app.db import get_session
@@ -204,7 +205,7 @@ async def allocate(
     contract = await session.get(Contract, body.contract_id)
     if contract is None or contract.vendor_id != vendor.id or contract.kind != Capability.HUMAN_WORK:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "That contract isn't a human-work contract with this vendor")
-    if not contract.in_effect(date.today()):
+    if not contract.in_effect(clock.now().date()):
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "That contract isn't in effect today")
     if await session.scalar(select(Allocation.id).where(Allocation.project_id == project.id, Allocation.vendor_id == vendor.id)):
         raise HTTPException(status.HTTP_409_CONFLICT, "This vendor is already allocated; change its allocation instead")

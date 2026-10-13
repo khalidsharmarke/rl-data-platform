@@ -1,4 +1,6 @@
-.PHONY: up down reset logs test seed psql
+.PHONY: up down reset logs test seed psql demo
+
+DEMO = docker compose -f docker-compose.yml -f docker-compose.demo.yml
 
 up:      ## Build and start everything in the background
 	docker compose up --build -d
@@ -20,3 +22,8 @@ seed:    ## Re-run the (idempotent) seed
 
 psql:    ## Open a SQL shell on the dev database
 	docker compose exec db psql -U rl -d rl
+
+demo:    ## Fresh database, demo clock on, then run the scripted demo scenario
+	$(DEMO) down -v
+	$(DEMO) up --build -d
+	$(DEMO) run --rm --build simulator

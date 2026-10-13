@@ -130,3 +130,15 @@ async def test_submissions_are_immutable(client, login, session):
 async def test_seeded_sample_project_is_allocated_across_three_vendors(client, login):
     projects = (await client.get("/projects", headers=await login(BRIGHTLINE_ADMIN))).json()
     assert [p["name"] for p in projects] == ["Which answer is more helpful? (sample)"]
+
+
+async def test_an_expired_lease_frees_the_task_for_another_worker(client, login, session):
+    project_id, _ = await make_project(client, login, tasks=1)  # overlap 1: one claim fills the task
+    await allocate(client, login, project_id, "Northwind Data", "1")
+    first, second = await login(NORTHWIND_WORKER), await login(NORTHWIND_WORKER_2)
+    assignment = (await claim(client, first, project_id)).json()
+    assert (await claim(client, second, project_id)).status_code == 204  # full while the lease is live
+
+    await session.execute(text("UPDATE assignments SET expires_at = now() - interval '1 minute' WHERE id = :id"), {"id": assignment["id"]})
+    reclaimed = await claim(client, second, project_id)
+    assert reclaimed.status_code == 200 and reclaimed.json()["task"]["id"] == assignment["task"]["id"]

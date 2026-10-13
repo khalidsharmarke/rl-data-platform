@@ -5,7 +5,7 @@ from decimal import Decimal
 from enum import StrEnum
 from typing import Any
 
-from sqlalchemy import BigInteger, Date, DateTime, ForeignKey, Identity, Integer, Numeric, Text, func
+from sqlalchemy import BigInteger, Boolean, Date, DateTime, ForeignKey, Identity, Integer, Numeric, Text, func
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
@@ -176,6 +176,7 @@ class TaskRoute(Base):
     task_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tasks.id"), primary_key=True)
     vendor_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("orgs.id"), primary_key=True)
     routed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    is_full: Mapped[bool] = mapped_column(Boolean, default=False)
 
 
 class Assignment(Base):

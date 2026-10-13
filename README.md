@@ -21,6 +21,7 @@ Needs Docker with Compose.
 ```sh
 make up      # build and start Postgres, the API and the web app
 make test    # run the backend tests against a separate test database
+make demo    # fresh database, demo clock on, then the scripted three-vendor scenario (about 3 minutes)
 make down    # stop (make reset also deletes the database)
 ```
 

@@ -1,5 +1,5 @@
 import uuid
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Any
 
 import jsonschema
@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app import clock
 from app.db import get_session
 from app.models import Allocation, Assignment, Contract, Org, Project, Role, Submission, Task, TaskSchema, User
 from app.scoping import can_see_org, require_roles, shows_identity
@@ -101,7 +102,7 @@ async def submit(
     assignment = await session.scalar(select(Assignment).where(Assignment.id == assignment_id).with_for_update())
     if assignment is None or assignment.worker_id != user.id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Not found")
-    now = datetime.now(UTC)
+    now = clock.now()
     if assignment.status != "open" or assignment.expires_at <= now:
         raise HTTPException(status.HTTP_409_CONFLICT, "This assignment is no longer open")
     task = await session.get(Task, assignment.task_id)

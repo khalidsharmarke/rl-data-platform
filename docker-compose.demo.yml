@@ -1,0 +1,19 @@
+# The scripted demo: `make demo`. Runs the platform on the demo clock and adds the simulator.
+services:
+  api:
+    environment:
+      DEMO_CLOCK_SPEED: "180"
+      SCORECARD_BUCKET_MINUTES: "15"
+      VENDOR_GOLD_REFRESH_MINUTES: "60"
+      SEED_SAMPLE_PROJECT: "false"
+
+  simulator:
+    build: ./simulator
+    profiles: ["demo"]
+    environment:
+      API_URL: http://api:8000
+      DEMO_CLOCK_SPEED: "180"
+    volumes:
+      - ./backend/app/demo_content.py:/sim/demo_content.py:ro
+    depends_on:
+      - api

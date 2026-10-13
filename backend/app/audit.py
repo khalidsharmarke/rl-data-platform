@@ -5,6 +5,7 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app import clock
 from app.models import AuditEvent, Org, User
 
 
@@ -27,6 +28,7 @@ def record(
 ) -> None:
     session.add(
         AuditEvent(
+            at=clock.now(),
             actor_id=actor.id if actor else None,
             action=action,
             entity_type=entity_type,

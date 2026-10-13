@@ -72,6 +72,13 @@ class GeneratedTask:
     better: str  # "A" or "B"
 
 
+def gold_items(n: int, rate: float, seed: int = 7) -> set[int]:
+    """A random sample of items to use as gold. Gold must come from the same mix of questions
+    as regular work; picking every k-th item can land on only a few questions, which would make
+    gold tasks recognizable."""
+    return set(random.Random(seed + 1).sample(range(n), round(n * rate)))
+
+
 def generate(n: int, seed: int = 7) -> list[GeneratedTask]:
     rng = random.Random(seed)
     tasks = []
