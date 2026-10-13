@@ -140,7 +140,7 @@ The system is light on reads, heavy on writes for training results, and compute-
 |---|---|---|---|---|
 | N1 | Latency (workers) | UI actions < 200 ms p95; the next item loads in < 1 s | Labelers are paid by time, so friction is a direct cost | A10 |
 | N2 | Latency (feedback) | Validation results within minutes; dashboard data 10–30 s behind training | *"real-time feedback during production training"*; *"a loop that closes in hours and days"* | A9 |
-| N3 | Availability | Labeling 99.9%; vendor portal 99.5%; dashboards may degrade | An outage idles thousands of paid people; dashboards are read-only, so brief staleness is acceptable | A8 |
+| N3 | Availability | Labeling 99.9%; vendor workspace 99.5%; dashboards may degrade | An outage idles thousands of paid people; dashboards are read-only, so brief staleness is acceptable | A8 |
 | N4 | Decoupling | Training infrastructure is never blocked by this platform; results are buffered and processed asynchronously | Losing visibility is acceptable; stalling training isn't | A23 |
 | N5 | Durability | No submitted label or episode result is lost; processing is idempotent (safe to retry) | *"The quality of Claude's next generation depends on the quality of the data we train it on"* | |
 | N6 | Reproducibility | Environment versions are immutable; every episode and dataset references an exact version | An approved environment can't change under a running training job | |
@@ -179,7 +179,7 @@ Each assumption names the requirements that depend on it and what changes if it'
 | A5 | Each submission takes ~5 sandbox runs (reference, no-op, 3 repeats) of ~5 min each | Scale estimate, EC3 | Longer agentic environments (hours) would need far more compute and partial or sampled validation |
 | A6 | ~1,000 episodes/s at peak across concurrent training runs | Scale estimate, N4 | 10× more would require a streaming log (e.g. Kafka) in front of ingestion instead of a simple queue |
 | A7 | Episode metadata ~1 KB; transcripts 100 KB–1 MB | Scale estimate | Bigger transcripts change storage cost, not the design, as long as they stay in object storage |
-| A8 | Availability targets: labeling 99.9%, vendor portal 99.5% | N3 | Chosen to rank surfaces by cost of downtime, not taken from the posting |
+| A8 | Availability targets: labeling 99.9%, vendor workspace 99.5% | N3 | Chosen to rank surfaces by cost of downtime, not taken from the posting |
 | A9 | "Real-time" means 10–30 s behind training | N2, TO4 | Sub-second would require push or streaming all the way to the browser |
 | A10 | Labeler latency targets of 200 ms p95 and < 1 s to next item | N1 | Industry-typical UI targets, not from the posting |
 
@@ -222,71 +222,80 @@ The system splits into three planes, because the scale estimate shows three load
 
 ### How it works, step by step
 
-**The goal in one line:** Claude improves by practicing tasks and getting scored on them. Many of those tasks, and the human judgments used to score answers, come from outside contractors. A broken task or a careless judgment teaches Claude the wrong lesson. So the system is a **quality-control line** for training material, plus a **monitor** that watches how the material behaves once training uses it.
+**The goal in one line:** Claude improves by practicing tasks and getting scored on them. Anthropic gets many of those tasks, and the human judgments used to score answers, from vendors. A broken task or a careless judgment teaches Claude the wrong lesson, and vendors vary in how often that happens. So the system is a **quality-control line** for training material, a **scoreboard** that measures every vendor the same way, and an **integrity system** that catches abuse and cleans up after it.
 
 Each step lists the components involved, what each one is for, and what breaks without it.
 
-**1. Outside people get in, and only see what's theirs.** A vendor company signs up; its engineers and labelers get accounts, and its scripts get API keys.
-- *Web app:* one site where every kind of user works. Without it, vendors and labelers, many of them non-technical, would need custom tooling.
+**1. Vendors get a workspace, and only see what's theirs.** Data ops sets up a vendor's workspace and records what it supplies: human work, environments, or both. The vendor admin then invites their own reviewers, workers and environment builders, and their scripts get API keys.
+- *Web app:* one site with a surface for each role. Without it, vendors and workers, many of them non-technical, would need custom tooling.
 - *API gateway:* checks who each request comes from and what they may see. Without it, every part of the system would repeat its own permission checks, and one missed check would expose one vendor's work to another. It can be middleware inside the API service; it's drawn separately to show the responsibility.
-- *Orgs and tokens module:* creates companies, invites people, issues and revokes keys. Without it, ops would set up every vendor by hand, which contradicts *"ramp up in hours, not weeks"*.
+- *Workspaces module:* creates workspaces, records capabilities, invites people, issues and revokes keys. Without it, data ops would set up every vendor by hand, against the posting's *"ramp up in hours, not weeks"*.
+- *Pseudonymous worker IDs:* Anthropic sees each worker as an ID, never a name. Vendors keep their workers' identities, so they can work with the platform without handing over personal data.
 
-**2. A vendor builds a practice task.** The vendor writes the task ("fix this bug"), packages the code it runs in as a container, and includes an answer key: a reference solution plus the grader that scores attempts.
+**2. An environment builder makes a practice task.** They write the task ("fix this bug"), package the code it runs in as a container, and include an answer key: a reference solution plus the grader that scores attempts.
 - *Container registry:* stores each vendor's packaged code.
 - *Environments module and Postgres:* record the task. Every edit creates a new version, and old versions never change. Without that rule, training would say "I used task #42" and nobody could tell which #42.
 
 **3. Machines check the task before any person spends time on it.** Like checking an exam before giving it: the answer key should score full marks, a blank answer should score zero, and grading the same answer twice should give the same score.
-- *Job queue (a Postgres table):* checks take minutes each and thousands arrive a day, so they wait in line. Submitting a task and queueing its checks happen in one database transaction, so a task can never be "submitted" with no check started (D2). Workers take the next job from whichever vendor has the fewest running, so one vendor's 500 submissions can't push everyone else to the back.
+- *Job queue (a Postgres table):* checks take minutes each and thousands arrive a day, so they wait in line. Submitting a task and queueing its checks happen in one database transaction, so a task can never be "submitted" with no check started. Workers take the next job from whichever vendor has the fewest running, so one vendor's 500 submissions can't push everyone else to the back.
 - *Sandbox workers:* run the vendor's code in a sealed box with no internet access and strict time and memory limits. Without them, we'd be running strangers' code on our own machines.
 
 **4. A researcher looks at it.** Machines catch tasks that are broken. People catch tasks that work but aren't worth training on: too easy, off-topic, or teaching the wrong skill.
-- *Review module:* a queue of tasks for researchers to browse, grade and comment on. Feedback goes back to the vendor, who fixes the task and resubmits, which sends it back to step 3.
+- *Review module:* a queue of tasks for researchers to browse, grade and comment on. Feedback goes back to the environment builder, who fixes the task and resubmits, which sends it back to step 3.
 
 **5. Approved tasks become available to training.**
 - *Catalog API:* training asks for "all approved tasks" and gets exact versions. Without it, training would read our database directly, and the two systems couldn't change independently.
 - *Code task generator:* creates coding tasks in bulk and submits them through the same front door as a vendor, so they get the same checks. Without that reuse, we'd build and maintain a second quality pipeline.
 
-**6. Alongside: people produce judgments.** A researcher posts a batch of questions, such as "which of these two answers is better?", and thousands of labelers answer them.
-- *Collection and QA module:* hands out work, collects answers, and measures labeler quality three ways: questions with known answers (gold), questions sent to several labelers for comparison, and reviewer spot checks. Without QA, careless or rushed labels go straight into training.
-- *Gold answers in a separate table:* labelers can never see them. Without the separation, the quality test could be gamed.
+**6. Data ops splits human-data work across vendors.** A researcher defines a project (such as "compare these pairs of answers, 50,000 of them, by Friday"), and data ops allocates it across vendors that can do that kind of work.
+- *Allocation module:* records which vendors get how much of each project, and lets data ops shift work while the project runs. Without it, comparing vendors on the same work would be impossible, because they'd never do the same work.
+
+**7. Workers produce judgments.** Workers at each allocated vendor answer tasks. Some vendors have their own reviewers check the answers before they go to Anthropic.
+- *Collection and QA module:* hands out tasks, collects answers, and measures each worker's quality three ways: tasks with known answers (gold), tasks sent to several workers for comparison, and reviewer spot checks. The measurement is identical for every vendor. Without QA, careless or rushed answers go straight into training.
+- *Gold answers in a separate table:* workers never see them, and vendors never learn which tasks were gold. Without that, the quality test could be gamed.
+- *Lineage on every answer:* each accepted answer records the task, the worker's ID, the vendor and the review. Without it, removing a bad worker's answers later would be guesswork.
 - *Object storage (exports):* finished, checked batches are saved as files for training to download.
 
-**7. Training sends back reports.** Every attempt Claude makes on a task produces a report: which task, what score, how long it took, and the full transcript. That's about a thousand reports a second.
+**8. Training sends back reports.** Every attempt Claude makes on a task produces a report: which task, what score, how long it took, and the full transcript. That's about a thousand reports a second.
 - *Results intake:* receives reports in batches and ignores duplicates, so a resent report isn't counted twice.
 - *Durable log:* a shock absorber. It accepts reports immediately, even when the parts behind it are slow or down. Without it, a slow dashboard could slow down training, which this system must never do.
 - *Separate path that skips the gateway:* this flood never touches the database behind the website, so the site stays fast.
+- *Stream processor:* rolls raw reports up into per-task and per-run statistics, and credits each result to the vendor that built the task.
 
-**8. Reports become something people can read.**
-- *Stream processor:* rolls raw reports up into per-task and per-run statistics.
-- *Analytics store:* a database built for questions like "average score for this task over the last hour". Without it, crunching millions of rows in Postgres would slow down everything else on it.
+**9. Everyone sees the same scoreboard.** Data ops compares vendors on one project and follows each vendor over time. Each vendor admin sees their own scorecard, the same numbers Anthropic sees, broken down by worker.
+- *Scorecard jobs:* background jobs that roll human-data quality, volume, cost and turnaround up per vendor, per project and per worker. The platform computes every number from its own records; vendors' own reports are never an input. Without that, vendors couldn't be compared fairly.
+- *Analytics store:* a database built for questions like "this vendor's acceptance rate by week". Without it, crunching millions of rows in Postgres would slow down everything else on it.
+- *Dashboard API:* scorecards, comparisons, run dashboards and a live feed, so researchers can watch a training run as it happens.
 - *Object storage (transcripts):* holds full transcripts, which are too big to keep anywhere else.
-- *Dashboard API:* charts plus a live feed, so researchers can watch a training run as it happens.
 
-**9. Catch cheating, then send the task back.** "Reward hacking" is when the model gets full marks without solving the problem, like a student editing the answer key.
-- *Reward-hack detector:* watches the report stream for suspicious patterns, such as perfect scores on very short attempts or edits to test files.
-- *Quarantine through the API:* a flagged task is pulled from training and goes back to review (step 4), using the same route a person would. The record shows what was pulled, by whom or by which rule, and why. Without this, problems show up on a chart and nothing changes.
+**10. Catch abuse at both levels, then clean up.** Abuse means making data look better, larger or more human than it is. Vendors police their workers; Anthropic polices vendors.
+- *Abuse detection jobs:* rules over workers' answers (answering faster than anyone could read, near-duplicates, AI-written text where a human judgment is required, coordinated answers) and over vendors (quality falling as volume rises, removed workers coming back).
+- *Reward-hack detector:* watches the training report stream for a model scoring full marks without solving the problem, such as perfect scores on very short attempts or edits to test files.
+- *Cases module:* every flag opens a case with its evidence. Worker cases go to the vendor admin; vendor and environment cases go to data ops, who can also see how vendors handled their own cases. Every action, from a warning to offboarding a vendor, is tied to a case and can be reviewed and reversed.
+- *Clean-up through lineage:* once a case is decided, a lineage query finds everything the worker, vendor or environment produced, and it's discarded, re-labeled or quarantined. A quarantined task goes back to review (step 4).
 
 **Throughout: the paper trail.**
-- *Audit log:* an append-only record of every approval, quarantine and permission change. When something looks wrong in training, it traces back to the exact task version, the vendor who built it, and the reviewer who approved it.
+- *Audit log:* an append-only record of every approval, allocation, case decision and permission change. When something looks wrong in training, it traces back to the exact task version or answer, the worker and vendor who produced it, and the reviewer who approved it.
 
 ### Components
 
 | Component | Plane | Job | Requirements |
 |---|---|---|---|
-| Web app | Edge | One React + TS app with four surfaces: vendor portal, labeling UI, review UI, dashboards | EC4 EC5 DC3 TO4 TO5 |
-| API gateway | Edge | Authenticates (SSO for staff and labelers, API tokens for vendors and services), applies roles and tenant scoping, rate-limits | VM1 VM2 N9 N11 |
-| API service | Control | One service split into modules: environments and versions, review and quarantine, collection and QA, orgs and tokens, audit | EC1–EC6 DC1–DC7 VM1–VM5 TO6 |
-| Postgres | Control | Source of truth: immutable versions, the version state machine, assignments, the audit log, and the validation job queue (a table) | N6 N7 N12 |
-| Validation job queue | Control (a Postgres table) | Holds validation jobs. Workers claim the next one with `SELECT … FOR UPDATE SKIP LOCKED`, taking from the vendor with the fewest running jobs first | N10 |
+| Web app | Edge | One React + TS app with a surface per role: vendor workspace (admin, reviewer, worker, environment builder), researcher review, data ops console, dashboards and scorecards | EC4 EC5 DC3 DC8 TO4 TO5 VP2–VP4 AB3 |
+| API gateway | Edge | Authenticates (SSO for people, API tokens for vendors and services), applies roles and workspace scoping, rate-limits | VM1 VM2 N9 N11 |
+| API service | Control | One service split into modules: workspaces and capabilities, environments and versions, review and quarantine, projects and allocation, collection and QA, cases and actions, lineage and clean-up, audit | EC1–EC6 DC1–DC8 VP1 AB3–AB7 VM1–VM6 TO6 |
+| Postgres | Control | Source of truth: immutable versions, the version state machine, allocations, assignments and submissions with lineage, cases, the audit log, and the job queue (a table) | N6 N7 N12 N18 |
+| Job queue | Control (a Postgres table) | Holds validation, abuse-detection and scorecard jobs. Workers claim the next one with `SELECT … FOR UPDATE SKIP LOCKED`; validation jobs are taken from the vendor with the fewest running first | N10 |
 | Sandbox workers | Execution | Run each submitted version: reference solution must pass, no-op must fail, repeat runs must agree, difficulty estimated. No network; CPU, memory and time limits | EC3 N8 |
+| Background jobs | Execution | Trusted platform code: abuse-detection rules over submissions and vendors, and scorecard roll-ups written to the analytics store | AB1 AB2 VP2–VP4 N16 N17 |
 | Container registry | Execution | Vendor images, with per-vendor push and pull credentials | VM2 |
 | Code task generator | Execution | Generates programming tasks and submits them through the public API, like any vendor | EC7 A21 |
 | Results intake | Ingestion | Accepts batches of episode results from training; deduplicates by episode id; acknowledges once written to the log | TO1 N5 |
 | Durable log | Ingestion | Buffers bursts so training is never slowed by downstream processing | N4 |
-| Stream processor | Ingestion | Aggregates per-environment and per-run stats; writes transcripts to object storage | TO1 TO2 |
-| Reward-hack detector | Ingestion | Pluggable rules over the episode stream; raises flags through the API | TO3 A14 |
-| Analytics store | Ingestion | Stats tables built for time-range queries (e.g. ClickHouse) | TO2 |
-| Dashboard API | Ingestion | Queries for dashboards and drill-down, plus a live feed over server-sent events | TO2 TO4 TO5 |
+| Stream processor | Ingestion | Aggregates per-environment and per-run stats, credits outcomes to the environment's vendor, writes transcripts to object storage | TO1 TO2 TO7 |
+| Reward-hack detector | Ingestion | Pluggable rules over the episode stream; raises flags through the API, which open cases | TO3 AB3 A14 |
+| Analytics store | Ingestion | Stats tables built for time-range queries (e.g. ClickHouse): per environment, run, vendor, project and worker | TO2 TO7 VP2–VP4 |
+| Dashboard API | Ingestion | Scorecards, vendor comparisons, run dashboards and drill-down, plus a live feed over server-sent events | TO2 TO4 TO5 VP2–VP4 |
 | Object storage | Shared | Episode transcripts, exported datasets, validation logs | TO5 DC6 |
 
 ### Key decisions
@@ -294,54 +303,68 @@ Each step lists the components involved, what each one is for, and what breaks w
 | # | Decision | Why | Trade-off |
 |---|---|---|---|
 | D1 | The control plane is one modular service, not microservices | Priorities shift fast (N13); one deploy and one database keep iteration quick | Modules must keep clean boundaries so the ingestion or execution side can split off later |
-| D2 | The validation job queue is a Postgres table. Submitting a version updates its status and inserts its jobs in one transaction; workers claim jobs with `SKIP LOCKED` | ~25k runs a day is about 0.3 jobs/s (A4, A5), far below what Postgres handles. One transaction means a version can't be "submitted" with no job, or have a job after a rollback (N5, N7), with no message broker or outbox relay to run | Workers poll the database, and a crashed worker's job is retried after a lease expires, so runs must be idempotent. Move to a dedicated broker (with an outbox) only if volume grows ~1,000× |
+| D2 | The job queue is a Postgres table. Submitting a version updates its status and inserts its jobs in one transaction; workers claim jobs with `SKIP LOCKED` | ~25k validation runs a day is about 0.3 jobs/s (A4, A5), and batched abuse checks add little (§5), far below what Postgres handles. One transaction means a version can't be "submitted" with no job, or have a job after a rollback (N5, N7), with no message broker or outbox relay to run | Workers poll the database, and a crashed worker's job is retried after a lease expires, so jobs must be idempotent. Move to a dedicated broker (with an outbox) only if volume grows ~1,000× |
 | D3 | Environment versions are immutable, and their status changes only through a state machine (draft → submitted → validating → failed or in review → approved → quarantined) | Training always refers to an exact, unchanging version (N6); every transition is a single audited event (N12) | Fixing a typo means a new version |
-| D4 | Validation runs in sandboxes pulled from a fair-share queue | Vendor code is untrusted (N8, A15); one vendor can't starve the rest (N10) | Sandboxing (e.g. gVisor or Firecracker) adds startup time to each run |
+| D4 | Validation runs in sandboxes, taking jobs from the queue with a fair share per vendor | Vendor code is untrusted (N8, A15); one vendor can't starve the rest (N10) | Sandboxing (e.g. gVisor or Firecracker) adds startup time to each run |
 | D5 | Training results bypass the gateway and the control plane: intake → durable log → processors | Training is never blocked by the platform (N4); the heaviest write path stays off the control database | Two paths to secure and monitor; dashboards are eventually consistent (N7) |
 | D6 | Intake deduplicates by episode id, and every processor is idempotent | Retries can't double-count results (N5) | Producers must assign stable episode ids |
-| D7 | The hack detector raises flags through the API, not by writing to the database directly | Quarantine goes through the same state machine and audit trail as a human decision (TO6, VM4) | One extra network hop on a path that isn't latency-sensitive |
-| D8 | Gold answers live in their own table, which labeler-facing endpoints never read | Labelers can't see gold answers, so QA can't be gamed (N9) | QA scoring needs a separate, privileged code path |
+| D7 | Detectors raise flags through the API, not by writing to the database directly | Quarantine and other actions go through the same state machine, cases and audit trail as a human decision (TO6, AB3, VM4) | One extra network hop on a path that isn't latency-sensitive |
+| D8 | Gold answers live in their own table, which worker- and vendor-facing endpoints never read | Workers and vendors can't identify gold tasks, so QA can't be gamed (N9, N17) | QA scoring needs a separate, privileged code path |
 | D9 | Task types and environment configs are described by JSON schemas stored as data | New task types ship without a migration or a new UI form (N13) | Validation and rendering are generic, so very custom task UIs need extension points |
 | D10 | Training pulls approved environments from a catalog API and downloads datasets via short-lived signed URLs | Training stays decoupled (A23); large files never pass through the API (DC6) | Signed URLs must expire and be scoped to one dataset |
+| D11 | Every performance number is computed by the platform, by one code path for all vendors, and vendors read the same numbers Anthropic does | Fair comparison needs an identical measure (N16, VP2, VP3); vendors can only fix what they can see (VP4) | Scorecards lag by the roll-up interval, and vendor views are further delayed and aggregated around gold tasks (A26) |
+| D12 | Workers are pseudonymous outside their vendor: each has a platform ID scoped to the vendor, and identity fields live only in the vendor's workspace | Anthropic can trace data and spot patterns without holding personal data (N9, A25) | A worker removed by one vendor can't be recognized at another |
+| D13 | One flag → case → action model serves both levels. The case owner follows the subject: worker cases to the vendor admin, vendor and environment cases to data ops | One audited path for every enforcement decision (AB3–AB5, N18, VM4); data ops can review vendors' cases (AB7) | The case model is generic, so level-specific workflows need care |
+| D14 | Lineage is recorded when data is created: every accepted submission stores task, worker ID, vendor, project and review; every dataset row and episode references its source | Clean-up after abuse is a query, not an investigation (AB6, N12) | Wider rows; datasets must be re-exportable without removed items |
+| D15 | Abuse detectors are pluggable rules, run as background jobs (AB1, AB2) and over the episode stream (TO3). Rule definitions are never exposed through vendor-facing APIs | New signals ship without a redeploy (A27); published rules could be gamed (N17) | Vendors see the outcome of a rule, not its logic, which can feel opaque; case evidence (N18) has to make up for it |
 
 ### Core entities
 
 | Entity | Key fields | Notes |
 |---|---|---|
-| Org | id, name, kind (vendor or internal) | Tenant boundary (VM1) |
-| User | id, org, role (vendor, labeler, researcher, ops) | |
+| Org | id, name, kind (vendor or internal), capabilities (human work, environments; domains) | A vendor workspace is a vendor org (VM1, VM6) |
+| User | id, org, role (researcher, data ops, vendor admin, vendor reviewer, worker, environment builder), pseudonymous id | Identity fields visible only inside the user's own org (D12) |
 | ApiToken | id, org, scopes, hash, expires_at, revoked_at | Stored hashed (N11) |
 | Environment | id, org, name | Groups versions |
-| EnvironmentVersion | id, environment, number, config (JSON), image digest, status | Immutable; the central entity (D3) |
+| EnvironmentVersion | id, environment, number, config (JSON), image digest, status | Immutable (D3) |
 | ValidationRun | id, version, check (reference, no-op, repeat), result, logs_uri | |
-| Review | id, version, reviewer, grade, rubric scores, feedback | |
-| CollectionProject | id, task_type schema, instructions, overlap, gold rate | |
-| Item / Assignment / Label | item payload; assignment to a labeler; the submitted answer | One open assignment per labeler and item (N7) |
-| GoldAnswer | item, answer | Separate table (D8) |
+| Review | id, subject (version or submission), reviewer, grade, rubric scores, feedback | Researcher or vendor reviewer (EC5, DC8) |
+| Project | id, task_type schema, instructions, quality bar, volume, deadline, overlap, gold rate | DC1 |
+| Allocation | id, project, vendor, share, status | VP1 |
+| Task / Assignment / Submission | task payload; assignment to a worker; the answer, with worker ID, vendor, review and acceptance | One open assignment per worker and task (N7); lineage (D14) |
+| GoldAnswer | task, answer | Separate table (D8) |
 | Dataset | id, project, filter, uri, created_at | An exported snapshot (DC6) |
-| TrainingRun / Episode | run; episode_id, version, reward, passed, length, transcript_uri | Episodes live in the analytics store, not Postgres (D5) |
-| Flag | id, version, run, rule, evidence, status | Raised by the detector or a person (TO3, TO6) |
+| TrainingRun / Episode | run; episode_id, version, vendor, reward, passed, length, transcript_uri | Episodes live in the analytics store, not Postgres (D5) |
+| Flag | id, subject (worker, vendor or version), rule or person, evidence | AB1 AB2 TO3 |
+| Case | id, subject, owner, flags, status, decision, decided_by | D13, N18 |
+| Action | id, case, type (warn, retrain, suspend, remove, lower allocation, pause, offboard, discard, re-label, quarantine) | AB4–AB6 |
+| Scorecard row | vendor, project, worker (optional), period, quality, volume, cost per accepted task, turnaround | Analytics store (D11) |
 | AuditEvent | id, actor, action, entity, before, after, at | Append-only (VM4) |
 
 ### API sketch
 
 | Call | Who | Requirements |
 |---|---|---|
-| `POST /environments`, `POST /environments/{id}/versions` | Vendor | EC1 EC2 |
-| `POST /versions/{id}/submit`, `GET /versions/{id}` | Vendor | EC3 EC4 |
+| `POST /orgs`, `PUT /orgs/{id}/capabilities` | Data ops | VM1 VM6 |
+| `POST /orgs/{id}/invites`, `POST /orgs/{id}/tokens`, `DELETE /tokens/{id}`, `GET /onboarding/checks` | Vendor admin | VM1–VM3 |
+| `POST /environments`, `POST /environments/{id}/versions`, `POST /versions/{id}/submit`, `GET /versions/{id}` | Environment builder | EC1–EC4 |
 | `GET /versions?status=in_review`, `POST /versions/{id}/reviews` | Researcher | EC5 |
 | `POST /versions/{id}/approve`, `POST /versions/{id}/quarantine` | Researcher, detector | EC6 TO6 |
 | `GET /catalog` | Training | EC6 |
-| `POST /projects`, `POST /projects/{id}/items` | Researcher | DC1 DC2 |
-| `POST /assignments/next`, `POST /assignments/{id}/label`, `POST /items/{id}/flag` | Labeler | DC2 DC3 DC5 |
+| `POST /projects`, `POST /projects/{id}/tasks` | Researcher | DC1 |
+| `POST /projects/{id}/allocations`, `PATCH /allocations/{id}` | Data ops | VP1 |
+| `POST /assignments/next`, `POST /assignments/{id}/submit`, `POST /tasks/{id}/flag` | Worker | DC2 DC3 DC5 |
+| `POST /submissions/{id}/review` | Vendor reviewer | DC8 |
 | `GET /projects/{id}/quality`, `POST /projects/{id}/exports` | Researcher | DC4 DC6 DC7 |
+| `GET /projects/{id}/vendors` | Data ops, researcher | VP2 |
+| `GET /vendors/{id}/scorecard`, `GET /workers/{id}/quality` | Data ops; vendor admin (own vendor only) | VP3 VP4 |
+| `GET /cases`, `POST /cases/{id}/decision`, `POST /cases/{id}/actions` | Vendor admin, data ops | AB3–AB5 AB7 |
+| `GET /lineage`, `POST /cleanups` | Data ops | AB6 |
 | `POST /ingest/episodes` (batch) | Training | TO1 N5 |
 | `GET /runs/{id}/stats`, `GET /runs/{id}/live` (SSE), `GET /episodes/{id}` | Researcher | TO2 TO4 TO5 |
-| `POST /orgs`, `POST /orgs/{id}/invites`, `POST /orgs/{id}/tokens`, `DELETE /tokens/{id}` | Ops, vendor | VM1 VM2 |
-| `GET /onboarding/checks` | Vendor | VM3 |
 
 ## 10. Next steps
 
 1. **Scope the build**: which flow or flows, the timebox and the stack. Some components can be small stand-ins in the build while keeping the same boundaries: the gateway as middleware in the API service, the durable log as a Postgres table, the analytics store as summary tables in Postgres, and the registry as local Docker.
 2. **Decide which NFRs get shown in code versus written up.** N4–N9 and N12 are cheap to demonstrate and are the hard parts. The scale targets (N1–N3, N10) are better written up from the estimates above.
-3. **Deeper diagrams if needed**: the environment-version state machine (D3) and sequence diagrams for the three core flows.
+3. **Deeper diagrams if needed**: the environment-version state machine (D3), the case life cycle (D13), and sequence diagrams for the five core flows.
