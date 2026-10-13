@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import Feedback from "./Feedback";
 import Projects from "./Projects";
 import Review from "./Review";
+import Scorecards from "./Scorecards";
 import Work from "./Work";
 import { api, saveToken, savedToken, type User } from "./api";
 import Workspaces from "./Workspaces";
@@ -48,6 +49,7 @@ function Views({ me }: { me: User }) {
   const tabs = [
     ...(me.role === "worker" ? ["Work", "Feedback"] : []),
     ...(me.role !== "worker" ? ["Projects"] : []),
+    ...(["data_ops", "researcher", "vendor_admin"].includes(me.role) ? ["Scorecards"] : []),
     ...(me.role === "researcher" ? ["Review"] : []),
     "Workspaces",
   ];
@@ -65,6 +67,7 @@ function Views({ me }: { me: User }) {
       {tab === "Feedback" && <Feedback />}
       {tab === "Projects" && <Projects me={me} />}
       {tab === "Review" && <Review />}
+      {tab === "Scorecards" && <Scorecards me={me} />}
       {tab === "Workspaces" && <Workspaces me={me} />}
     </>
   );

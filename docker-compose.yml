@@ -32,6 +32,18 @@ services:
       db:
         condition: service_healthy
 
+  worker:
+    build: ./backend
+    environment:
+      DATABASE_URL: postgresql+asyncpg://rl:rl@db:5432/rl
+    command: python -m app.jobs
+    # Starts alongside the API, which runs migrations first; retry until they're in place.
+    restart: unless-stopped
+    volumes:
+      - ./backend:/app
+    depends_on:
+      - api
+
   web:
     build: ./frontend
     environment:

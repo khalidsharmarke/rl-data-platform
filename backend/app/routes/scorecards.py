@@ -1,0 +1,205 @@
+import uuid
+from datetime import datetime, timedelta
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel
+from sqlalchemy import select, text
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.auth import current_user
+from app.config import settings
+from app.db import get_session
+from app.models import Org, OrgKind, Role, User
+from app.quality import METRIC_VERSION, SUBMISSION_FACTS
+from app.routes.projects import get_visible_project
+from app.scorecards import Point, drop_alerts, gold_cutoff
+from app.scoping import is_internal, require_roles, shows_identity
+
+router = APIRouter()
+
+MIN_GOLD_FOR_WORKER_ACCURACY = 20  # PRD PD2
+
+
+class VendorComparison(BaseModel):
+    vendor_id: uuid.UUID
+    vendor_name: str
+    submissions: int
+    accepted: int
+    acceptance_rate: float | None
+    gold_n: int
+    gold_accuracy: float | None
+    agreement: float | None
+    rejected: int
+    cost: float
+    cost_per_accepted: float | None
+    avg_turnaround_minutes: float | None
+    avg_time_on_task_s: float | None
+
+
+class ComparisonOut(BaseModel):
+    metric_version: str
+    computed_at: datetime | None
+    vendors: list[VendorComparison]
+
+
+class PointOut(BaseModel):
+    period_start: datetime
+    submissions: int
+    accepted: int
+    gold_n: int | None
+    gold_accuracy: float | None
+    agreement: float | None
+    cost_per_accepted: float | None
+
+
+class ScorecardOut(BaseModel):
+    metric_version: str
+    vendor_name: str
+    gold_shown_until: datetime | None
+    points: list[PointOut]
+    alerts: list[dict]
+
+
+class WorkerRow(BaseModel):
+    worker_id: uuid.UUID
+    handle: str
+    display_name: str | None
+    submissions: int
+    agreement: float | None
+    rejected: int
+    gold_accuracy: float | None
+    gold_n: int | None
+
+
+def rate(a: float, b: float) -> float | None:
+    return a / b if b else None
+
+
+@router.get("/projects/{project_id}/vendors")
+async def compare_vendors(
+    project_id: uuid.UUID,
+    user: User = Depends(require_roles(Role.DATA_OPS, Role.RESEARCHER)),
+    session: AsyncSession = Depends(get_session),
+) -> ComparisonOut:
+    """VP2: every vendor on one project, side by side, by the same measures."""
+    project = await get_visible_project(project_id, user, session)
+    rows = await session.execute(
+        text(
+            """
+            SELECT r.vendor_id, o.name, sum(submissions) s, sum(accepted) a, sum(gold_n) gn, sum(gold_correct) gc,
+                   sum(compared) cmp, sum(agreed) agr, sum(rejected) rej, sum(cost) cost,
+                   sum(turnaround_s) ta, sum(time_on_task_ms) tot, max(computed_at) computed_at
+            FROM scorecard_rows r JOIN orgs o ON o.id = r.vendor_id
+            WHERE r.project_id = :p AND r.metric_version = :m AND r.worker_id IS NULL
+            GROUP BY r.vendor_id, o.name ORDER BY o.name
+            """
+        ),
+        {"p": project.id, "m": METRIC_VERSION},
+    )
+    vendors, computed = [], None
+    for r in rows:
+        computed = max(computed, r.computed_at) if computed else r.computed_at
+        vendors.append(VendorComparison(
+            vendor_id=r.vendor_id, vendor_name=r.name, submissions=r.s, accepted=r.a, acceptance_rate=rate(r.a, r.s - r.gn),
+            gold_n=r.gn, gold_accuracy=rate(r.gc, r.gn), agreement=rate(r.agr, r.cmp), rejected=r.rej, cost=float(r.cost),
+            cost_per_accepted=rate(float(r.cost), r.a), avg_turnaround_minutes=rate(r.ta / 60, r.s), avg_time_on_task_s=rate(r.tot / 1000, r.s),
+        ))
+    return ComparisonOut(metric_version=METRIC_VERSION, computed_at=computed, vendors=vendors)
+
+
+async def vendor_in_reach(vendor_id: uuid.UUID, user: User, session: AsyncSession) -> Org:
+    vendor = await session.get(Org, vendor_id)
+    allowed = is_internal(user) and user.role in (Role.DATA_OPS, Role.RESEARCHER) or (
+        user.role == Role.VENDOR_ADMIN and user.org_id == vendor_id
+    )
+    if vendor is None or vendor.kind != OrgKind.VENDOR or not allowed:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Not found")
+    return vendor
+
+
+@router.get("/vendors/{vendor_id}/scorecard")
+async def vendor_scorecard(
+    vendor_id: uuid.UUID,
+    project_id: uuid.UUID = Query(),
+    user: User = Depends(current_user),
+    session: AsyncSession = Depends(get_session),
+) -> ScorecardOut:
+    """VP3 for Anthropic; VP4 for the vendor itself, with gold numbers held back per PRD PD2."""
+    vendor = await vendor_in_reach(vendor_id, user, session)
+    await get_visible_project(project_id, user, session)
+    rows = await session.execute(
+        text(
+            """
+            SELECT period_start, submissions, gold_n, gold_correct, compared, agreed, rejected, reviewed, accepted, cost
+            FROM scorecard_rows
+            WHERE project_id = :p AND vendor_id = :v AND metric_version = :m AND worker_id IS NULL
+            ORDER BY period_start
+            """
+        ),
+        {"p": project_id, "v": vendor.id, "m": METRIC_VERSION},
+    )
+    points = [Point(**{k: (float(v) if k == "cost" else v) for k, v in r._mapping.items()}) for r in rows]
+    internal = is_internal(user)
+    cutoff = None if internal else gold_cutoff()
+    period = lambda p: p.period_start  # noqa: E731
+
+    def shown(p: Point) -> PointOut:
+        gold_visible = internal or period(p) + _bucket() <= cutoff
+        return PointOut(
+            period_start=p.period_start, submissions=p.submissions, accepted=p.accepted,
+            gold_n=p.gold_n if gold_visible else None, gold_accuracy=p.gold_accuracy if gold_visible else None,
+            agreement=p.agreement, cost_per_accepted=rate(p.cost, p.accepted),
+        )
+
+    return ScorecardOut(
+        metric_version=METRIC_VERSION, vendor_name=vendor.name, gold_shown_until=cutoff,
+        points=[shown(p) for p in points], alerts=drop_alerts(points) if internal else [],
+    )
+
+
+def _bucket() -> timedelta:
+    return timedelta(minutes=settings.scorecard_bucket_minutes)
+
+
+@router.get("/vendors/{vendor_id}/workers")
+async def vendor_workers(
+    vendor_id: uuid.UUID,
+    project_id: uuid.UUID = Query(),
+    user: User = Depends(current_user),
+    session: AsyncSession = Depends(get_session),
+) -> list[WorkerRow]:
+    """Worker quality within a vendor (VP4, C4.4). Agreement and rejections are live; gold
+    accuracy appears only after enough gold results, and only up to the last refresh (PD2)."""
+    vendor = await vendor_in_reach(vendor_id, user, session)
+    await get_visible_project(project_id, user, session)
+    internal = is_internal(user)
+    cutoff = None if internal else gold_cutoff()
+    rows = await session.execute(
+        text(
+            f"""
+            SELECT worker_id, count(*) s,
+                   count(*) FILTER (WHERE compared) cmp, count(*) FILTER (WHERE compared AND agrees) agr,
+                   count(*) FILTER (WHERE rejected) rej,
+                   count(*) FILTER (WHERE is_gold AND (CAST(:cutoff AS timestamptz) IS NULL OR submitted_at < :cutoff)) gn,
+                   count(*) FILTER (WHERE gold_correct AND (CAST(:cutoff AS timestamptz) IS NULL OR submitted_at < :cutoff)) gc
+            FROM ({SUBMISSION_FACTS}) f
+            WHERE vendor_id = :v
+            GROUP BY worker_id
+            """
+        ),
+        {"project_id": project_id, "v": vendor.id, "cutoff": cutoff},
+    )
+    stats = {r.worker_id: r for r in rows}
+    people = {u.id: u for u in (await session.scalars(select(User).where(User.id.in_(stats))))}
+    out = []
+    for worker_id, r in stats.items():
+        enough = r.gn >= MIN_GOLD_FOR_WORKER_ACCURACY
+        show_gold = internal or enough
+        member = people[worker_id]
+        out.append(WorkerRow(
+            worker_id=worker_id, handle=member.handle,
+            display_name=member.display_name if shows_identity(user, member) else None,
+            submissions=r.s, agreement=rate(r.agr, r.cmp), rejected=r.rej,
+            gold_accuracy=rate(r.gc, r.gn) if show_gold else None, gold_n=r.gn if show_gold else None,
+        ))
+    return sorted(out, key=lambda w: (w.gold_accuracy is None, w.gold_accuracy or 0))

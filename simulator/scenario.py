@@ -23,7 +23,7 @@ API = os.environ.get("API_URL", "http://api:8000")
 SPEED = int(os.environ.get("DEMO_CLOCK_SPEED", "180"))
 TASKS = int(os.environ.get("DEMO_TASKS", "3000"))
 GOLD_RATE = 0.05
-SWITCH_AT = 0.35  # share of expected answers after which the switcher starts pasting
+SWITCH_AT = 0.35  # share of its vendor's expected answers after which the switcher starts pasting
 SEED = 2026
 
 PROFILES = {
@@ -31,7 +31,8 @@ PROFILES = {
     "careful": dict(accuracy=0.95, seconds=(30, 70), reason=0.6, paste=False),
     "average": dict(accuracy=0.86, seconds=(18, 40), reason=0.3, paste=False),
     "sloppy": dict(accuracy=0.62, seconds=(7, 15), reason=0.0, paste=False),
-    "ai_paster": dict(accuracy=0.72, seconds=(2, 4), reason=1.0, paste=True),
+    # Pastes an answer without reading the task, so it is right about half the time.
+    "ai_paster": dict(accuracy=0.5, seconds=(2, 4), reason=1.0, paste=True),
 }
 
 ROSTERS = {
@@ -55,6 +56,7 @@ PASTED_REASON = ("Answer {choice} is more helpful because it directly addresses 
 @dataclass
 class Progress:
     expected: int
+    expected_by_vendor: dict = field(default_factory=dict)
     answered: int = 0
     by_vendor: dict = field(default_factory=dict)
 
@@ -125,7 +127,8 @@ async def run_worker(c, project_id, truth, vendor, name, profile, progress: Prog
     until_break = rng.randint(15, 40)
     misses = 0
     while True:
-        if switcher and behavior != "ai_paster" and progress.answered >= SWITCH_AT * progress.expected:
+        own = progress.by_vendor.get(vendor, 0)
+        if switcher and behavior != "ai_paster" and own >= SWITCH_AT * progress.expected_by_vendor[vendor]:
             behavior = "ai_paster"
             print(f"  {name} ({vendor}) starts pasting AI-written answers", flush=True)
         r = await c.post("/assignments/next", headers=headers, json={"project_id": project_id})
@@ -180,6 +183,7 @@ async def main() -> None:
         project_id, truth, workers = await setup(c)
         gold = round(TASKS * GOLD_RATE)
         progress = Progress(expected=(TASKS - gold) * 2 + gold * 2 * len(SHARES))
+        progress.expected_by_vendor = {v: round((TASKS - gold) * float(s)) * 2 + gold * 2 for v, s in SHARES.items()}
         print(f"Running {len(workers)} simulated workers across {len(SHARES)} vendors", flush=True)
 
         async def ticker():

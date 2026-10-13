@@ -67,6 +67,7 @@ Personas are described in the [PRD](PRD.md#3-who-cares-about-what). Each vendor 
 | DC6 | QA-passed data is exported for training | *"connect environment authoring tools, data collection systems, and RL training infrastructure"* | A23 |
 | DC7 | Progress and throughput are tracked per project and per vendor | *"data collection progress"* | |
 | DC8 | A vendor reviewer can check and correct workers' output before it's submitted to Anthropic. Vendor review adds to platform QA and doesn't replace it | PRD C2.2 | A29 |
+| A30 | Per-task contracts pay for every submitted answer, not only accepted ones; hourly contracts pay for time on task | VP2, VP3, D11 | If vendors are paid only for accepted work, cost per accepted unit equals the contract price and stops reflecting quality; the comparison would then lean on acceptance rate instead |
 | DC9 | The platform records time on task (assignment to submission) for every submission | PRD C3.5; PRD PD3 | |
 
 ### Training observability
@@ -323,6 +324,7 @@ Each step lists the components involved, what each one is for, and what breaks w
 | D16 | Data is protected automatically; people are acted on by people. An open case triggers reversible holds (AB8); suspensions, removals and vendor actions need a recorded decision | Damage from abuse is contained within minutes without punishing anyone on a false positive (N18, PRD PD4) | Held data delays exports; a burst of false flags can stall a project until cases are reviewed |
 | D17 | Regular tasks are routed to one vendor in proportion to its allocation share, interleaved through the claim order (smooth weighted round-robin); gold tasks are routed to every allocated vendor. Changing an allocation re-routes only tasks nobody has started | Every vendor is measured on the same gold tasks, so gold accuracy is comparable (N16, VP2); interleaving keeps gold evenly mixed into each vendor's stream, where contiguous blocks would end a vendor's stream in a run of gold (D8); work already started stays with the vendor that started it | Gold tasks are answered once per vendor, which costs more than answering them once; agreement on regular tasks is measured within a vendor |
 | D18 | Acceptance (metric quality-v1): an answer on a regular task is accepted unless a reviewer rejected it or its worker's gold accuracy is below the project's quality bar, once the worker has enough gold results to judge | Ties accepted volume, and so cost per accepted unit (PRD PD3), to measured quality rather than to volume alone | A worker's later gold results can change whether their earlier answers count; the metric version (N19) makes that explainable |
+| D19 | A vendor scorecard raises an alert when gold accuracy over the last hour falls at least 8 points below the vendor's earlier accuracy, and the drop is at least 3 standard errors of the recent window | Data ops needs early warning of real changes (VP3) without chasing noise: a 2-standard-error dip happens by chance in a long series | A small vendor's real drop takes longer to reach significance; worker-level rules (AB1) catch individual abuse sooner |
 
 ### Core entities
 

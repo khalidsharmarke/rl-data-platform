@@ -7,6 +7,13 @@ services:
       VENDOR_GOLD_REFRESH_MINUTES: "60"
       SEED_SAMPLE_PROJECT: "false"
 
+  worker:
+    environment:
+      DEMO_CLOCK_SPEED: "180"
+      SCORECARD_BUCKET_MINUTES: "15"
+      VENDOR_GOLD_REFRESH_MINUTES: "60"
+      JOBS_TICK_SECONDS: "3"
+
   simulator:
     build: ./simulator
     profiles: ["demo"]

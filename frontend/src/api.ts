@@ -141,3 +141,48 @@ export type FeedbackItem = {
 };
 
 export const pct = (x: number | null | undefined) => (x == null ? "—" : `${Math.round(x * 100)}%`);
+
+export type VendorComparison = {
+  vendor_id: string;
+  vendor_name: string;
+  submissions: number;
+  accepted: number;
+  acceptance_rate: number | null;
+  gold_n: number;
+  gold_accuracy: number | null;
+  agreement: number | null;
+  rejected: number;
+  cost: number;
+  cost_per_accepted: number | null;
+  avg_turnaround_minutes: number | null;
+  avg_time_on_task_s: number | null;
+};
+
+export type ScorePoint = {
+  period_start: string;
+  submissions: number;
+  accepted: number;
+  gold_n: number | null;
+  gold_accuracy: number | null;
+  agreement: number | null;
+  cost_per_accepted: number | null;
+};
+
+export type Scorecard = {
+  metric_version: string;
+  vendor_name: string;
+  gold_shown_until: string | null;
+  points: ScorePoint[];
+  alerts: { period_start: string; metric: string; recent: number; baseline: number }[];
+};
+
+export type WorkerQuality = {
+  worker_id: string;
+  handle: string;
+  display_name: string | null;
+  submissions: number;
+  agreement: number | null;
+  rejected: number;
+  gold_accuracy: number | null;
+  gold_n: number | null;
+};

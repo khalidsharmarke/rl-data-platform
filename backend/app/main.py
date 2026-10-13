@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from app import clock
 from app.db import SessionLocal
 
-from app.routes import audit, auth, contracts, health, orgs, projects, quality, work
+from app.routes import audit, auth, contracts, health, orgs, projects, quality, scorecards, work
 
 
 
@@ -25,3 +25,4 @@ app.include_router(contracts.router)
 app.include_router(projects.router)
 app.include_router(work.router)
 app.include_router(quality.router)
+app.include_router(scorecards.router)

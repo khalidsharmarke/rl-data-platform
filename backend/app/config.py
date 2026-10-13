@@ -12,6 +12,8 @@ class Settings(BaseSettings):
     # Width of a scorecard period, and how often vendors' gold-based numbers refresh (PRD PD2).
     scorecard_bucket_minutes: int = 60
     vendor_gold_refresh_minutes: int = 24 * 60
+    # How often the background worker queues roll-ups and works the queue (real seconds).
+    jobs_tick_seconds: float = 30
     # The seed's small sample project; the scripted demo creates its own project instead.
     seed_sample_project: bool = True
 
