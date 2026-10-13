@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Planned |
+| Status | In progress: M0 done |
 | Timebox | About a week: ~33 hours across nine milestones |
 | Stack | Python (FastAPI, async) · Postgres · React + TypeScript (Vite) · Docker Compose |
 | Delivered as | This repo, runnable with `docker compose up`, plus a 2–3 minute recorded walkthrough embedded in the README |
@@ -88,18 +88,18 @@ From the [decision register](DECISIONS.md#what-this-means-for-the-first-build): 
 
 Each milestone ends with something that runs and a check that proves it. Hours are estimates.
 
-| # | Milestone | Delivers | Done when | Hours |
-|---|---|---|---|---|
-| M0 | Skeleton | Docker Compose with Postgres, the FastAPI app, migrations, the React app, a test runner and seeded demo logins | `docker compose up` serves a login page and a health endpoint; tests run in one command | 2 |
-| M1 | Workspaces, roles and audit | Orgs with capabilities, users and roles, vendor-scoped worker IDs, workspace-scoping middleware, append-only audit log | A test shows Vendor A's admin can't read Vendor B's data; every write creates an audit event | 3 |
-| M2 | Projects, contracts and work | Projects with schema versions, tasks, hidden gold answers, contracts with price and unit, allocations pointing to contracts, assignment queue, submissions with lineage and time on task | A worker can claim and answer tasks through the API; each submission carries full lineage | 4 |
-| M3 | Quality | Gold scoring, overlap and agreement, researcher spot checks with reasons, acceptance, worker quality scores, gold-set rotation, the worker's feedback view | Seeded answers produce the expected accuracy and agreement; workers see spot-check rejections with reasons; no worker or vendor endpoint returns gold data (tested) | 5 |
-| M4 | Simulator | Synthetic workers with profiles (careful, average, sloppy, AI-paster) driving the public API; the demo scenario script | One command runs the full demo scenario against a fresh database | 3 |
-| M5 | Scorecards | Roll-up jobs on the Postgres queue with metric versions; project comparison, vendor scorecard over time, vendor's own view with PD2's split | The project view ranks the three vendors; Vendor C's dip is visible; vendor views hide per-task gold results | 4 |
-| M6 | Abuse and cases | Versioned worker rules (speed, paste, near-duplicate), flags, cases with evidence, automatic holds, vendor-admin decisions and actions, data ops' read-only view | The AI-paster is flagged, held and suspended in the scenario; every action links to its case | 5 |
-| M7 | Clean-up and export | Lineage query, clean-up of a decided case, dataset export and re-export | Re-exported dataset contains none of the removed worker's answers; the audit log shows the chain | 3 |
-| M8 | Polish and walkthrough | UI pass across the four role views (researcher, data ops, vendor admin, worker), README with screenshots, recorded walkthrough | Someone new can run the demo from the README alone; the recording covers the nine-step story | 4 |
-| | | | **Total** | **33** |
+| # | Milestone | Delivers | Done when | Hours | Status |
+|---|---|---|---|---|---|
+| M0 | Skeleton | Docker Compose with Postgres, the FastAPI app, migrations, the React app, a test runner and seeded demo logins | `docker compose up` serves a login page and a health endpoint; tests run in one command | 2 | Done |
+| M1 | Workspaces, roles and audit | Orgs with capabilities, users and roles, vendor-scoped worker IDs, workspace-scoping middleware, append-only audit log | A test shows Vendor A's admin can't read Vendor B's data; every write creates an audit event | 3 | |
+| M2 | Projects, contracts and work | Projects with schema versions, tasks, hidden gold answers, contracts with price and unit, allocations pointing to contracts, assignment queue, submissions with lineage and time on task | A worker can claim and answer tasks through the API; each submission carries full lineage | 4 | |
+| M3 | Quality | Gold scoring, overlap and agreement, researcher spot checks with reasons, acceptance, worker quality scores, gold-set rotation, the worker's feedback view | Seeded answers produce the expected accuracy and agreement; workers see spot-check rejections with reasons; no worker or vendor endpoint returns gold data (tested) | 5 | |
+| M4 | Simulator | Synthetic workers with profiles (careful, average, sloppy, AI-paster) driving the public API; the demo scenario script | One command runs the full demo scenario against a fresh database | 3 | |
+| M5 | Scorecards | Roll-up jobs on the Postgres queue with metric versions; project comparison, vendor scorecard over time, vendor's own view with PD2's split | The project view ranks the three vendors; Vendor C's dip is visible; vendor views hide per-task gold results | 4 | |
+| M6 | Abuse and cases | Versioned worker rules (speed, paste, near-duplicate), flags, cases with evidence, automatic holds, vendor-admin decisions and actions, data ops' read-only view | The AI-paster is flagged, held and suspended in the scenario; every action links to its case | 5 | |
+| M7 | Clean-up and export | Lineage query, clean-up of a decided case, dataset export and re-export | Re-exported dataset contains none of the removed worker's answers; the audit log shows the chain | 3 | |
+| M8 | Polish and walkthrough | UI pass across the four role views (researcher, data ops, vendor admin, worker), README with screenshots, recorded walkthrough | Someone new can run the demo from the README alone; the recording covers the nine-step story | 4 | |
+| | | | **Total** | **33** | |
 
 ### Stretch, in order
 
