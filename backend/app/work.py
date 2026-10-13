@@ -115,7 +115,7 @@ CLAIM = text(
       AND (
         SELECT count(*) FROM assignments x
         WHERE x.task_id = r.task_id AND x.vendor_id = r.vendor_id
-          AND (x.status = 'submitted' OR (x.status = 'open' AND x.expires_at > :now))
+          AND ((x.status = 'submitted' AND NOT EXISTS (SELECT 1 FROM submissions s2 JOIN removals rm ON rm.submission_id = s2.id AND rm.requeue WHERE s2.assignment_id = x.id)) OR (x.status = 'open' AND x.expires_at > :now))
       ) < p.overlap
     ORDER BY t.seq
     LIMIT 1
@@ -128,7 +128,7 @@ RECOUNT = text(
     """
     SELECT count(*) FROM assignments x
     WHERE x.task_id = :task_id AND x.vendor_id = :vendor_id
-      AND (x.status = 'submitted' OR (x.status = 'open' AND x.expires_at > :now))
+      AND ((x.status = 'submitted' AND NOT EXISTS (SELECT 1 FROM submissions s2 JOIN removals rm ON rm.submission_id = s2.id AND rm.requeue WHERE s2.assignment_id = x.id)) OR (x.status = 'open' AND x.expires_at > :now))
     """
 )
 

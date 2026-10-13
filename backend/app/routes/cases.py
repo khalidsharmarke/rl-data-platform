@@ -57,6 +57,8 @@ class Action(BaseModel):
 
 
 class CaseDetail(CaseSummary):
+    subject_id: uuid.UUID
+    project_id: uuid.UUID | None
     decision_reason: str | None
     flags: list[Flag]
     samples: list[Sample]
@@ -150,7 +152,7 @@ async def case_detail(
             text("SELECT a.*, u.role FROM case_actions a LEFT JOIN users u ON u.id = a.actor_id WHERE a.case_id = :c ORDER BY a.seq"), {"c": case_id}
         )
     ]
-    return CaseDetail(**summary(row, user), decision_reason=row.decision_reason, flags=flags, samples=samples, actions=actions)
+    return CaseDetail(**summary(row, user), subject_id=row.subject_id, project_id=row.project_id, decision_reason=row.decision_reason, flags=flags, samples=samples, actions=actions)
 
 
 @router.post("/{case_id}/decision")

@@ -203,8 +203,23 @@ export type CaseSummary = {
 };
 
 export type CaseDetail = CaseSummary & {
+  subject_id?: string;
+  project_id?: string | null;
   decision_reason: string | null;
   flags: { observation: string; rule: string | null; rule_version: string | null }[];
   samples: { submission_id: string; prompt: string; answer: { choice: string; rationale?: string }; time_on_task_s: number; pasted: boolean }[];
   actions: { action: string; by: string; note: string | null; at: string }[];
 };
+
+export type Lineage = {
+  worker_id: string;
+  handle: string;
+  vendor_name: string;
+  submissions: number;
+  held: number;
+  removed: number;
+  accepted_now: number;
+  datasets: { dataset_id: string; created_at: string; rows_from_subject: number; current: boolean }[];
+};
+
+export type Dataset = { id: string; project_id: string; created_at: string; metric_version: string; row_count: number; supersedes: string | null };

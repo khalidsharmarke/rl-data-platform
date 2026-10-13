@@ -1,13 +1,23 @@
 import { useEffect, useState } from "react";
-import { api, pct, type Allocation, type Contract, type Project, type Quality, type User } from "./api";
+import { api, pct, savedToken, type Allocation, type Contract, type Dataset, type Project, type Quality, type User } from "./api";
 
 const UNIT: Record<string, string> = { task: "per task", hour: "per hour", environment: "per environment" };
+
+async function download(id: string) {
+  const token = savedToken();
+  const response = await fetch(`/api/datasets/${id}/download`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+  const url = URL.createObjectURL(await response.blob());
+  const a = Object.assign(document.createElement("a"), { href: url, download: `dataset-${id}.jsonl` });
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 export default function Projects({ me }: { me: User }) {
   const [projects, setProjects] = useState<Project[]>([]);
   const [allocations, setAllocations] = useState<Record<string, Allocation[]>>({});
   const [contracts, setContracts] = useState<Record<string, Contract>>({});
   const [quality, setQuality] = useState<Record<string, Quality>>({});
+  const [datasets, setDatasets] = useState<Record<string, Dataset[]>>({});
   const internal = me.org_kind === "internal";
 
   useEffect(() => {
@@ -20,6 +30,8 @@ export default function Projects({ me }: { me: User }) {
       for (const p of list) {
         byProject[p.id] = await api<Allocation[]>(`/projects/${p.id}/allocations`);
         byQuality[p.id] = await api<Quality>(`/projects/${p.id}/quality`);
+        const sets = await api<Dataset[]>(`/projects/${p.id}/datasets`);
+        setDatasets((d) => ({ ...d, [p.id]: sets }));
         if (me.role === "data_ops") {
           for (const a of byProject[p.id]) {
             for (const c of await api<Contract[]>(`/orgs/${a.vendor_id}/contracts`)) byContract[c.id] = c;
@@ -77,6 +89,28 @@ export default function Projects({ me }: { me: User }) {
                 })}
               </tbody>
             </table>
+          )}
+          {internal && (
+            <div className="datasets">
+              <h4>Datasets</h4>
+              <button
+                onClick={async () => {
+                  const d = await api<Dataset>(`/projects/${p.id}/exports`, { method: "POST" });
+                  setDatasets((all) => ({ ...all, [p.id]: [d, ...(all[p.id] ?? [])] }));
+                }}
+              >
+                Export accepted answers
+              </button>
+              <ul>
+                {(datasets[p.id] ?? []).map((d, i) => (
+                  <li key={d.id}>
+                    {new Date(d.created_at).toLocaleString()} · {d.row_count.toLocaleString()} rows · {d.metric_version}
+                    {i === 0 ? " · current" : " · superseded"} ·{" "}
+                    <a href="#" onClick={(e) => (e.preventDefault(), download(d.id))}>download</a>
+                  </li>
+                ))}
+              </ul>
+            </div>
           )}
         </div>
       ))}

@@ -26,6 +26,7 @@ services:
              uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
     volumes:
       - ./backend:/app
+      - objects:/data
     ports:
       - "8000:8000"
     depends_on:
@@ -58,3 +59,5 @@ services:
 
 volumes:
   pgdata:
+  # Object storage stand-in: exported datasets.
+  objects:

@@ -326,6 +326,8 @@ Each step lists the components involved, what each one is for, and what breaks w
 | D18 | Acceptance (metric quality-v1): an answer on a regular task is accepted unless a reviewer rejected it or its worker's gold accuracy is below the project's quality bar, once the worker has enough gold results to judge | Ties accepted volume, and so cost per accepted unit (PRD PD3), to measured quality rather than to volume alone | A worker's later gold results can change whether their earlier answers count; the metric version (N19) makes that explainable |
 | D19 | A vendor scorecard raises an alert when gold accuracy over the last hour falls at least 8 points below the vendor's earlier accuracy, and the drop is at least 3 standard errors of the recent window | Data ops needs early warning of real changes (VP3) without chasing noise: a 2-standard-error dip happens by chance in a long series | A small vendor's real drop takes longer to reach significance; worker-level rules (AB1) catch individual abuse sooner |
 | D20 | After a case is decided, the abuse rules judge only the worker's answers submitted after the decision | A cleared or reinstated worker isn't re-flagged on evidence a person has already weighed (N18) | Abuse that continues right after a decision needs a fresh window of answers (10) before it's flagged again |
+| D21 | Clean-up removes every answer the worker gave, not only the flagged ones; re-label also reopens those tasks for other workers at the same vendor | Nobody can tell exactly when abuse began, and answers given before detection may already be in exported datasets; lineage says which (AB6) | Honest early work by the same worker is lost, and re-labeling costs another answer per task |
+| D22 | Removed answers still count as delivered in the vendor's scorecard history, but are never accepted or exported | The vendor's record stays truthful: the dip happened. Only the data used for training changes | Delivered volume includes answers that were later thrown away; acceptance shows the difference |
 
 ### Core entities
 
@@ -345,7 +347,8 @@ Each step lists the components involved, what each one is for, and what breaks w
 | Task / Assignment / Submission | task payload; assignment to a worker; the answer, with worker ID, vendor, review, acceptance, time on task and hold status | One open assignment per worker and task (N7); lineage (D14) |
 | GoldAnswer | task, answer | Separate table (D8) |
 | GoldRetirement | task, retired by, reason, when | Rotation (PRD PD2): retired gold tasks are no longer handed out; past answers on them still count |
-| Dataset | id, project, filter, uri, created_at | An exported snapshot (DC6) |
+| Dataset / DatasetRow | dataset: project, uri, metric version, row count, the dataset it supersedes; row: dataset, submission | An exported snapshot (DC6); each row points to its source submission (D14) |
+| Cleanup / Removal | clean-up: case, worker, mode (discard or re-label), counts; removal: submission, clean-up, whether its task reopens | Submissions stay immutable; removal is recorded beside them (AB6, D21) |
 | TrainingRun / Episode | run; episode_id, version, vendor, reward, passed, length, transcript_uri | Episodes live in the analytics store, not Postgres (D5) |
 | Flag | id, subject (worker, vendor or version), rule (shared or vendor-private) and rule version, or person; evidence | AB1 AB2 TO3 |
 | Case | id, subject, owner, flags, holds, vendor response, status, decision, decided_by | D13, N18 |

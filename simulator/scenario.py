@@ -25,9 +25,13 @@ TASKS = int(os.environ.get("DEMO_TASKS", "3000"))
 GOLD_RATE = 0.05
 SWITCH_AT = 0.35  # share of its vendor's expected answers after which the switcher starts pasting
 SEED = 2026
-# The vendor admin reviews open cases and suspends the worker. Off when deciding by hand on camera.
-ADMIN_DECIDES = os.environ.get("DEMO_ADMIN_DECIDES", "true") == "true"
-REVIEW_DELAY_MINUTES = 45  # simulated time between a case opening and the admin deciding
+# Autopilot plays the people in the story: the vendor admin suspends the flagged worker after
+# reviewing the case, data ops cleans up, and the researcher exports datasets. Turn it off to
+# do those steps by hand (for a recorded walkthrough).
+AUTOPILOT = os.environ.get("DEMO_AUTOPILOT", "true") == "true"
+REVIEW_DELAY_MINUTES = 30  # simulated time between a case opening and the admin deciding
+CLEANUP_DELAY_MINUTES = 15  # simulated time between the decision and data ops' clean-up
+EXPORT_EVERY_MINUTES = 30  # the researcher pulls accepted data every half hour (simulated)
 
 PROFILES = {
     # accuracy on the better answer, simulated seconds per task, writes a reason, pastes it
@@ -137,7 +141,7 @@ async def run_worker(c, project_id, truth, vendor, name, profile, progress: Prog
         r = await c.post("/assignments/next", headers=headers, json={"project_id": project_id})
         if r.status_code == 204:
             misses += 1
-            if misses > 3:
+            if misses > 6:  # an hour with nothing to do: the project is finished
                 return
             await sim_sleep(10 * 60)  # others' expired leases may free tasks up
             continue
@@ -185,6 +189,34 @@ async def vendor_admin(c, vendor: str, done: asyncio.Event) -> None:
         await sim_sleep(10 * 60)
 
 
+async def data_ops(c, project_id, progress: Progress, done: asyncio.Event) -> None:
+    """The researcher exports every hour; data ops cleans up after a suspension; a final export at the end."""
+    users = (await c.get("/auth/demo-users")).json()
+    ops = await as_person(c, next(u["display_name"] for u in users if u["role"] == "data_ops"))
+    researcher = await as_person(c, next(u["display_name"] for u in users if u["role"] == "researcher"))
+    cleaned = set()
+    loop = asyncio.get_running_loop()
+    decided_at: dict[str, float] = {}
+    next_export, exports = loop.time() + EXPORT_EVERY_MINUTES * 60 / SPEED, 0
+    while not done.is_set():
+        if loop.time() >= next_export:
+            exports += 1
+            d = (await c.post(f"/projects/{project_id}/exports", headers=researcher)).json()
+            print(f"  Researcher exports dataset {exports}: {d['row_count']} accepted answers", flush=True)
+            next_export += EXPORT_EVERY_MINUTES * 60 / SPEED
+        for case in (await c.get("/cases?status=decided", headers=ops)).json():
+            if case["decision"] in ("suspend", "remove") and case["id"] not in cleaned:
+                decided_at.setdefault(case["id"], loop.time())
+                if loop.time() - decided_at[case["id"]] >= CLEANUP_DELAY_MINUTES * 60 / SPEED:
+                    r = (await c.post("/cleanups", headers=ops, json={"case_id": case["id"], "mode": "relabel"})).json()
+                    print(f"  Data ops cleans up: {r['removed']} answers removed, tasks reopened; "
+                          f"{r['datasets_affected']} earlier dataset(s) contained them", flush=True)
+                    cleaned.add(case["id"])
+        await sim_sleep(10 * 60)
+    d = (await c.post(f"/projects/{project_id}/exports", headers=researcher)).json()
+    print(f"  Researcher exports the final dataset: {d['row_count']} accepted answers", flush=True)
+
+
 async def report(c, project_id) -> None:
     users = (await c.get("/auth/demo-users")).json()
     ops = await as_person(c, next(u["display_name"] for u in users if u["role"] == "data_ops"))
@@ -213,14 +245,14 @@ async def main() -> None:
 
         tick = asyncio.create_task(ticker())
         done = asyncio.Event()
-        admin = asyncio.create_task(vendor_admin(c, "Brightline Annotation", done)) if ADMIN_DECIDES else None
+        helpers = [asyncio.create_task(vendor_admin(c, "Brightline Annotation", done)),
+                   asyncio.create_task(data_ops(c, project_id, progress, done))] if AUTOPILOT else []
         rngs = random.Random(SEED)
         await asyncio.gather(*(run_worker(c, project_id, truth, v, n, p, progress, random.Random(rngs.random()))
                                for v, n, p in workers))
         tick.cancel()
         done.set()
-        if admin:
-            await admin
+        await asyncio.gather(*helpers)
         print(f"Done: {progress.answered} answers", flush=True)
         await report(c, project_id)
 

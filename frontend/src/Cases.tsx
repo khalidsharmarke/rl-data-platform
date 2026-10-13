@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api, type CaseDetail, type CaseSummary, type User } from "./api";
+import { api, type CaseDetail, type CaseSummary, type Lineage, type User } from "./api";
 
 const DECISIONS = [
   { value: "suspend", label: "Suspend worker" },
@@ -16,6 +16,7 @@ export default function Cases({ me }: { me: User }) {
   const [decision, setDecision] = useState("suspend");
   const [reason, setReason] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [lineage, setLineage] = useState<Lineage | null>(null);
   const isOwner = (c: CaseSummary) => (c.owner === "vendor_admin" ? me.role === "vendor_admin" : me.role === "data_ops");
 
   const load = () => api<CaseSummary[]>("/cases").then(setCases);
@@ -28,8 +29,26 @@ export default function Cases({ me }: { me: User }) {
   async function show(id: string) {
     setError(null);
     setReason("");
-    setOpen(await api<CaseDetail>(`/cases/${id}`));
+    const detail = await api<CaseDetail>(`/cases/${id}`);
+    setOpen(detail);
+    setLineage(null);
+    if (me.role === "data_ops" && detail.subject_id && detail.project_id) {
+      setLineage(await api<Lineage>(`/lineage?worker_id=${detail.subject_id}&project_id=${detail.project_id}`));
+    }
   }
+
+  async function cleanup(mode: "relabel" | "discard") {
+    if (!open) return;
+    try {
+      await api(`/cleanups`, { method: "POST", body: JSON.stringify({ case_id: open.id, mode }) });
+      await show(open.id);
+      load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  const cleaned = open?.actions.some((a) => a.action === "cleanup");
 
   async function decide() {
     if (!open) return;
@@ -141,6 +160,33 @@ export default function Cases({ me }: { me: User }) {
               <button className="primary" disabled={reason.trim().length < 3} onClick={decide}>
                 Decide
               </button>
+            </div>
+          )}
+          {lineage && (
+            <div className="lineage">
+              <h4>Lineage</h4>
+              <p>
+                {lineage.submissions} answers from <span className="mono">{lineage.handle}</span>: {lineage.held} held, {lineage.removed} removed,{" "}
+                {lineage.accepted_now} accepted now.
+              </p>
+              {lineage.datasets.length > 0 ? (
+                <ul>
+                  {lineage.datasets.map((d) => (
+                    <li key={d.dataset_id}>
+                      {d.rows_from_subject} rows in the dataset exported {when(d.created_at)}
+                      {d.current ? " (current: re-export after clean-up)" : " (superseded)"}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="muted">None of these answers is in an exported dataset.</p>
+              )}
+              {open.status === "decided" && (open.decision === "suspend" || open.decision === "remove") && !cleaned && (
+                <div className="row">
+                  <button className="primary" onClick={() => cleanup("relabel")}>Remove answers and re-label tasks</button>
+                  <button onClick={() => cleanup("discard")}>Remove answers only</button>
+                </div>
+              )}
             </div>
           )}
           {error && <p className="error">{error}</p>}

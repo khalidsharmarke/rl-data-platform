@@ -16,6 +16,8 @@ class Settings(BaseSettings):
     jobs_tick_seconds: float = 30
     # The seed's small sample project; the scripted demo creates its own project instead.
     seed_sample_project: bool = True
+    # Object storage stand-in: exported datasets are written here.
+    export_dir: str = "/data/exports"
 
 
 settings = Settings()
