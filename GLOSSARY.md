@@ -56,7 +56,7 @@ Terms used in [`POSTING.md`](POSTING.md), [`PRD.md`](PRD.md) and [`DESIGN.md`](D
 | Term | Meaning here | In the posting |
 |---|---|---|
 | **QA** | Quality assurance: the checks that decide whether work is accepted | *"quality assurance systems"*; *"QA"* |
-| **Gold task** | A task with an answer known in advance, mixed in unannounced to measure a worker's accuracy | |
+| **Gold task** | A test question hidden among real work. Its correct answer is known in advance, and it looks exactly like any other task. For example, of 100 tasks asking a worker to rate whether a chatbot answer is correct, 5 might be answers known to contain a factual error. Real tasks have no known answer (that's why a person is doing them), so gold tasks are the only direct check on a worker's accuracy. They only work while workers can't tell which tasks are tests | |
 | **Agreement** | How often workers give the same answer to the same task. Low agreement means unclear instructions or unreliable workers | |
 | **Acceptance rate** | The share of a vendor's (or worker's) submissions that pass QA | |
 | **Vendor performance** | How a vendor does on quality, volume, cost and turnaround, per project and over time | |
