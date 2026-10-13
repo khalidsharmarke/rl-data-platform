@@ -135,7 +135,7 @@ Each assumption names the requirements that depend on it and what changes if it'
 | A1 | ~5,000 labelers are active on a given day (posting says *"thousands"*) | Scale estimate, N1, N3 | 10× more still fits one Postgres for labeling writes (~500/s peak); revisit at 100× |
 | A2 | A labeler completes ~30 items/hour over an 8-hour day | Scale estimate | Long agentic items could be 2–5/hour, which cuts write load and raises the cost of losing a submission (N5) |
 | A3 | ~50 vendor orgs | Scale estimate, N10 | Fairness (N10) matters more with fewer, larger vendors |
-| A4 | ~5,000 environment versions submitted per day | Scale estimate | Validation compute scales linearly with this |
+| A4 | ~5,000 environment versions submitted per day | Scale estimate, D2 | Validation compute scales linearly with this. At ~1,000× the volume, the job queue should move out of Postgres (D2) |
 | A5 | Each submission takes ~5 sandbox runs (reference, no-op, 3 repeats) of ~5 min each | Scale estimate, EC3 | Longer agentic environments (hours) would need far more compute and partial or sampled validation |
 | A6 | ~1,000 episodes/s at peak across concurrent training runs | Scale estimate, N4 | 10× more would require a streaming log (e.g. Kafka) in front of ingestion instead of a simple queue |
 | A7 | Episode metadata ~1 KB; transcripts 100 KB–1 MB | Scale estimate | Bigger transcripts change storage cost, not the design, as long as they stay in object storage |
@@ -182,8 +182,8 @@ The system splits into three planes, because the scale estimate shows three load
 | Web app | Edge | One React + TS app with four surfaces: vendor portal, labeling UI, review UI, dashboards | EC4 EC5 DC3 TO4 TO5 |
 | API gateway | Edge | Authenticates (SSO for staff and labelers, API tokens for vendors and services), applies roles and tenant scoping, rate-limits | VM1 VM2 N9 N11 |
 | API service | Control | One service split into modules: environments and versions, review and quarantine, collection and QA, orgs and tokens, audit | EC1–EC6 DC1–DC7 VM1–VM5 TO6 |
-| Postgres | Control | Source of truth: immutable versions, the version state machine, assignments, the audit log, and an outbox table for jobs | N6 N7 N12 |
-| Validation job queue | Execution | Holds validation jobs; hands them out with a fair share per vendor | N10 |
+| Postgres | Control | Source of truth: immutable versions, the version state machine, assignments, the audit log, and the validation job queue (a table) | N6 N7 N12 |
+| Validation job queue | Control (a Postgres table) | Holds validation jobs. Workers claim the next one with `SELECT … FOR UPDATE SKIP LOCKED`, taking from the vendor with the fewest running jobs first | N10 |
 | Sandbox workers | Execution | Run each submitted version: reference solution must pass, no-op must fail, repeat runs must agree, difficulty estimated. No network; CPU, memory and time limits | EC3 N8 |
 | Container registry | Execution | Vendor images, with per-vendor push and pull credentials | VM2 |
 | Code task generator | Execution | Generates programming tasks and submits them through the public API, like any vendor | EC7 A21 |
@@ -200,7 +200,7 @@ The system splits into three planes, because the scale estimate shows three load
 | # | Decision | Why | Trade-off |
 |---|---|---|---|
 | D1 | The control plane is one modular service, not microservices | Priorities shift fast (N13); one deploy and one database keep iteration quick | Modules must keep clean boundaries so the ingestion or execution side can split off later |
-| D2 | State change and job creation are written in one Postgres transaction (outbox), and a relay moves outbox rows to the queue | A version can't end up "submitted" with no validation job, or a job for a version that was rolled back (N5, N7) | Adds a relay process and at-least-once delivery, so workers must be idempotent |
+| D2 | The validation job queue is a Postgres table. Submitting a version updates its status and inserts its jobs in one transaction; workers claim jobs with `SKIP LOCKED` | ~25k runs a day is about 0.3 jobs/s (A4, A5), far below what Postgres handles. One transaction means a version can't be "submitted" with no job, or have a job after a rollback (N5, N7), with no message broker or outbox relay to run | Workers poll the database, and a crashed worker's job is retried after a lease expires, so runs must be idempotent. Move to a dedicated broker (with an outbox) only if volume grows ~1,000× |
 | D3 | Environment versions are immutable, and their status changes only through a state machine (draft → submitted → validating → failed or in review → approved → quarantined) | Training always refers to an exact, unchanging version (N6); every transition is a single audited event (N12) | Fixing a typo means a new version |
 | D4 | Validation runs in sandboxes pulled from a fair-share queue | Vendor code is untrusted (N8, A15); one vendor can't starve the rest (N10) | Sandboxing (e.g. gVisor or Firecracker) adds startup time to each run |
 | D5 | Training results bypass the gateway and the control plane: intake → durable log → processors | Training is never blocked by the platform (N4); the heaviest write path stays off the control database | Two paths to secure and monitor; dashboards are eventually consistent (N7) |
