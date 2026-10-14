@@ -22,6 +22,7 @@ Every product and design decision made so far, sorted by how hard it would be to
 | PD2 | Gold-task accuracy is shown to vendors only as a daily aggregate | Tightening this later is easy. **Loosening** it is one-way: once per-task gold results are shown, those gold tasks are known and have to be retired | Rotate gold tasks (DC4), so any exposed set is replaced over time |
 | D8, D15 | Gold answers and detector rules are never exposed to vendors or workers | Same as PD2: a leaked gold set or a published rule can't be made secret again | Rotate gold tasks; keep rules pluggable (A27) so a known rule can be replaced |
 | D26 / PD6 | Automatic responses to a finding can't be perceived by its subject | Same as PD2: once workers have seen how and when the platform reacts, they know what triggers it, and that can't be taken back | Keep evidence shown to vendors to what was observed (N18), never thresholds |
+| D31 | Each exported row records its tier and the worker's grades at release | A row exported without them can never be filtered by trust later, because the evidence at that moment isn't kept anywhere else | Record both from the first export after release ships |
 | AB11, AB12 | Client and API signals are recorded with every submission | A signal not captured at submission can't be reconstructed, so a new detector can't be tried in shadow mode (D27) against past work | Record raw signals, including ones no rule uses yet |
 | PD3 | Cost is compared per accepted unit, using platform-measured time on task | The comparison itself is two-way (it's a calculation). What's one-way is **recording the inputs**: each contract's price and unit (VM7), and each submission's time on task (DC9). Data not captured can't be recomputed under a different definition | Store raw inputs, never only the computed cost |
 
@@ -60,6 +61,9 @@ Every product and design decision made so far, sorted by how hard it would be to
 | D25 | Exports include only submissions detection has processed and that aren't held | Dropping or loosening the gate, at the cost of exporting unchecked data |
 | D27 | New rules start in shadow mode | Changing the bar for going live |
 | D28 | A random share of unflagged work is reviewed, and outcomes return to detection as labels | Changing the sample rate |
+| PD7 / D29 | Release is decided from evidence at export time, with a per-project minimum gap and cap | Changing the conditions; nothing is stored, so the next export follows the new rule |
+| D30 | Grades on two axes, with integrity tiers setting how much later gold release needs | Changing the tiers or counts (A35) |
+| D32 | A single signal is a watch finding; agreeing signals open a case | Changing the severity rule inside the detection service |
 | | Three planes (control, execution, ingestion); Postgres, an analytics store and object storage | Replacing a store means a data migration, which is costly but loses nothing |
 | | Web app in React and TypeScript | A rewrite of the front end; the API (VM5) is unaffected |
 | B1 | The first build covers multi-vendor human data (flows 2, 4, 5), not the environment pipeline ([`BUILD.md`](BUILD.md)) | The environment slice can follow; nothing in slice A blocks it |

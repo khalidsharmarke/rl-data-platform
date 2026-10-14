@@ -79,6 +79,8 @@ The design's scale estimate is about 1.2 million submissions a day ([`DESIGN.md`
 | Should clean-up remove all of a worker's answers, or only those after the behavior started? (D21) | How much honest data is lost per case |
 | A suspended worker can rejoin through another vendor, because workers are pseudonymous (PD1). When is a cross-vendor match on a keyed hash (C5.10) worth its privacy cost? | Whether suspensions hold across vendors |
 | Who sets the gold rate and alert thresholds for a project, and how much gold is worth paying for? | How quickly a vendor-level drop can be detected |
+| If data is released only after evidence arrives (PD7), are vendors paid at submission or at release? | Who carries the risk of the gap, and vendors' cash flow if it's long |
+| How long should data be allowed to wait before it's released as provisional, and how should training treat provisional rows? | Whether slow-to-prove contributors (new workers, rare experts, domains with little gold) end up under-represented in training data |
 
 ### Assumptions to confirm with the team
 
@@ -93,7 +95,7 @@ The design's scale estimate is about 1.2 million submissions a day ([`DESIGN.md`
 
 In order, from [`BUILD.md`](BUILD.md#stretch-in-order) and the gaps above:
 
-1. The integrity layers around what's built: detection behind its contract (AB13), the export gate (AB17) and discreet escalation (AB14), then the audit sample and shadow mode (AB15, AB16).
+1. The integrity milestones M9–M12 in [`BUILD.md`](BUILD.md#integrity-milestones): detection behind its contract (AB13), the release stage (DC10), contributor grades (DC11) and discreet escalation (AB14). The audit sample and shadow mode (AB15, AB16) follow.
 2. A thin environment slice: immutable environment versions, reference and no-op checks in a locked-down container (EC1–EC3, D3). It covers the most posting lines that 0.1.0 doesn't.
 3. Broken-task flags and disagreement alerts (DC5).
 4. Vendor-level abuse rules and vendor actions (AB2, AB5).

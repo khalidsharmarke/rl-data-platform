@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Released as 0.1.0 (MVP): M0–M8 done. Stretch goals not started. Known limitations in [`LIMITATIONS.md`](LIMITATIONS.md) |
+| Status | Released as 0.1.0 (MVP): M0–M8 done. Integrity milestones M9–M12 planned. Known limitations in [`LIMITATIONS.md`](LIMITATIONS.md) |
 | Timebox | About a week: ~33 hours across nine milestones |
 | Stack | Python (FastAPI, async) · Postgres · React + TypeScript (Vite) · Docker Compose |
 | Delivered as | This repo, runnable with `make demo`, plus an 80-second recorded walkthrough linked from the README |
@@ -104,6 +104,18 @@ Each milestone ends with something that runs and a check that proves it. Hours a
 | M7 | Clean-up and export | Lineage query, clean-up of a decided case, dataset export and re-export | Re-exported dataset contains none of the removed worker's answers; the audit log shows the chain | 3 | Done |
 | M8 | Polish and walkthrough | UI pass across the four role views (researcher, data ops, vendor admin, worker), README with screenshots, recorded walkthrough | Someone new can run the demo from the README alone; the recording covers the nine-step story | 4 | Done |
 | | | | **Total** | **33** | |
+
+### Integrity milestones
+
+These build the [integrity layers](DESIGN.md#integrity-layers) and the release stage (PRD PD7) around the case, hold and clean-up path from M6 and M7. They come before the stretch goals below.
+
+| # | Milestone | Delivers | Done when | Hours | Status |
+|---|---|---|---|---|---|
+| M9 | Detection behind its contract | Submission events written in the submission's transaction (outbox) and read through a cursor feed; a separate detection service in Docker Compose that runs the versioned rules and returns findings with a severity and how far it has processed; a labels feed of case decisions; the platform's in-process scan removed (AB13, D23, D24, D32) | The demo's abusive worker is caught by the separate service; a single signal produces a watch finding, not a case; no event is skipped when transactions commit out of order (tested) | 4 | Planned |
+| M10 | Release stage | Release decided at export from evidence: detection progress, holds, minimum gap, overlap, later gold; provisional release at the cap; tier recorded on every dataset row; a release summary for the project (DC10, AB17, D25, D29, D31) | No unchecked or held answer is exported; an answer followed by failing gold isn't released; provisional rows appear only after the cap (tested); in the demo, none of the abusive worker's pasted answers reach a dataset | 4 | Planned |
+| M11 | Contributor grades | Quality grade with a 95% interval and integrity tier per worker; tiers set how much later gold release needs; grades snapshotted on dataset rows; a grades view for Anthropic and an aggregate for vendors (DC11, D30) | A turncoat's tier and release follow their later gold; vendors and workers can't read grades (tested) | 4 | Planned |
+| M12 | Discreet escalation | Watch findings raise the worker's share of gold; ten later gold answers clear the finding or open a case; a simulated worker who pastes from their own notes is watched and cleared without a case (AB14, D26, D32) | The escalated worker's tasks are indistinguishable from others' (tested); in the demo, the note-paster is cleared and the abusive worker is suspended | 3 | Planned |
+| | | | **Total** | **15** | |
 
 ### Stretch, in order
 

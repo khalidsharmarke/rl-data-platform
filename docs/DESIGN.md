@@ -69,6 +69,8 @@ Personas are described in the [PRD](PRD.md#3-who-cares-about-what). Each vendor 
 | DC8 | A vendor reviewer can check and correct workers' output before it's submitted to Anthropic. Vendor review adds to platform QA and doesn't replace it | PRD C2.2 | A29 |
 | A30 | Per-task contracts pay for every submitted answer, not only accepted ones; hourly contracts pay for time on task | VP2, VP3, D11 | If vendors are paid only for accepted work, cost per accepted unit equals the contract price and stops reflecting quality; the comparison would then lean on acceptance rate instead |
 | DC9 | The platform records time on task (assignment to submission) for every submission | PRD C3.5; PRD PD3 | |
+| DC10 | Release stage: an accepted answer is released for export only when detection has processed it, it isn't held, the project's minimum gap has passed since it was submitted, its task has all its overlapping answers, and the worker has answered enough gold after it with accuracy at or above the quality bar. How much later gold is enough depends on the worker's integrity grade (DC11). An answer still waiting at the project's cap is released as provisional if the integrity conditions hold. Each exported row records its tier (verified or provisional) and the worker's grades at release | PRD C3.6; PRD PD7; *"surface reward signal integrity issues early"* | A34 |
+| DC11 | Contributor grades: every worker has a quality grade (gold accuracy with a 95% interval, read as meets the bar, below it, or uncertain) and an integrity grade (held, watch, unproven or trusted), computed by the platform the same way for every vendor. Grades set how much evidence release needs and how closely the worker is measured (AB14); they never act on a person. Anthropic sees grades per worker; vendors see only aggregates; workers see neither their grades nor whether their answers have been released | PRD C3.7; PRD PD7; N16, N17 | A35 |
 
 ### Training observability
 
@@ -130,7 +132,7 @@ Personas are described in the [PRD](PRD.md#3-who-cares-about-what). Each vendor 
 Five flows carry most of the value. Two entities anchor them: the **vendor workspace** (who supplied the work) and the **environment version** or **task** (what was supplied). Lineage links every piece of training data to both.
 
 1. **Submit → validate → review → approve** (EC1–EC6)
-2. **Allocate → collect → QA → export** (VP1, DC1–DC8)
+2. **Allocate → collect → QA → release → export** (VP1, DC1–DC11)
 3. **Run → monitor → flag → quarantine** (TO1–TO7), which loops back into flow 1
 4. **Measure → compare → reallocate** (VP2–VP4, TO7): every vendor scored the same way, per project and over time
 5. **Signal → detect → escalate → case → act → clean up** (AB1–AB17), at two levels: vendors over their workers, Anthropic over vendors
@@ -226,6 +228,8 @@ Each assumption names the requirements that depend on it and what changes if it'
 | A31 | Worker-abuse detection is built and tuned by specialists (trust and safety, or research), so the platform treats it as a separate service and defines only its contract | AB13, D23 | If the platform team owns detection too, the contract still holds; the split is then inside one team |
 | A32 | Client signals can be forged by anyone answering through the API or with a modified client | AB11 | If work could only be done in a locked-down client, client signals could carry more weight |
 | A33 | Findings within about 5 minutes of submission are early enough, because datasets are exported hourly or less often | N20, AB17, D25 | If training consumes data continuously, waiting for detection adds its lag to every row |
+| A34 | Researchers accept a release gap of about an hour by default, longer for production runs | DC10, PD7 | A shorter default lets more data through on less evidence; the setting is per project, so the default is all that changes |
+| A35 | The integrity tiers' evidence counts (20 gold answers to stop being unproven; 1, 3 or 5 later gold answers to release) are starting points | DC11, D30 | Too low and a turncoat's answers are released before their later gold shows the change; too high and honest work waits for the cap |
 
 ## 9. High-level design
 
@@ -291,7 +295,8 @@ Each step lists the components involved, what each one is for, and what breaks w
 - *Discreet escalation:* a finding first makes the platform measure the worker more closely: more gold tasks, more overlap, more spot checks, none of which the worker can tell apart from normal work. A strong enough finding also holds their data. The worker's experience doesn't change until a person decides.
 - *Cases module:* every flag opens a case with its evidence. Worker cases go to the vendor admin; vendor and environment cases go to data ops, who can also see how vendors handled their own cases. While a case is open, the platform automatically holds the affected data back from training, which can be undone. Every action against a person or vendor, from a warning to offboarding, needs a recorded decision, is tied to its case, and can be reviewed and reversed. Low quality on its own doesn't open a case; it shows up on the scorecard instead.
 - *Manual review:* people decide cases, and they also review a random sample of work nothing flagged. Without that sample, the platform could count false alarms but never what it missed. Both kinds of outcome go back to the detection service as labels.
-- *Export gate:* a dataset includes only answers the detection service has already checked and that aren't held, so training gets data minutes later but checked.
+- *Release stage:* an answer reaches a dataset only after evidence about it has arrived: detection has checked it, nothing holds it, and the worker's later test answers show they were still working well. Trusted workers need less of that evidence than new or suspect ones, but everyone waits at least the project's minimum gap. Data that waits too long is released as provisional rather than lost.
+- *Contributor grades:* each worker is graded on quality and, separately, on integrity, with how sure the platform is of each. Grades decide how much evidence release needs and how closely someone is measured. They never act on a person, and the person never sees them.
 - *Clean-up through lineage:* once a case is decided, a lineage query finds everything the worker, vendor or environment produced, and it's discarded, re-labeled or quarantined. A quarantined task goes back to review (step 4).
 
 **Throughout: the paper trail.**
@@ -310,7 +315,7 @@ Each layer sees something the others can't, and each is limited in what it may d
 | 5 | Platform response | When a finding arrives | The finding and its severity | Escalate measurement and hold data, invisibly to the subject (AB14). Open a case | AB3 AB8 AB14 |
 | 6 | Manual review | Hours | Cases with evidence; a random sample of unflagged work | Decide cases and act on people. Label outcomes for layer 4 | AB3–AB5 AB15 |
 | 7 | Vendor oversight | Daily roll-ups | Every vendor's scorecards, cases and case decisions | Raise vendor findings to data ops | AB2 AB7 VP3 |
-| 8 | Export gate | When a dataset is built | How far detection has processed, holds, removals | Keep unchecked and held data out of training | AB17 DC6 |
+| 8 | Release stage | When a dataset is built | How far detection has processed, holds, removals, overlap, the worker's later gold and grades | Keep unchecked and held data out of training; tag the rest verified or provisional | AB17 DC6 DC10 DC11 |
 | 9 | Training feedback | After training uses the data | Reward-hack flags; outcomes traced back by lineage | Raise findings against environments, vendors and the datasets involved | TO3 TO7 D14 |
 
 **Escalation.** Responses grow with the evidence. The platform acts early on data and late on people (PD6):
@@ -318,7 +323,7 @@ Each layer sees something the others can't, and each is limited in what it may d
 | Step | Response | Triggered by | Who can perceive it |
 |---|---|---|---|
 | 1. Observe | Record the finding. New rules stay at this step in shadow mode (AB16) | Any finding | Anthropic only |
-| 2. Measure more | More gold (from gold the worker hasn't seen), more overlap and more spot checks on the worker's next tasks | A finding below case severity | Nobody: the extra tasks look like any other (D8) |
+| 2. Measure more | More gold (from gold the worker hasn't seen), more overlap and more spot checks on the worker's next tasks | A finding below case severity (D32), or a falling grade | Nobody: the extra tasks look like any other (D8) |
 | 3. Protect data | Open a case and hold the worker's unexported answers | A finding at case severity, or step 2 confirming it | The vendor admin, through the case. Not the worker |
 | 4. Act on the worker | Warn, retrain, suspend, remove | The vendor admin's decision | The worker |
 | 5. Act on the vendor | Lower allocation, pause, offboard, after the vendor responds | Data ops' decision | The vendor |
@@ -331,7 +336,7 @@ Step 2 also turns a suspicion into evidence: a few dozen extra gold answers conf
 |---|---|---|---|
 | Web app | Edge | One React + TS app with a surface per role: vendor workspace (admin, reviewer, worker, environment builder), researcher review, data ops console, dashboards and scorecards. The work UI records client signals | EC4 EC5 DC3 DC8 TO4 TO5 VP2–VP4 AB3 AB11 |
 | API gateway | Edge | Authenticates (SSO for people, API tokens for vendors and services), applies roles and workspace scoping, rate-limits | VM1 VM2 N9 N11 AB12 |
-| API service | Control | One service split into modules: workspaces, capabilities and contracts, environments and versions, review and quarantine, projects and allocation, collection and QA (with API signals), escalation, cases and actions, lineage and clean-up, export gate, audit | EC1–EC6 DC1–DC8 VP1 AB3–AB8 AB12 AB14–AB17 VM1–VM7 TO6 |
+| API service | Control | One service split into modules: workspaces, capabilities and contracts, environments and versions, review and quarantine, projects and allocation, collection and QA (with API signals), escalation, cases and actions, lineage and clean-up, grades and release, audit | EC1–EC6 DC1–DC11 VP1 AB3–AB8 AB12 AB14–AB17 VM1–VM7 TO6 |
 | Postgres | Control | Source of truth: immutable versions, the version state machine, contracts, allocations, assignments and submissions with lineage, cases and holds, the audit log, and the job queue (a table) | N6 N7 N12 N18 N19 |
 | Job queue | Control (a Postgres table) | Holds validation, abuse-detection and scorecard jobs. Workers claim the next one with `SELECT … FOR UPDATE SKIP LOCKED`; validation jobs are taken from the vendor with the fewest running first | N10 |
 | Sandbox workers | Execution | Run each submitted version: reference solution must pass, no-op must fail, repeat runs must agree, difficulty estimated. No network; CPU, memory and time limits | EC3 N8 |
@@ -376,10 +381,14 @@ Step 2 also turns a suspicion into evidence: a few dozen extra gold answers conf
 | D22 | Removed answers still count as delivered in the vendor's scorecard history, but are never accepted or exported | The vendor's record stays truthful: the dip happened. Only the data used for training changes | Delivered volume includes answers that were later thrown away; acceptance shows the difference |
 | D23 | Worker-abuse detection is a separate service behind a fixed contract: submission events in, findings out through the API (D7). The platform owns everything a finding leads to: escalation, cases, holds, decisions and clean-up | Detection is specialist work that changes often and may belong to another team (A31). The contract lets it change without touching the platform, and enforcement keeps one audited path (D13) | The event and finding schemas become a contract with another team. A signal the event doesn't carry can't be used until the contract changes, so events carry raw signals rather than derived ones |
 | D24 | Every submission publishes an event, written to an outbox table in the submission's transaction and relayed to the detection queue. The service runs cheap checks on every event and costly ones (text similarity, model-based checks) on a sample weighted toward risk: new workers, workers with findings, vendors whose scorecards are falling | No submission skips detection because of a crash between commit and publish (N5). About 50 events/s at peak is cheap to send in full, so sampling is the service's cost decision, not the platform's. A random, weighted sample can't be predicted and dodged, just as gold can't (D8) | An outbox and relay to run. Costly checks miss some abuse by low-risk workers; the audit sample (D28) measures how much |
-| D25 | A dataset includes only submissions up to the point the detection service reports it has processed, and none that are held | Data reaches training only after it has been checked (AB17). The lag is minutes against exports that run hourly or less often (N20, A33) | When detection is down, exports stall. That's the safe failure, and platform monitoring alerts on it (N15) |
+| D25 | A dataset includes only submissions up to the point the detection service reports it has processed, and none that are held. This is part of the release stage (DC10) | Data reaches training only after it has been checked (AB17). The lag is minutes against exports that run hourly or less often (N20, A33) | When detection is down, exports stall. That's the safe failure, and platform monitoring alerts on it (N15) |
 | D26 | Automatic responses are ones the subject can't perceive (PD6, AB14): extra gold drawn from gold the worker hasn't seen, extra overlap, spot-check routing, holds. The API never rejects a submission because abuse is suspected, and case evidence shown to vendors describes what was observed, never thresholds or which tasks were gold | A response the subject can see tells them what was detected and when, which teaches evasion (N17), and harms an honest worker on a false positive (N18). Measuring more turns a suspicion into evidence quickly | Extra gold and overlap cost money. Extra gold counts toward the worker's quality but not the vendor's comparison, which keeps vendors comparable (D17). Abuse continues, into held data, until a person decides |
 | D27 | New rule and detector versions start in shadow mode: their findings are recorded but don't escalate or open cases, until their precision on reviewed work meets data ops' bar | A bad rule can't flood vendors with false cases or hold a project's data (the trade-off in D16). Old and new versions run side by side (N19) | A new signal takes days to go live |
 | D28 | A random share of unflagged submissions joins the spot-check queue (DC4), where reviewers can't tell it from other spot checks. Audit outcomes and case decisions go back to the detection service as labels | Reviewing only flagged work measures false alarms but never misses. Labels are how detection improves (A27) | Review time spent on mostly honest work. The sample rate sets how quickly a miss rate can be estimated |
+| D29 | Release is decided at export time from evidence, not stored as a state: detection progress, holds, removals, overlap, the minimum gap, and the worker's gold submitted after the answer. Accuracy on that later gold must be at or above the quality bar | Evidence from the answer's own period catches a contributor who changes behavior; their earlier answers stop being released as soon as later gold falls (PD7). Computing release from current evidence means a new hold or a worse grade takes effect at the next export, with no state to update | An answer near the end of a worker's run has little later gold and waits for the cap. Release needs the whole project's facts at each export, which grows with project size |
+| D30 | Grades have two axes. Quality is gold accuracy with a 95% Wilson interval, read against the project's bar: meets it (lower bound at or above), below it (upper bound below) or uncertain. Integrity is a tier: held (an open case), watch (a finding below case severity that later gold hasn't yet cleared), unproven (fewer than 20 gold answers), trusted. Release needs 1, 3 or 5 later gold answers for trusted, unproven and watch workers; held workers' answers aren't released | Low quality and abuse need different responses (PRD PD4), so one combined score would blur them. The interval keeps "90% on 20 answers" apart from "90% on 200" | The counts are starting points (A35). Trust is earned from gold only, so domains with little gold rely on the cap |
+| D31 | An answer still unreleased at the project's cap is released as provisional if detection has processed it, nothing holds it and the minimum gap has passed. Every exported row records its tier and the worker's grades at release | Integrity stays a hard gate while quality confidence becomes data researchers can filter on, so slow-to-prove contributors aren't silently dropped (PD7) | Training has to choose what to do with provisional rows; a grade not recorded at release can't be recovered later |
+| D32 | Detector findings carry a severity. A single signal is a watch finding and leads to escalation (AB14); two or more signals agreeing on the same answers lead to a case. A client signal on its own is never more than a watch finding (AB11). A watch finding is cleared when the worker's next 10 gold answers meet the bar, and becomes a case when they don't | Weak evidence earns closer measurement, not a case the vendor admin sees; a client signal can be forged (A32). Later gold turns a watch finding into a decision either way | A worker abusing in a way only one signal sees is measured for longer before anyone looks |
 
 ### Core entities
 
@@ -398,12 +407,13 @@ Step 2 also turns a suspicion into evidence: a few dozen extra gold answers conf
 | TaskRoute | task, vendor | Which vendors may work on a task (D17) |
 | Task / Assignment / Submission | task payload; assignment to a worker; the answer, with worker ID, vendor, review, acceptance, time on task, client and API signals, and hold status | One open assignment per worker and task (N7); lineage (D14); signals (AB11, AB12) |
 | SubmissionEvent | id, submission, signals, created_at, relayed_at | Outbox for the detection service (D24) |
-| DetectionProgress | detector version, processed up to (event id), reported_at | The export gate reads it (D25) |
+| DetectionProgress | detector version, processed up to (event id), reported_at | The release stage reads it (D25) |
+| WorkerGrade | worker, project, gold n, gold correct, 95% interval, quality grade, integrity grade, computed_at | Computed by the platform (DC11, D30); a snapshot is stored on each exported row |
 | Escalation | worker, project, extra gold rate, extra overlap, spot-check share, finding, expires_at | AB14, D26 |
 | AuditSample | submission, review, outcome (abuse, low quality, fine) | AB15, D28 |
 | GoldAnswer | task, answer | Separate table (D8) |
 | GoldRetirement | task, retired by, reason, when | Rotation (PRD PD2): retired gold tasks are no longer handed out; past answers on them still count |
-| Dataset / DatasetRow | dataset: project, uri, metric version, row count, the dataset it supersedes; row: dataset, submission | An exported snapshot (DC6); each row points to its source submission (D14) |
+| Dataset / DatasetRow | dataset: project, uri, metric version, row count, the dataset it supersedes; row: dataset, submission, tier (verified or provisional), the worker's grades at release | An exported snapshot (DC6); each row points to its source submission (D14) |
 | Cleanup / Removal | clean-up: case, worker, mode (discard or re-label), counts; removal: submission, clean-up, whether its task reopens | Submissions stay immutable; removal is recorded beside them (AB6, D21) |
 | TrainingRun / Episode | run; episode_id, version, vendor, reward, passed, length, transcript_uri | Episodes live in the analytics store, not Postgres (D5) |
 | Flag | id, subject (worker, vendor or version), source (detection service, vendor rule, reward-hack detector or person), rule or detector version, severity, mode (live or shadow), evidence | AB1 AB2 AB13 AB16 TO3 |
@@ -426,7 +436,8 @@ Step 2 also turns a suspicion into evidence: a few dozen extra gold answers conf
 | `POST /projects/{id}/allocations`, `PATCH /allocations/{id}` | Data ops | VP1 |
 | `POST /assignments/next`, `POST /assignments/{id}/submit`, `POST /tasks/{id}/flag`, `GET /me/feedback` | Worker | DC2 DC3 DC5 |
 | `POST /submissions/{id}/review` | Vendor reviewer | DC8 |
-| `GET /projects/{id}/quality`, `POST /projects/{id}/exports` | Researcher | DC4 DC6 DC7 |
+| `GET /projects/{id}/quality`, `POST /projects/{id}/exports`, `GET /projects/{id}/release` | Researcher | DC4 DC6 DC7 DC10 |
+| `GET /projects/{id}/grades` | Data ops, researcher | DC11 |
 | `GET /projects/{id}/vendors` | Data ops, researcher | VP2 |
 | `GET /vendors/{id}/scorecard`, `GET /workers/{id}/quality` | Data ops; vendor admin (own vendor only) | VP3 VP4 |
 | `GET /cases`, `POST /cases/{id}/responses`, `POST /cases/{id}/decision`, `POST /cases/{id}/actions` | Vendor admin, data ops | AB3–AB5 AB7 AB8 |
