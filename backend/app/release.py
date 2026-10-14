@@ -12,7 +12,8 @@ is released when:
   Evidence, required for "verified"
   - its task has all its overlapping answers at the worker's vendor
   - the worker has answered enough gold *after* it, with accuracy at or above the quality
-    bar. Evidence from the answer's own period is what catches a worker who changes: their
+    bar. How much is enough depends on the worker's integrity grade (app/grades.py): trust
+    shortens the wait, never to nothing. Evidence from the answer's own period is what catches a worker who changes: their
     earlier answers stop being released as soon as their later gold falls.
 
 An answer that meets the integrity conditions but not the evidence ones is released as
@@ -28,12 +29,9 @@ from datetime import datetime, timedelta
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app import clock
+from app import clock, grades
 from app.models import Project
 from app.quality import SUBMISSION_FACTS
-
-# Later gold answers needed before an answer is verified.
-LATER_GOLD = 3
 
 FACTS = f"""
 WITH f AS ({SUBMISSION_FACTS}),
@@ -74,6 +72,7 @@ class ReleaseView:
     decisions: list[Decision]
     detection_through: int
     as_of: datetime
+    grades: dict[uuid.UUID, grades.Grade]
 
     def released(self) -> list[Decision]:
         return [d for d in self.decisions if d.state != "waiting"]
@@ -88,16 +87,13 @@ class ReleaseView:
         }
 
 
-def later_gold_needed(worker_id: uuid.UUID) -> int:
-    return LATER_GOLD
-
-
 async def evaluate(session: AsyncSession, project: Project) -> ReleaseView:
     now = clock.now()
     through = await session.scalar(text("SELECT coalesce(max(processed_through), 0) FROM detection_progress")) or 0
     gap = timedelta(minutes=project.release_after_minutes)
     cap = timedelta(minutes=project.release_cap_minutes)
     bar = float(project.quality_bar)
+    graded = await grades.compute(session, project)
     decisions = []
     for r in (await session.execute(text(FACTS), {"project_id": project.id})).all():
         age = now - r.submitted_at
@@ -105,7 +101,8 @@ async def evaluate(session: AsyncSession, project: Project) -> ReleaseView:
             state, waiting_for = "waiting", "detection"
         elif age < gap:
             state, waiting_for = "waiting", "gap"
-        elif (r.task_answers >= project.overlap and r.later_gold_n >= later_gold_needed(r.worker_id)
+        elif ((needed := graded[r.worker_id].later_gold_needed) is not None
+              and r.task_answers >= project.overlap and r.later_gold_n >= needed
               and r.later_gold_correct >= bar * r.later_gold_n):
             state, waiting_for = "verified", None
         elif age >= cap:
@@ -113,4 +110,4 @@ async def evaluate(session: AsyncSession, project: Project) -> ReleaseView:
         else:
             state, waiting_for = "waiting", "evidence"
         decisions.append(Decision(r.id, r.worker_id, state, waiting_for))
-    return ReleaseView(decisions, through, now)
+    return ReleaseView(decisions, through, now, graded)

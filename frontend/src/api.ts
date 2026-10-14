@@ -225,6 +225,13 @@ export type Lineage = {
 export type Dataset = {
   id: string; project_id: string; created_at: string; metric_version: string; row_count: number; provisional: number; supersedes: string | null;
 };
+export type Grade = {
+  worker_id: string; handle: string; vendor_name: string; gold_n: number; gold_accuracy: number | null;
+  interval: [number, number] | null; quality: "meets" | "below" | "uncertain";
+  integrity: "suspended" | "held" | "watch" | "unproven" | "trusted"; later_gold_needed: number | null;
+  watch_progress: [number, number] | null;
+};
+export type Grades = { version: string; quality_bar: number; workers: Grade[] };
 export type Release = {
   accepted: number; verified: number; provisional: number;
   waiting: { detection: number; gap: number; evidence: number };

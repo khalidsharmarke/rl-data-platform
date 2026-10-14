@@ -94,3 +94,7 @@ tr.clickable:hover td { background: var(--bg); }
 .lineage ul, .datasets ul { margin: 0; padding-left: 18px; font-size: 0.9rem; }
 .datasets h4, .lineage h4 { margin: 0; }
 .datasets button { justify-self: start; }
+.grades { margin-top: 12px; }
+.grades summary { cursor: pointer; font-weight: 600; }
+.grades table { font-size: 0.9rem; }
+.grades td:first-child { white-space: nowrap; }

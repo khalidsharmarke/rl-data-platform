@@ -2,15 +2,15 @@
 
 | | |
 |---|---|
-| Version | 0.1.0 (MVP) plus the integrity milestones built since: M9–M10 (see [`BUILD.md`](BUILD.md#integrity-milestones)) |
-| Covers | Slice A from [`BUILD.md`](BUILD.md): multi-vendor human data, with allocation, gold QA, scorecards, worker-abuse cases and lineage clean-up; a separate detection service; the release stage |
+| Version | 0.1.0 (MVP) plus the integrity milestones built since: M9–M11 (see [`BUILD.md`](BUILD.md#integrity-milestones)) |
+| Covers | Slice A from [`BUILD.md`](BUILD.md): multi-vendor human data, with allocation, gold QA, scorecards, worker-abuse cases and lineage clean-up; a separate detection service; the release stage; contributor grades |
 | Related | [`POSTING.md`](POSTING.md) · [`PRD.md`](PRD.md) · [`DESIGN.md`](DESIGN.md) · [`DECISIONS.md`](DECISIONS.md) |
 
 What the build does not do, where it falls short, and what is still undecided. The design describes the full platform; this page describes the gap between the design and the build.
 
 ## 1. Coverage of the posting
 
-The posting names three areas: *"environment creation, data collection, and training observability."* The build covers the core of data collection, plus the vendor management, workspaces and audit trail it needs. It covers 24 of the design's 53 functional requirements.
+The posting names three areas: *"environment creation, data collection, and training observability."* The build covers the core of data collection, plus the vendor management, workspaces and audit trail it needs. It covers 25 of the design's 53 functional requirements.
 
 | Posting line | Coverage in the build |
 |---|---|
@@ -37,6 +37,9 @@ The posting names three areas: *"environment creation, data collection, and trai
 | Gold stays secret only if nothing reveals it indirectly | Gold can be recognized from how it's spread across questions, where it sits in a vendor's stream, or counts in events vendors can read. D8 forbids all three and tests cover them, but each new feature that touches routing, counts or timing can open another way | Tests for every vendor-visible endpoint and event, reviewed whenever routing changes |
 | Watch findings lead to nothing yet | A single signal is recorded as a watch finding (D32) but doesn't change how closely the worker is measured; only agreeing signals open a case | Discreet escalation: extra gold before a case (AB14, D26), milestone M12 |
 | No audit sample or shadow mode | The platform can count false alarms but not what its rules miss (AB15), and a new rule version goes live at once (AB16) | D27, D28 |
+| Trust is earned from gold only | A worker on a project with little gold, or a rare expert with none, stays unproven and their answers wait for the cap, then go out as provisional (D30, A35) | Other evidence routes into the grade: reviewer spot checks, agreement among experts |
+| Grades are per project | A worker trusted on one project starts unproven on the next | Carry evidence across projects, weighted by how similar the work is |
+| Vendors get no view of grades | DC11 gives vendors an aggregate (for example, how much of their work is released); the build shows them nothing | An aggregate on the vendor's own scorecard, coarse enough not to single out a watched worker |
 | Rule thresholds were set against simulated workers | The demo's results depend on the simulator's settings (clock speed, Rosa's accuracy, when she switches, how often workers take breaks). Real workers will behave differently | Recalibrate the thresholds on real cases. Rules are versioned (N19), so a change shows in every flag |
 
 ### Data and cost

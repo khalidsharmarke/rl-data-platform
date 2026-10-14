@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app import clock
+from app import clock, grades
 from app.audit import record
 from app.db import get_session
 from app.models import GoldAnswer, GoldRetirement, Org, Review, Role, Submission, Task, TaskSchema, User
@@ -37,6 +37,25 @@ class QualityOut(BaseModel):
     metric_version: str
     vendors: list[QualityRow]
     workers: list[QualityRow]
+
+
+class GradeRow(BaseModel):
+    worker_id: uuid.UUID
+    handle: str
+    vendor_name: str
+    gold_n: int
+    gold_accuracy: float | None
+    interval: tuple[float, float] | None
+    quality: str
+    integrity: str
+    later_gold_needed: int | None
+    watch_progress: tuple[int, int] | None
+
+
+class GradesOut(BaseModel):
+    version: str
+    quality_bar: float
+    workers: list[GradeRow]
 
 
 class ReviewItem(BaseModel):
@@ -84,6 +103,30 @@ async def project_quality(
         vendors=sorted((row(k, names[k], m) for k, m in vendors.items()), key=lambda r: r.label),
         workers=sorted((row(k, handles[k], m) for k, m in workers.items()), key=lambda r: r.label),
     )
+
+
+@router.get("/projects/{project_id}/grades")
+async def project_grades(
+    project_id: uuid.UUID,
+    user: User = Depends(require_roles(Role.RESEARCHER, Role.DATA_OPS)),
+    session: AsyncSession = Depends(get_session),
+) -> GradesOut:
+    """Each worker's quality and integrity grades (DC11). Anthropic only; workers appear by
+    pseudonymous handle (D12)."""
+    project = await get_visible_project(project_id, user, session)
+    graded = await grades.compute(session, project)
+    who = (await session.execute(
+        select(User.id, User.handle, Org.name).join(Org, Org.id == User.org_id).where(User.id.in_(graded))
+    )).all()
+    names = {w.id: (w.handle, w.name) for w in who}
+    rows = [
+        GradeRow(worker_id=g.worker_id, handle=names[g.worker_id][0], vendor_name=names[g.worker_id][1], gold_n=g.gold_n,
+                 gold_accuracy=g.gold_correct / g.gold_n if g.gold_n else None, interval=g.interval, quality=g.quality,
+                 integrity=g.integrity, later_gold_needed=g.later_gold_needed, watch_progress=g.watch_progress)
+        for g in graded.values()
+    ]
+    return GradesOut(version=grades.GRADES_VERSION, quality_bar=float(project.quality_bar),
+                     workers=sorted(rows, key=lambda r: (r.vendor_name, r.handle)))
 
 
 @router.get("/projects/{project_id}/review-queue")

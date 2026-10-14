@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api, pct, savedToken, type Allocation, type Contract, type Dataset, type Project, type Quality, type Release, type User } from "./api";
+import { api, pct, savedToken, type Allocation, type Contract, type Dataset, type Grades, type Project, type Quality, type Release, type User } from "./api";
 
 const UNIT: Record<string, string> = { task: "per task", hour: "per hour", environment: "per environment" };
 
@@ -19,6 +19,7 @@ export default function Projects({ me }: { me: User }) {
   const [quality, setQuality] = useState<Record<string, Quality>>({});
   const [datasets, setDatasets] = useState<Record<string, Dataset[]>>({});
   const [releases, setReleases] = useState<Record<string, Release>>({});
+  const [grades, setGrades] = useState<Record<string, Grades>>({});
   const internal = me.org_kind === "internal";
 
   useEffect(() => {
@@ -35,6 +36,8 @@ export default function Projects({ me }: { me: User }) {
         setDatasets((d) => ({ ...d, [p.id]: sets }));
         const release = await api<Release>(`/projects/${p.id}/release`);
         setReleases((r) => ({ ...r, [p.id]: release }));
+        const graded = await api<Grades>(`/projects/${p.id}/grades`);
+        setGrades((g) => ({ ...g, [p.id]: graded }));
         if (me.role === "data_ops") {
           for (const a of byProject[p.id]) {
             for (const c of await api<Contract[]>(`/orgs/${a.vendor_id}/contracts`)) byContract[c.id] = c;
@@ -93,6 +96,7 @@ export default function Projects({ me }: { me: User }) {
               </tbody>
             </table>
           )}
+          {internal && (grades[p.id]?.workers.length ?? 0) > 0 && <GradesTable g={grades[p.id]} />}
           {internal && (
             <div className="datasets">
               <h4>Datasets</h4>
@@ -136,5 +140,61 @@ function ReleaseLine({ r }: { r: Release }) {
       detection, {r.waiting.gap} for the minimum gap ({hours(r.release_after_minutes)}), {r.waiting.evidence} for later
       evidence about their worker (provisional after {hours(r.release_cap_minutes)}).
     </p>
+  );
+}
+
+const INTEGRITY: Record<string, string> = {
+  trusted: "Trusted",
+  unproven: "Unproven",
+  watch: "Watched",
+  held: "Held (open case)",
+  suspended: "Suspended",
+};
+
+function GradesTable({ g }: { g: Grades }) {
+  const counts = g.workers.reduce<Record<string, number>>((c, w) => ({ ...c, [w.integrity]: (c[w.integrity] ?? 0) + 1 }), {});
+  return (
+    <details className="grades">
+      <summary>
+        Worker grades: {Object.entries(INTEGRITY).filter(([k]) => counts[k]).map(([k, label]) => `${counts[k]} ${label.toLowerCase()}`).join(" · ")}
+      </summary>
+      <p className="muted">
+        Quality is gold accuracy with a 95% interval, against the {Math.round(g.quality_bar * 100)}% bar. Integrity sets how
+        many gold answers the worker must get right after an answer before it is released as verified. Workers and vendors
+        never see these.
+      </p>
+      <table>
+        <thead>
+          <tr>
+            <th>Worker</th>
+            <th>Vendor</th>
+            <th>Gold answers</th>
+            <th>Accuracy (95% interval)</th>
+            <th>Quality</th>
+            <th>Integrity</th>
+            <th>Later gold needed</th>
+          </tr>
+        </thead>
+        <tbody>
+          {g.workers.map((w) => (
+            <tr key={w.worker_id}>
+              <td>{w.handle}</td>
+              <td>{w.vendor_name}</td>
+              <td>{w.gold_n}</td>
+              <td>
+                {pct(w.gold_accuracy)}
+                {w.interval && ` (${pct(w.interval[0])}–${pct(w.interval[1])})`}
+              </td>
+              <td>{w.quality === "meets" ? "Meets the bar" : w.quality === "below" ? "Below the bar" : "Uncertain"}</td>
+              <td>
+                {INTEGRITY[w.integrity]}
+                {w.watch_progress && ` · ${w.watch_progress[1]}/${w.watch_progress[0]} gold right since`}
+              </td>
+              <td>{w.later_gold_needed ?? "—"}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </details>
   );
 }

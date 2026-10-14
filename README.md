@@ -18,7 +18,7 @@ Three fictional vendors work on one project, *"Which of these two answers is mor
 4. **The platform notices and opens a case.** A separate detection service reads every submission and reports three signals that agree: speed, pasting and duplicates. The worker's answers are held out of training automatically. Nothing is done *to the worker* yet.
 5. **Brightline's admin decides.** She sees what was observed, with examples, but never the rules' thresholds or which tasks were tests. She suspends the worker, with a reason on record.
 6. **Data ops cleans up.** Lineage shows every answer the worker gave, and that none of them reached a dataset: the release stage held them back, because the test questions she answered after them were failing. One click removes them and reopens those tasks for other workers.
-7. **Every export contains only released answers**: checked by detection, past a minimum gap, and backed by good test answers from the same worker afterwards. Each row is tagged verified or provisional and points back to its source.
+7. **Every export contains only released answers**: checked by detection, past a minimum gap, and backed by good test answers from the same worker afterwards. How many depends on the worker's grade: a trusted worker needs one, a new one three. Grades rate quality and integrity separately, so an honest but sloppy worker is trusted with low quality, not treated as abusive. Each row is tagged verified or provisional and points back to its source.
 8. **The audit log holds the whole chain** and can't be edited, even by direct SQL.
 
 | Brightline's admin: the case | Data ops: lineage and clean-up |
@@ -32,7 +32,7 @@ Needs Docker with Compose.
 ```sh
 make demo    # fresh database, then the scripted scenario above (about 3 minutes)
 make up      # start Postgres, the API, the background worker and the web app on real time
-make test    # 91 backend tests (against a separate test database) and 9 detection-service tests
+make test    # 101 backend tests (against a separate test database) and 9 detection-service tests
 make down    # stop (make reset also deletes the database)
 ```
 
@@ -72,7 +72,7 @@ Each of these was found by testing or by looking at the demo's output, fixed, an
 ## Where things are
 
 ```
-backend/     FastAPI app, migrations, background worker (app/jobs.py), the detection contract (app/routes/detection.py), the release stage (app/release.py), 91 tests
+backend/     FastAPI app, migrations, background worker (app/jobs.py), the detection contract (app/routes/detection.py), the release stage (app/release.py), contributor grades (app/grades.py), 101 tests
 detection/   the separate detection service: abuse rules and severity (rules.py), its state (detector.py), 9 tests
 frontend/    React + TypeScript: one app, a view per role
 simulator/   the scripted scenario, driving the public API

@@ -183,7 +183,9 @@ async def export(
 ) -> DatasetOut:
     """Write released answers to a dataset file, each row with its lineage and tier (DC6, DC10, D14, D31)."""
     project: Project = await get_visible_project(project_id, user, session)
-    tiers = {d.submission_id: d.state for d in (await release.evaluate(session, project)).released()}
+    view = await release.evaluate(session, project)
+    tiers = {d.submission_id: d.state for d in view.released()}
+    snapshots = {d.submission_id: view.grades[d.worker_id].snapshot() for d in view.released()}
     rows = (await session.execute(text(EXPORT_ROWS), {"ids": list(tiers)})).all()
     previous = await session.scalar(text("SELECT id FROM datasets WHERE project_id = :p ORDER BY created_at DESC LIMIT 1"), {"p": project.id})
     dataset_id = uuid.uuid4()
@@ -195,6 +197,7 @@ async def export(
                 "submission_id": str(r.submission_id), "task_id": str(r.task_id), "task": r.payload, "answer": r.answer,
                 "worker": r.handle, "vendor": r.vendor, "schema_version": r.schema_version, "metric_version": METRIC_VERSION,
                 "submitted_at": r.submitted_at.isoformat(), "tier": tiers[r.submission_id],
+                "worker_grade": snapshots[r.submission_id],
             }) + "\n")
     provisional = sum(1 for r in rows if tiers[r.submission_id] == "provisional")
     now = clock.now()
@@ -205,9 +208,10 @@ async def export(
     )
     if rows:
         await session.execute(
-            text("INSERT INTO dataset_rows (dataset_id, submission_id, tier) "
-                 "SELECT :d, unnest(CAST(:ids AS uuid[])), unnest(CAST(:tiers AS text[]))"),
-            {"d": dataset_id, "ids": [r.submission_id for r in rows], "tiers": [tiers[r.submission_id] for r in rows]},
+            text("INSERT INTO dataset_rows (dataset_id, submission_id, tier, grades) "
+                 "SELECT :d, unnest(CAST(:ids AS uuid[])), unnest(CAST(:tiers AS text[])), unnest(CAST(:grades AS jsonb[]))"),
+            {"d": dataset_id, "ids": [r.submission_id for r in rows], "tiers": [tiers[r.submission_id] for r in rows],
+             "grades": [json.dumps(snapshots[r.submission_id]) for r in rows]},
         )
     record(session, actor=user, action="dataset.exported", entity_type="dataset", entity_id=dataset_id, org_id=user.org_id,
            after={"project_id": str(project.id), "rows": len(rows), "provisional": provisional,

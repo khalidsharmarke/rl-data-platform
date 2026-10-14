@@ -12,7 +12,7 @@ from datetime import timedelta
 from sqlalchemy import text
 
 from app import clock
-from app.release import LATER_GOLD
+from app.grades import LATER_GOLD
 from tests.builders import allocate, make_project, report
 from tests.people import DATA_OPS, NORTHWIND_ADMIN, NORTHWIND_WORKER, RESEARCHER
 
@@ -33,7 +33,7 @@ async def answer_n(client, session, headers, project_id, generated, n, *, correc
     return done
 
 
-def verifiable(done, needed=LATER_GOLD):
+def verifiable(done, needed=LATER_GOLD["unproven"]):
     """Regular answers followed by at least `needed` gold answers (all correct here)."""
     return sum(1 for i, (_, g) in enumerate(done) if not g and sum(1 for _, g2 in done[i + 1:] if g2) >= needed)
 

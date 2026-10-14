@@ -78,7 +78,7 @@ Terms used in [`POSTING.md`](POSTING.md), [`PRD.md`](PRD.md) and [`DESIGN.md`](D
 | **Shadow mode** | A new rule runs and records findings, but they lead to nothing until the rule has proven accurate on reviewed work | |
 | **Audit sample** | Work nothing flagged, picked at random for manual review. It's how the platform learns what its detectors miss | |
 | **Release** | The point at which an accepted answer may be exported for training: after detection has checked it, nothing holds it, a minimum gap has passed and enough later evidence about the worker has arrived. A released answer is *verified*, or *provisional* if it was released at the project's cap without all the quality evidence | |
-| **Contributor grade** | How the platform rates a worker, on two separate axes: *quality* (how accurate, with how much certainty) and *integrity* (held, watch, unproven or trusted). Grades decide how much evidence release needs; they never act on a person | |
+| **Contributor grade** | How the platform rates a worker, on two separate axes: *quality* (how accurate, with how much certainty) and *integrity* (suspended, held, watch, unproven or trusted). Grades decide how much evidence release needs; they never act on a person | |
 | **Export gate** | The rule that a dataset includes only answers detection has already checked and that aren't held | |
 | **Low quality** | Honest but poor work. It lowers a worker's or vendor's scores and gets feedback, but doesn't open a case. Contrast with abuse | |
 | **Cross-vendor match** | A possible later feature: vendors submit a keyed hash of a stable identifier, so Anthropic can tell that a worker at one vendor is the same person as a worker at another without learning who they are | |
