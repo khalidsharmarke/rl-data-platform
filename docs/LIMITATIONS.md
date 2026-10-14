@@ -98,8 +98,8 @@ The design's scale estimate is about 1.2 million submissions a day ([`DESIGN.md`
 
 In order, from [`BUILD.md`](BUILD.md#stretch-in-order) and the gaps above:
 
-1. The audit sample and shadow mode (AB15, AB16), which measure what detection misses and keep a new rule from acting before it's proven. Escalation outcomes sent back to detection as labels.
-2. A thin environment slice: immutable environment versions, reference and no-op checks in a locked-down container (EC1–EC3, D3). It covers the most posting lines the build doesn't.
+1. The environment slice, milestones M13–M16 in [`BUILD.md`](BUILD.md#environment-milestones): versions, sandboxed checks, review, a catalog and quarantine (EC1–EC6, TO6). It covers the most posting lines the build doesn't.
+2. The audit sample and shadow mode (AB15, AB16), which measure what detection misses and keep a new rule from acting before it's proven. Escalation outcomes sent back to detection as labels.
 3. Broken-task flags and disagreement alerts (DC5).
 4. Vendor-level abuse rules and vendor actions (AB2, AB5).
 5. The vendor reviewer step (DC8).

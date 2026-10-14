@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | 0.1.0 (MVP): M0–M8. 0.2.0: integrity milestones M9–M12. Stretch goals not started. Known limitations in [`LIMITATIONS.md`](LIMITATIONS.md) |
+| Status | 0.1.0 (MVP): M0–M8. 0.2.0: integrity milestones M9–M12. Environment milestones M13–M16 planned. Stretch goals not started. Known limitations in [`LIMITATIONS.md`](LIMITATIONS.md) |
 | Timebox | About a week: ~33 hours across nine milestones |
 | Stack | Python (FastAPI, async) · Postgres · React + TypeScript (Vite) · Docker Compose |
 | Delivered as | This repo, runnable with `make demo`, plus a 100-second recorded walkthrough linked from the README |
@@ -61,7 +61,7 @@ These keep the boundaries from [`DESIGN.md`](DESIGN.md) but use simpler parts:
 
 | Left out | Requirements | Why |
 |---|---|---|
-| Environment pipeline and sandboxing | EC1–EC7, N8, D3, D4 | The costliest part to do safely, and a separate story. It would be the next slice, along with environment contracts and environment work on scorecards |
+| Parts of the environment pipeline | EC3's difficulty estimate, EC7, vendor-built images (A15, VM2) | The [environment milestones](#environment-milestones) build a thin slice; these come after it |
 | Training ingestion and observability | TO1–TO7, D5, D6 | Depends on environments |
 | Vendor-level abuse and actions | AB2, AB5 | P1 in the PRD. First stretch goal |
 | Vendor reviewer | DC8 | P1 in the PRD |
@@ -118,11 +118,33 @@ These build the [integrity layers](DESIGN.md#integrity-layers) and the release s
 | M12 | Discreet escalation | Watch findings raise the worker's share of gold; ten later gold answers clear the finding or open a case; a simulated worker who pastes from their own notes is watched and cleared without a case (AB14, D26, D32) | The escalated worker's tasks are indistinguishable from others' (tested); in the demo, the note-paster is cleared and the abusive worker is suspended | 3 | Done |
 | | | | **Total** | **15** | |
 
+### Environment milestones
+
+The second half of the product: vendors submit training environments, the platform checks them in a sandbox before anyone spends time on them, researchers review them, and approved versions are offered to training. This is core flow 1 in [`DESIGN.md`](DESIGN.md#4-core-flows) and the start of flow 3, and it covers PRD goal G6's first half and capabilities C2.3 and C3.3.
+
+**What the slice covers.** Immutable environment versions with a state machine (EC1, EC2, D3); automated checks in a sandbox: the reference solution passes, an empty solution fails, repeated runs agree (EC3, A11, A12); fair-share validation jobs (D4, N10); the builder's fix-and-resubmit loop (EC4); researcher review (EC5); a catalog that training pulls approved versions from (EC6); quarantine through an environment case (TO6, AB6, AB8, D13); environment work on the vendor scorecard (VP3).
+
+**What it leaves out.** Difficulty estimates (the rest of EC3) need a model attempting the task. Generated programming tasks (EC7), training results and reward-hack detection (TO1–TO5, TO7) need a training stand-in. Vendor-built container images (A15) and registry credentials (VM2) are replaced by build decision B4 below.
+
+**Build decisions for this slice**
+
+| # | Decision | Why | Trade-off |
+|---|---|---|---|
+| B4 | An environment version is a bundle the builder uploads (task statement, files, tests, reference solution, and a manifest naming the test command), run on a base image the platform provides. Vendors don't push their own images | Keeps the slice to the checks that protect the reward signal, without running a registry. The checks, versioning and sandbox are the same either way | Environments can only use what the base image has. Arbitrary images (A15) and registry access (VM2) are the next step, and they make sandboxing harder, not different |
+| B5 | Checks run in a separate sandbox runner with access to the Docker daemon. Each check gets a fresh container: no network, read-only root, a scratch directory, CPU, memory, process and time limits, a non-root user, and is killed on timeout | Vendor code is untrusted (N8). Plain Docker with these limits is enough to show the boundary and to test that it holds | Access to the Docker daemon is host-level power, acceptable on a laptop and nowhere else. A real deployment runs checks on dedicated hosts under gVisor or Firecracker (D4) |
+
+| # | Milestone | Delivers | Done when | Hours | Status |
+|---|---|---|---|---|---|
+| M13 | Environment versions | Environments and immutable versions (content-addressed bundles in object storage), the version state machine (draft → submitted → validating → failed or in review → approved → quarantined), a seeded environment builder at Kestrel (the vendor with the environments capability), per-environment contracts, the builder's upload and submit API (EC1, EC2, D3, VM6, VM7) | A version can't be changed once stored, even by direct SQL; only legal transitions succeed, each with an audit event; a vendor without the environments capability can't submit; other vendors can't see the environment (tested) | 3 | Planned |
+| M14 | Sandbox validation | Validation jobs queued in the same transaction as submission and taken fairly across vendors; the sandbox runner service; three checks per version (reference passes, empty solution fails, three repeat runs agree) with logs in object storage; failed or in-review outcome (EC3, D4, N8, N10, A11, A12) | A sound environment passes; a grader that passes an empty solution fails the empty check; an unsolvable task fails the reference check; a flaky grader fails the repeat check; a check that reaches for the network or runs past its limit is stopped and failed; one vendor's burst of submissions doesn't hold back another's (tested) | 5 | Planned |
+| M15 | Builder loop, review and catalog | Builder screens: versions, check results with logs, resubmit as a new version with a diff; researcher review queue with a rubric grade and feedback; approval; `GET /catalog` returning approved versions by exact id, with every pull recorded (EC4, EC5, EC6, D10) | A builder sees why a check failed and fixes it in a new version; only approved versions appear in the catalog; training pulls an exact version, and the pull is recorded (tested) | 3 | Planned |
+| M16 | Quarantine, scorecard and demo | Environment cases owned by data ops; quarantine removes a version from the catalog and sends it back to review; lineage lists who pulled it; environment work on the vendor scorecard (validation pass rate, review grades); the demo adds Kestrel's builder submitting a sound environment, one whose grader passes anything, one that can't be solved and one that's flaky; README and walkthrough (TO6, AB6, AB8, VP3, D13) | In `make demo`, the three broken environments are stopped by the checks that target them, the sound one is approved and pulled, then quarantined through a case and dropped from the catalog with its pulls listed; Kestrel's scorecard shows its environment pass rate | 3 | Planned |
+| | | | **Total** | **14** | |
+
 ### Stretch, in order
 
 1. Vendor-level abuse rule (quality falling while volume rises) and vendor actions with the vendor's response (AB2, AB5)
 2. Vendor reviewer step (DC8)
-3. A thin environment slice: immutable environment versions with reference and no-op checks in a locked-down container (EC1–EC3, D3)
 
 ## 5. Where the code lives
 
@@ -146,3 +168,5 @@ anthropic-jobs-5186067008/
 | The demo depends on the simulator behaving believably | Worker profiles are tuned against the scenario in M4, before scorecards and rules are built on them |
 | Abuse rules look naive | Rules are versioned and pluggable (D15, N19); the README says which signals are behavioral stand-ins and why |
 | Scope creep from the stretch list | Stretch items start only after M8 is done |
+| The sandbox is weaker than it looks | B5 says plainly that Docker with limits is a stand-in; M14 tests the limits that matter (no network, time, memory) rather than claiming isolation it doesn't have |
+| Running containers per check makes the demo slow | Checks use one small base image and short tests; the demo submits four environments, not hundreds |

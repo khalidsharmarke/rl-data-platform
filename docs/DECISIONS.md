@@ -69,6 +69,8 @@ Every product and design decision made so far, sorted by how hard it would be to
 | B1 | The first build covers multi-vendor human data (flows 2, 4, 5), not the environment pipeline ([`BUILD.md`](BUILD.md)) | The environment slice can follow; nothing in slice A blocks it |
 | B2 | Build stack: FastAPI (async Python), Postgres, React + TypeScript, Docker Compose | Rewriting the backend in another language; the API contract and data model carry over |
 | B3 | Delivered as a runnable repo plus a recorded walkthrough, not a hosted demo | Hosting can be added later without code changes |
+| B4 | Environments in the first slice are uploaded bundles on a platform base image, not vendor images ([`BUILD.md`](BUILD.md#environment-milestones)) | Adding vendor images and registry credentials later; versions and checks carry over |
+| B5 | The sandbox is Docker with strict limits, run by a service with Docker daemon access | Swapping the runner for gVisor or Firecracker on dedicated hosts; the check contract stays the same |
 
 ## What this means for the first build
 
