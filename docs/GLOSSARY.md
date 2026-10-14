@@ -71,6 +71,13 @@ Terms used in [`POSTING.md`](POSTING.md), [`PRD.md`](PRD.md) and [`DESIGN.md`](D
 | **Vendor abuse** | Abuse by a vendor as an organization, for example padding volume with low-quality work, re-admitting banned workers, subcontracting without saying so, submitting environments with gameable graders or copied benchmark content. Anthropic detects and acts | |
 | **Case** | The record opened when abuse is suspected: the flags and evidence, the owner who decides (vendor admin for worker cases, data ops for vendor and environment cases), any response, and the decision | |
 | **Hold** | Automatic, reversible protection while a case is open: a flagged worker's pending answers are kept out of exports, or a flagged environment is quarantined | |
+| **Signal** | One observation about how a piece of work was produced, such as pasted text, time on task or request rate. Signals come from the work UI, the API and the worker's history. Signals from the worker's browser can be forged, so they're hints | |
+| **Detection service** | A separate service that reads every submission's signals and returns findings with evidence. The platform depends on its contract, not on how it works | |
+| **Finding** | What a detector reports: who, which signal, how severe, and the evidence. A finding can lead to escalation or a case; it's never an action against anyone by itself | |
+| **Escalation** | The platform's quiet response to a finding: more gold tasks, overlap and spot checks for the worker, then a hold. The worker can't tell it's happening | |
+| **Shadow mode** | A new rule runs and records findings, but they lead to nothing until the rule has proven accurate on reviewed work | |
+| **Audit sample** | Work nothing flagged, picked at random for manual review. It's how the platform learns what its detectors miss | |
+| **Export gate** | The rule that a dataset includes only answers detection has already checked and that aren't held | |
 | **Low quality** | Honest but poor work. It lowers a worker's or vendor's scores and gets feedback, but doesn't open a case. Contrast with abuse | |
 | **Cross-vendor match** | A possible later feature: vendors submit a keyed hash of a stable identifier, so Anthropic can tell that a worker at one vendor is the same person as a worker at another without learning who they are | |
 | **Lineage** | The trace from a piece of training data back to the task, worker (pseudonymous), vendor, environment version and reviewer it came from. Used to clean up after abuse is found | *"audit trails"* |

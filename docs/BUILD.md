@@ -53,6 +53,7 @@ These keep the boundaries from [`DESIGN.md`](DESIGN.md) but use simpler parts:
 | Object storage | A local directory mounted into the container |
 | Background jobs | An async worker process (`python -m app.jobs`) claiming jobs from the Postgres queue table |
 | SSO | Seeded users with a role picker on the login page |
+| Detection service fed by an outbox (D23, D24) | A background job (`app/abuse.py`) that reads each worker's recent submissions from Postgres and runs three versioned rules in the platform's own process. Any finding opens a case and holds the worker's data directly |
 | Real time, for the scripted demo | A demo clock (`make demo` only) that runs 180× real time, so about five simulated hours of work take under three minutes. Every timestamp the platform writes or compares goes through it, so time on task stays consistent. Off for `make up` and in tests |
 
 ### Not in the build
@@ -63,6 +64,7 @@ These keep the boundaries from [`DESIGN.md`](DESIGN.md) but use simpler parts:
 | Training ingestion and observability | TO1–TO7, D5, D6 | Depends on environments |
 | Vendor-level abuse and actions | AB2, AB5 | P1 in the PRD. First stretch goal |
 | Vendor reviewer | DC8 | P1 in the PRD |
+| The rest of the integrity layers | AB11 and AB12 beyond paste and time on task; AB13's contract; AB14–AB17 | The case, hold, decision and clean-up path these feed is built; escalation, audit sampling, shadow mode and the export gate are the next integrity work |
 | Vendor-private rules, cross-vendor match | AB9, AB10 | P2 in the PRD |
 | Onboarding, API tokens, registry | VM2, VM3, N14 | Not needed to tell the story; vendors are seeded |
 | Nice-to-haves | NH1–NH5 | Beyond the posting by definition |
@@ -71,7 +73,7 @@ These keep the boundaries from [`DESIGN.md`](DESIGN.md) but use simpler parts:
 
 Telling AI-written text from human text is unreliable. The build doesn't claim to do it. It flags the **behavior** around a submission instead: answers submitted faster than the task can be read, text pasted rather than typed, and near-duplicate answers across tasks. These are A27's "starting point" signals. In the simulator, the AI-pasting worker behaves that way, so the rules catch it for the same reasons they would catch a real one.
 
-## 3. The seven must-haves
+## 3. The must-haves
 
 From the [decision register](DECISIONS.md#what-this-means-for-the-first-build): the decisions that can't be added later for data already collected.
 
@@ -84,6 +86,7 @@ From the [decision register](DECISIONS.md#what-this-means-for-the-first-build): 
 | 5 | Raw cost inputs (PD3, DC9) | Price and unit on each contract (VM7); time on task on each submission | M2 |
 | 6 | Opaque, vendor-scoped worker IDs (D12) | Worker IDs are random and per vendor; names exist only inside the vendor's workspace | M1 |
 | 7 | Metric and rule versions recorded (N19) | Every scorecard row and flag stores the version that produced it | M5, M6 |
+| 8 | Client and API signals recorded (AB11, AB12) | Partly. Every submission stores server-measured time on task and the client's paste signal. Request rates, sessions and the other client signals aren't recorded | M2, M6 |
 
 ## 4. Milestones
 

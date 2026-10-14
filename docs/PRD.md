@@ -123,6 +123,10 @@ Priority: **P0** is needed for the product to make sense, **P1** makes it good, 
 | C5.8 | While a case is open, affected data is protected automatically and reversibly: a flagged worker's pending answers are held out of exports, a flagged environment is quarantined (PD4) | Platform | P0 | AB8 |
 | C5.9 | Vendor-private abuse rules that open cases only inside the vendor's workspace and never affect scorecards (PD5) | Vendor admin | P2 | AB9 |
 | C5.10 | Cross-vendor worker match on a keyed hash, used as evidence in cases (PD1) | Data ops | P2 | AB10 |
+| C5.11 | **Signals at every layer:** the work UI, the API and a dedicated detection service each contribute evidence. Signals from the worker's browser are hints, never proof on their own | Platform | P0 | AB11 AB12 AB13 |
+| C5.12 | **Discreet escalation:** before a person decides, the platform responds only in ways the subject can't perceive: measuring them more closely and holding their data (PD6) | Platform | P0 | AB14 |
+| C5.13 | **Measuring detection:** a random sample of unflagged work is reviewed, decided cases feed back as labels, and new rules run in shadow first | Data ops | P1 | AB15 AB16 |
+| C5.14 | Data reaches training only after detection has checked it | Platform | P0 | AB17 |
 
 ### C6. Vendor workspace
 | # | Capability | Who | Priority | Design |
@@ -142,6 +146,7 @@ These are proposed targets, to be checked against real baselines.
 |---|---|---|
 | Time from project creation to first accepted data | Researcher | < 1 day |
 | Share of training data traceable to its vendor and pseudonymous worker | Researcher, data ops | 100% |
+| Time from worker abuse starting to the worker's data being held | Platform | < 1 hour |
 | Time from worker abuse starting to the worker being stopped | Vendor admin | < 24 hours |
 | Time from vendor abuse being flagged to affected data being quarantined | Data ops | < 1 hour after the decision |
 | Share of quality problems vendors catch before Anthropic does | Both | Rising over time |
@@ -157,6 +162,7 @@ These are proposed targets, to be checked against real baselines.
 | PD3 | How is cost compared? | Each contract is stored in its own unit (per hour, per task or per environment) and compared as cost per accepted unit. Hourly contracts are converted using time on task measured by the platform, not vendor timesheets | Vendors are priced differently in practice (experts hourly, labeling per task); one normalized measure keeps comparisons fair | Comparisons depend on the platform's time measurement being accurate |
 | PD4 | What counts as abuse versus low quality, and who decides? | Low quality (honest but poor work) feeds scorecards and feedback and opens no case. Abuse signals open a case. The vendor admin decides worker cases; data ops decides vendor and environment cases, after the vendor can respond. The platform protects data automatically and reversibly while a case is open; any action against a person or vendor needs a human decision. Anthropic can always decline data, whatever a vendor decides about its worker | Intent can't be measured, only evidence; holds limit damage quickly without punishing anyone on a false positive | A burst of false flags can hold back data until cases are reviewed |
 | PD5 | Who writes abuse-detection rules? | Shared platform rules are the only ones that affect scorecards and Anthropic's decisions. Later (C5.9), vendors can add private rules that open cases only inside their own workspace | Every vendor is measured by the same rules; vendors can still catch patterns specific to their workforce | Vendors can't influence the shared rules directly |
+| PD6 | How and when does the platform intervene before a person decides? | Early on data, late on people, and out of the subject's sight. A finding makes the platform measure the worker more closely (more gold tasks, overlap and spot checks) and, when strong enough, hold their data. Nothing the worker sees changes, and no work is refused, until a person decides. Evidence shown to vendors describes what was observed, never the rule's threshold | A visible response tells the subject what was detected and when, which teaches evasion; it also harms an honest worker on a false alarm. Measuring more turns a suspicion into evidence within a few dozen tasks | Extra gold and overlap cost money, and abuse continues, into held data, until a person decides |
 
 ## 8. Nice-to-haves beyond the posting
 

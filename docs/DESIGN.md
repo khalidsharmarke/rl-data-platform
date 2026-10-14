@@ -95,8 +95,8 @@ Personas are described in the [PRD](PRD.md#3-who-cares-about-what). Each vendor 
 
 | # | Requirement | Source | Assumes |
 |---|---|---|---|
-| AB1 | Detect worker abuse (answering faster than reading time, near-duplicate answers, AI-generated text where human judgment is required, colluding answer patterns, gold-task farming) and flag it to the vendor admin, using the shared platform rules | PRD C5.1; *"surface reward signal integrity issues early"* | A27 |
-| AB2 | Detect vendor abuse (quality falling while volume rises, removed workers returning, environments with gameable graders or copied benchmark content) and flag it to data ops, using the shared platform rules | PRD C5.2; PRD PD1 | A27 |
+| AB1 | Detect worker abuse (answering faster than reading time, near-duplicate answers, AI-generated text where human judgment is required, colluding answer patterns, gold-task farming) and flag it to the vendor admin, using the shared platform rules. Worker detection runs in the detection service (AB13) | PRD C5.1; *"surface reward signal integrity issues early"* | A27 |
+| AB2 | Detect vendor abuse (quality falling while volume rises, removed workers returning, environments with gameable graders or copied benchmark content, matching answers across vendors, and a vendor handling its own cases unusually: cases left open, most dismissed, suspended workers soon reinstated) and flag it to data ops, using the shared platform rules | PRD C5.2; PRD PD1 | A27 |
 | AB3 | An abuse flag opens a case with its evidence; low-quality signals feed scorecards and feedback and don't open cases. The owner records a decision: the vendor admin for worker cases, data ops for vendor and environment cases | PRD C5.3 | |
 | AB4 | Actions on workers: warn, retrain, suspend, remove | PRD C5.4 | |
 | AB5 | Actions on vendors: lower allocation, pause, offboard, each after the vendor has had a chance to respond | PRD C5.5 | |
@@ -105,6 +105,13 @@ Personas are described in the [PRD](PRD.md#3-who-cares-about-what). Each vendor 
 | AB8 | While a case is open, the subject's data is protected automatically and reversibly: a worker's unexported submissions are held out of exports, an environment version is quarantined. Actions against people or vendors (AB4, AB5) always need a recorded human decision | PRD C5.8; PRD PD4 | |
 | AB9 | Vendors can add private abuse rules that open cases only inside their own workspace and never feed scorecards (P2) | PRD C5.9; PRD PD5 | |
 | AB10 | Cross-vendor worker match: vendors submit a keyed hash of a stable identifier, and matches across vendors become case evidence, never an automatic action (P2) | PRD C5.10; PRD PD1 | |
+| AB11 | Client signals: the work UI records how each answer was produced (pasted text, time to first input, focus changes, whether the task content was opened) and sends them with the submission. They're marked untrusted: detector input and case evidence, never enough for a finding on their own | PRD C5.11; *"surface reward signal integrity issues early"* | A32 |
+| AB12 | API signals: on every claim and submission the API records what the server observes (time on task, claim and submit rates, concurrent sessions per worker, workers per session or device) and enforces rate limits that apply the same way to everyone. It never rejects a valid submission because abuse is suspected | PRD C5.11 | |
+| AB13 | Detection service: every submission produces an event on a queue that a separate detection service consumes. The service returns findings (subject, signal, severity, rule or model version, evidence a person can read) through the API, and reports how far through the event stream it has processed. It owns how signals are combined; the platform owns everything a finding leads to | PRD C5.11; *"surface reward signal integrity issues early"* | A31 |
+| AB14 | Discreet escalation: before a person decides, the platform responds to findings only in ways the subject can't perceive: more gold and overlap on the worker's tasks, more of their answers sent to spot checks, and holds (AB8). Anything the subject can perceive needs a recorded human decision (AB4, AB5) | PRD C5.12; PRD PD6 | |
+| AB15 | Audit sample: a random share of unflagged submissions goes to manual review, mixed in with other spot checks. Audit outcomes and case decisions go back to the detection service as labels, so its precision and its misses can both be measured | PRD C5.13 | A27 |
+| AB16 | Shadow mode: a new rule or detector version first records findings without escalating or opening cases, until its precision on reviewed work meets a bar data ops sets | PRD C5.13; N19 | |
+| AB17 | Exports wait for detection: a dataset includes only submissions the detection service has processed and that aren't held | PRD C5.14; DC6 | A33 |
 
 ### Workspaces and platform
 
@@ -126,7 +133,7 @@ Five flows carry most of the value. Two entities anchor them: the **vendor works
 2. **Allocate → collect → QA → export** (VP1, DC1–DC8)
 3. **Run → monitor → flag → quarantine** (TO1–TO7), which loops back into flow 1
 4. **Measure → compare → reallocate** (VP2–VP4, TO7): every vendor scored the same way, per project and over time
-5. **Detect → case → act → clean up** (AB1–AB7), at two levels: vendors over their workers, Anthropic over vendors
+5. **Signal → detect → escalate → case → act → clean up** (AB1–AB17), at two levels: vendors over their workers, Anthropic over vendors
 
 ## 5. Scale estimate
 
@@ -136,7 +143,7 @@ Five flows carry most of the value. Two entities anchor them: the **vendor works
 | Validation | 50 vendors (A3), 5k version submissions/day (A4), 5 sandbox runs of ~5 min each (A5) | 25k runs × 5 min ≈ 125k container-minutes/day ≈ 90 containers running at once | Compute is the bottleneck, not the API |
 | Training results | 1k episodes/s peak across runs (A6); ~1 KB metadata plus 100 KB–1 MB transcript each (A7) | ~1 MB/s metadata; 100 GB+/day of transcripts | The heaviest write path. Transcripts go in object storage, metadata in an analytics store |
 
-Worker-abuse checks (AB1) run on labeling submissions, batched per worker every few minutes, so they add well under 14 jobs/s to the job queue (D2). Vendor-level checks (AB2) and scorecards (VP3) are periodic rollups over data already collected.
+Every labeling submission publishes one small event for the detection service (AB13): about 14 events/s on average and 50/s at peak, a light load for any queue. How much work the service does per event is its own choice (D24). Vendor-level checks (AB2) and scorecards (VP3) are periodic rollups over data already collected.
 
 The system is light on reads, heavy on writes for training results, and compute-heavy for validation. Those three loads need separate paths.
 
@@ -160,9 +167,10 @@ The system is light on reads, heavy on writes for training results, and compute-
 | N14 | Fast onboarding | A new vendor goes from invite to first accepted work (an accepted sample task or a passing environment) in < 1 day, without help | *"ramp up in hours, not weeks"* | A22 |
 | N15 | Monitoring the platform itself | Metrics and alerts on queue backlog, sandbox failure rate, ingestion lag | A dashboard that silently goes stale is worse than none | |
 | N16 | Consistent measurement | Quality, volume, cost and turnaround are computed by the platform from its own records, the same way for every vendor. Vendor-reported numbers are never an input | Vendors can only be compared fairly on an identical measure (PRD G2); PRD PD3 | |
-| N17 | Detection secrecy | Which tasks are gold, and how abuse detectors work, is never visible to vendors or workers; they see results, not the method. Gold accuracy is shown only in aggregate (VP4) and gold tasks are rotated | Known gold tasks and known rules can be gamed; PRD PD2 | |
+| N17 | Detection secrecy | Which tasks are gold, and how abuse detectors work, is never visible to vendors or workers; they see results, not the method. Gold accuracy is shown only in aggregate (VP4) and gold tasks are rotated. Automatic responses to a finding can't be perceived by its subject (AB14) | Known gold tasks and known rules can be gamed, and a visible response reveals what was detected and when; PRD PD2, PD6 | |
 | N18 | Due process | Every abuse action is tied to a case holding the evidence behind it, and can be reviewed and reversed | A false finding against a worker or vendor has real consequences (PRD PD4) | |
 | N19 | Versioned definitions | Metric definitions, abuse rules and task and config schemas are versioned, and every score, flag, task and config records the version that produced it | A definition can then change without rewriting history: old and new versions can run side by side, and past numbers stay explainable ([decision register](DECISIONS.md)) | |
+| N20 | Detection decoupling and lag | Collection never waits on the detection service: events queue durably, and if the service is slow or down, work continues and exports wait (AB17). Findings arrive within 5 minutes of submission at p95 | Labeling availability (N3) can't depend on a separate service; held-back exports are the safe failure | A33 |
 
 ## 7. Out of scope
 
@@ -215,6 +223,9 @@ Each assumption names the requirements that depend on it and what changes if it'
 | A24 | A vendor supplies human work, environments, or both, and data ops sets each vendor's capabilities rather than vendors declaring their own. The market has both kinds of vendor, and several large ones do both (see [PRD §2](PRD.md#2-problem)) | Actors, VM6, VP1 | If vendors self-declare, a capability needs checking (for example, a trial project) before work is allocated against it |
 | A27 | The abuse signals listed in AB1 and AB2 are starting points; real ones come from investigating cases | AB1, AB2 | As with A14, detectors must be pluggable so new signals can be added without a redeploy |
 | A29 | Some vendors review their workers' output before submitting it; the platform supports this but doesn't require it | DC8 | If every vendor must review, DC8 becomes a mandatory step in the labeling workflow |
+| A31 | Worker-abuse detection is built and tuned by specialists (trust and safety, or research), so the platform treats it as a separate service and defines only its contract | AB13, D23 | If the platform team owns detection too, the contract still holds; the split is then inside one team |
+| A32 | Client signals can be forged by anyone answering through the API or with a modified client | AB11 | If work could only be done in a locked-down client, client signals could carry more weight |
+| A33 | Findings within about 5 minutes of submission are early enough, because datasets are exported hourly or less often | N20, AB17, D25 | If training consumes data continuously, waiting for detection adds its lag to every row |
 
 ## 9. High-level design
 
@@ -272,26 +283,61 @@ Each step lists the components involved, what each one is for, and what breaks w
 - *Dashboard API:* scorecards, comparisons, run dashboards and a live feed, so researchers can watch a training run as it happens.
 - *Object storage (transcripts):* holds full transcripts, which are too big to keep anywhere else.
 
-**10. Catch abuse at both levels, then clean up.** Abuse means making data look better, larger or more human than it is. Vendors police their workers; Anthropic polices vendors.
-- *Abuse detection jobs:* rules over workers' answers (answering faster than anyone could read, near-duplicates, AI-written text where a human judgment is required, coordinated answers) and over vendors (quality falling as volume rises, removed workers coming back).
+**10. Catch abuse at both levels, then clean up.** Abuse means making data look better, larger or more human than it is. Vendors police their workers; Anthropic polices vendors. The aim is to surface problems early without showing anyone how they were found, so every layer contributes signals, and automatic responses stay out of the subject's sight until a person decides ([Integrity layers](#integrity-layers)).
+- *Signals at every layer:* the work UI records how an answer was produced, and the API records what the server sees: timing, request rates, sessions. Client signals can be forged, so they're hints, never proof on their own.
+- *Detection service:* a separate service that reads an event for every submission and returns findings with evidence. The platform treats its logic as a black box and depends only on its contract: events in, findings out. Specialists can change how it works without touching the platform.
+- *Vendor oversight jobs:* rules over vendors: quality falling as volume rises, removed workers coming back, matching answers across vendors, and how each vendor handles its own workers' cases.
 - *Reward-hack detector:* watches the training report stream for a model scoring full marks without solving the problem, such as perfect scores on very short attempts or edits to test files.
+- *Discreet escalation:* a finding first makes the platform measure the worker more closely: more gold tasks, more overlap, more spot checks, none of which the worker can tell apart from normal work. A strong enough finding also holds their data. The worker's experience doesn't change until a person decides.
 - *Cases module:* every flag opens a case with its evidence. Worker cases go to the vendor admin; vendor and environment cases go to data ops, who can also see how vendors handled their own cases. While a case is open, the platform automatically holds the affected data back from training, which can be undone. Every action against a person or vendor, from a warning to offboarding, needs a recorded decision, is tied to its case, and can be reviewed and reversed. Low quality on its own doesn't open a case; it shows up on the scorecard instead.
+- *Manual review:* people decide cases, and they also review a random sample of work nothing flagged. Without that sample, the platform could count false alarms but never what it missed. Both kinds of outcome go back to the detection service as labels.
+- *Export gate:* a dataset includes only answers the detection service has already checked and that aren't held, so training gets data minutes later but checked.
 - *Clean-up through lineage:* once a case is decided, a lineage query finds everything the worker, vendor or environment produced, and it's discarded, re-labeled or quarantined. A quarantined task goes back to review (step 4).
 
 **Throughout: the paper trail.**
 - *Audit log:* an append-only record of every approval, allocation, case decision and permission change. When something looks wrong in training, it traces back to the exact task version or answer, the worker and vendor who produced it, and the reviewer who approved it.
 
+### Integrity layers
+
+Each layer sees something the others can't, and each is limited in what it may do on its own. The earlier a layer acts, the less it knows, so early layers only record and protect; people act on people.
+
+| # | Layer | When it acts | What it sees | What it may do on its own | Requirements |
+|---|---|---|---|---|---|
+| 1 | Accounts and access | Onboarding and sign-in | Invites, tokens, sessions, devices | Scope and revoke tokens; later, match workers across vendors as evidence (AB10) | VM1 VM2 N11 AB10 |
+| 2 | Work UI (client) | While the worker answers | How the answer was produced: pasting, typing, focus, whether content was opened | Record signals. They can be forged (A32) | AB11 |
+| 3 | API | On every claim and submission | Server time on task, request rates, sessions per worker, assignment ownership | Record signals; apply rate limits that are the same for everyone. Never reject work because abuse is suspected | AB12 DC9 |
+| 4 | Detection service | Within minutes, from the event queue | Each submission with the worker's history, signals from layers 2 and 3, and gold results | Raise findings with evidence. It can't act on anything itself | AB1 AB13 N20 |
+| 5 | Platform response | When a finding arrives | The finding and its severity | Escalate measurement and hold data, invisibly to the subject (AB14). Open a case | AB3 AB8 AB14 |
+| 6 | Manual review | Hours | Cases with evidence; a random sample of unflagged work | Decide cases and act on people. Label outcomes for layer 4 | AB3–AB5 AB15 |
+| 7 | Vendor oversight | Daily roll-ups | Every vendor's scorecards, cases and case decisions | Raise vendor findings to data ops | AB2 AB7 VP3 |
+| 8 | Export gate | When a dataset is built | How far detection has processed, holds, removals | Keep unchecked and held data out of training | AB17 DC6 |
+| 9 | Training feedback | After training uses the data | Reward-hack flags; outcomes traced back by lineage | Raise findings against environments, vendors and the datasets involved | TO3 TO7 D14 |
+
+**Escalation.** Responses grow with the evidence. The platform acts early on data and late on people (PD6):
+
+| Step | Response | Triggered by | Who can perceive it |
+|---|---|---|---|
+| 1. Observe | Record the finding. New rules stay at this step in shadow mode (AB16) | Any finding | Anthropic only |
+| 2. Measure more | More gold (from gold the worker hasn't seen), more overlap and more spot checks on the worker's next tasks | A finding below case severity | Nobody: the extra tasks look like any other (D8) |
+| 3. Protect data | Open a case and hold the worker's unexported answers | A finding at case severity, or step 2 confirming it | The vendor admin, through the case. Not the worker |
+| 4. Act on the worker | Warn, retrain, suspend, remove | The vendor admin's decision | The worker |
+| 5. Act on the vendor | Lower allocation, pause, offboard, after the vendor responds | Data ops' decision | The vendor |
+
+Step 2 also turns a suspicion into evidence: a few dozen extra gold answers confirm or clear a worker faster than waiting for normal gold to accumulate.
+
 ### Components
 
 | Component | Plane | Job | Requirements |
 |---|---|---|---|
-| Web app | Edge | One React + TS app with a surface per role: vendor workspace (admin, reviewer, worker, environment builder), researcher review, data ops console, dashboards and scorecards | EC4 EC5 DC3 DC8 TO4 TO5 VP2–VP4 AB3 |
-| API gateway | Edge | Authenticates (SSO for people, API tokens for vendors and services), applies roles and workspace scoping, rate-limits | VM1 VM2 N9 N11 |
-| API service | Control | One service split into modules: workspaces, capabilities and contracts, environments and versions, review and quarantine, projects and allocation, collection and QA, cases and actions, lineage and clean-up, audit | EC1–EC6 DC1–DC8 VP1 AB3–AB8 VM1–VM7 TO6 |
+| Web app | Edge | One React + TS app with a surface per role: vendor workspace (admin, reviewer, worker, environment builder), researcher review, data ops console, dashboards and scorecards. The work UI records client signals | EC4 EC5 DC3 DC8 TO4 TO5 VP2–VP4 AB3 AB11 |
+| API gateway | Edge | Authenticates (SSO for people, API tokens for vendors and services), applies roles and workspace scoping, rate-limits | VM1 VM2 N9 N11 AB12 |
+| API service | Control | One service split into modules: workspaces, capabilities and contracts, environments and versions, review and quarantine, projects and allocation, collection and QA (with API signals), escalation, cases and actions, lineage and clean-up, export gate, audit | EC1–EC6 DC1–DC8 VP1 AB3–AB8 AB12 AB14–AB17 VM1–VM7 TO6 |
 | Postgres | Control | Source of truth: immutable versions, the version state machine, contracts, allocations, assignments and submissions with lineage, cases and holds, the audit log, and the job queue (a table) | N6 N7 N12 N18 N19 |
 | Job queue | Control (a Postgres table) | Holds validation, abuse-detection and scorecard jobs. Workers claim the next one with `SELECT … FOR UPDATE SKIP LOCKED`; validation jobs are taken from the vendor with the fewest running first | N10 |
 | Sandbox workers | Execution | Run each submitted version: reference solution must pass, no-op must fail, repeat runs must agree, difficulty estimated. No network; CPU, memory and time limits | EC3 N8 |
-| Background jobs | Execution | Trusted platform code: abuse-detection rules over submissions and vendors, and scorecard roll-ups written to the analytics store | AB1 AB2 VP2–VP4 N16 N17 |
+| Background jobs | Execution | Trusted platform code: vendor oversight rules, and scorecard roll-ups written to the analytics store | AB2 VP2–VP4 N16 N17 |
+| Outbox and relay | Control | Submission events written in the same transaction as the submission, then relayed to the detection queue | AB13 N5 D24 |
+| Detection service | Execution (separate service) | A black box behind a contract: consumes submission events, returns findings and how far it has processed through the API, and receives labels from manual review | AB1 AB13 AB15 AB16 N17 N20 |
 | Container registry | Execution | Vendor images, with per-vendor push and pull credentials | VM2 |
 | Code task generator | Execution | Generates programming tasks and submits them through the public API, like any vendor | EC7 A21 |
 | Results intake | Ingestion | Accepts batches of episode results from training; deduplicates by episode id; acknowledges once written to the log | TO1 N5 |
@@ -307,7 +353,7 @@ Each step lists the components involved, what each one is for, and what breaks w
 | # | Decision | Why | Trade-off |
 |---|---|---|---|
 | D1 | The control plane is one modular service, not microservices | Priorities shift fast (N13); one deploy and one database keep iteration quick | Modules must keep clean boundaries so the ingestion or execution side can split off later |
-| D2 | The job queue is a Postgres table. Submitting a version updates its status and inserts its jobs in one transaction; workers claim jobs with `SKIP LOCKED`, then re-check capacity in a fresh statement, because the claiming query's snapshot predates the lock | ~25k validation runs a day is about 0.3 jobs/s (A4, A5), and batched abuse checks add little (§5), far below what Postgres handles. One transaction means a version can't be "submitted" with no job, or have a job after a rollback (N5, N7), with no message broker or outbox relay to run | Workers poll the database, and a crashed worker's job is retried after a lease expires, so jobs must be idempotent. Move to a dedicated broker (with an outbox) only if volume grows ~1,000× |
+| D2 | The job queue is a Postgres table. Submitting a version updates its status and inserts its jobs in one transaction; workers claim jobs with `SKIP LOCKED`, then re-check capacity in a fresh statement, because the claiming query's snapshot predates the lock | ~25k validation runs a day is about 0.3 jobs/s (A4, A5), and batched abuse checks add little (§5), far below what Postgres handles. One transaction means a version can't be "submitted" with no job, or have a job after a rollback (N5, N7), with no message broker to run for the platform's own jobs | Workers poll the database, and a crashed worker's job is retried after a lease expires, so jobs must be idempotent. Move to a dedicated broker (with an outbox) only if volume grows ~1,000× |
 | D3 | Environment versions are immutable, and their status changes only through a state machine (draft → submitted → validating → failed or in review → approved → quarantined) | Training always refers to an exact, unchanging version (N6); every transition is a single audited event (N12) | Fixing a typo means a new version |
 | D4 | Validation runs in sandboxes, taking jobs from the queue with a fair share per vendor | Vendor code is untrusted (N8, A15); one vendor can't starve the rest (N10) | Sandboxing (e.g. gVisor or Firecracker) adds startup time to each run |
 | D5 | Training results bypass the gateway and the control plane: intake → durable log → processors | Training is never blocked by the platform (N4); the heaviest write path stays off the control database | Two paths to secure and monitor; dashboards are eventually consistent (N7) |
@@ -320,7 +366,7 @@ Each step lists the components involved, what each one is for, and what breaks w
 | D12 | Workers are pseudonymous outside their vendor: each has a platform ID scoped to the vendor, and identity fields live only in the vendor's workspace | Anthropic can trace data and spot patterns without holding personal data (N9, PRD PD1) | A worker removed by one vendor can't be recognized at another until the keyed-hash match (AB10) is added |
 | D13 | One flag → case → action model serves both levels. The case owner follows the subject: worker cases to the vendor admin, vendor and environment cases to data ops | One audited path for every enforcement decision (AB3–AB5, N18, VM4); data ops can review vendors' cases (AB7). Low-quality signals never open cases (PRD PD4) | The case model is generic, so level-specific workflows need care |
 | D14 | Lineage is recorded when data is created: every accepted submission stores task, worker ID, vendor, project and review; every dataset row and episode references its source | Clean-up after abuse is a query, not an investigation (AB6, N12) | Wider rows; datasets must be re-exportable without removed items |
-| D15 | Abuse detectors are pluggable rules, run as background jobs (AB1, AB2) and over the episode stream (TO3). Shared rules are the only ones that feed scorecards; vendor-private rules (AB9) run inside one workspace. Rule definitions are never exposed through vendor-facing APIs | New signals ship without a redeploy (A27); every vendor is measured by the same rules (N16, PRD PD5); published rules could be gamed (N17) | Vendors see the outcome of a rule, not its logic, which can feel opaque; case evidence (N18) has to make up for it |
+| D15 | Abuse detectors are pluggable rules: worker rules in the detection service (AB1, D23), vendor rules as background jobs (AB2) and reward-hack rules over the episode stream (TO3). Shared rules are the only ones that feed scorecards; vendor-private rules (AB9) run inside one workspace. Rule definitions are never exposed through vendor-facing APIs | New signals ship without a redeploy (A27); every vendor is measured by the same rules (N16, PRD PD5); published rules could be gamed (N17) | Vendors see the outcome of a rule, not its logic, which can feel opaque; case evidence (N18) has to make up for it |
 | D16 | Data is protected automatically; people are acted on by people. An open case triggers reversible holds (AB8); suspensions, removals and vendor actions need a recorded decision | Damage from abuse is contained within minutes without punishing anyone on a false positive (N18, PRD PD4) | Held data delays exports; a burst of false flags can stall a project until cases are reviewed |
 | D17 | Regular tasks are routed to one vendor in proportion to its allocation share, interleaved through the claim order (smooth weighted round-robin); gold tasks are routed to every allocated vendor. Changing an allocation re-routes only tasks nobody has started | Every vendor is measured on the same gold tasks, so gold accuracy is comparable (N16, VP2); interleaving keeps gold evenly mixed into each vendor's stream, where contiguous blocks would end a vendor's stream in a run of gold (D8); work already started stays with the vendor that started it | Gold tasks are answered once per vendor, which costs more than answering them once; agreement on regular tasks is measured within a vendor |
 | D18 | Acceptance (metric quality-v1): an answer on a regular task is accepted unless a reviewer rejected it or its worker's gold accuracy is below the project's quality bar, once the worker has enough gold results to judge | Ties accepted volume, and so cost per accepted unit (PRD PD3), to measured quality rather than to volume alone | A worker's later gold results can change whether their earlier answers count; the metric version (N19) makes that explainable |
@@ -328,6 +374,12 @@ Each step lists the components involved, what each one is for, and what breaks w
 | D20 | After a case is decided, the abuse rules judge only the worker's answers submitted after the decision | A cleared or reinstated worker isn't re-flagged on evidence a person has already weighed (N18) | Abuse that continues right after a decision needs a fresh window of answers (10) before it's flagged again |
 | D21 | Clean-up removes every answer the worker gave, not only the flagged ones; re-label also reopens those tasks for other workers at the same vendor | Nobody can tell exactly when abuse began, and answers given before detection may already be in exported datasets; lineage says which (AB6) | Honest early work by the same worker is lost, and re-labeling costs another answer per task |
 | D22 | Removed answers still count as delivered in the vendor's scorecard history, but are never accepted or exported | The vendor's record stays truthful: the dip happened. Only the data used for training changes | Delivered volume includes answers that were later thrown away; acceptance shows the difference |
+| D23 | Worker-abuse detection is a separate service behind a fixed contract: submission events in, findings out through the API (D7). The platform owns everything a finding leads to: escalation, cases, holds, decisions and clean-up | Detection is specialist work that changes often and may belong to another team (A31). The contract lets it change without touching the platform, and enforcement keeps one audited path (D13) | The event and finding schemas become a contract with another team. A signal the event doesn't carry can't be used until the contract changes, so events carry raw signals rather than derived ones |
+| D24 | Every submission publishes an event, written to an outbox table in the submission's transaction and relayed to the detection queue. The service runs cheap checks on every event and costly ones (text similarity, model-based checks) on a sample weighted toward risk: new workers, workers with findings, vendors whose scorecards are falling | No submission skips detection because of a crash between commit and publish (N5). About 50 events/s at peak is cheap to send in full, so sampling is the service's cost decision, not the platform's. A random, weighted sample can't be predicted and dodged, just as gold can't (D8) | An outbox and relay to run. Costly checks miss some abuse by low-risk workers; the audit sample (D28) measures how much |
+| D25 | A dataset includes only submissions up to the point the detection service reports it has processed, and none that are held | Data reaches training only after it has been checked (AB17). The lag is minutes against exports that run hourly or less often (N20, A33) | When detection is down, exports stall. That's the safe failure, and platform monitoring alerts on it (N15) |
+| D26 | Automatic responses are ones the subject can't perceive (PD6, AB14): extra gold drawn from gold the worker hasn't seen, extra overlap, spot-check routing, holds. The API never rejects a submission because abuse is suspected, and case evidence shown to vendors describes what was observed, never thresholds or which tasks were gold | A response the subject can see tells them what was detected and when, which teaches evasion (N17), and harms an honest worker on a false positive (N18). Measuring more turns a suspicion into evidence quickly | Extra gold and overlap cost money. Extra gold counts toward the worker's quality but not the vendor's comparison, which keeps vendors comparable (D17). Abuse continues, into held data, until a person decides |
+| D27 | New rule and detector versions start in shadow mode: their findings are recorded but don't escalate or open cases, until their precision on reviewed work meets data ops' bar | A bad rule can't flood vendors with false cases or hold a project's data (the trade-off in D16). Old and new versions run side by side (N19) | A new signal takes days to go live |
+| D28 | A random share of unflagged submissions joins the spot-check queue (DC4), where reviewers can't tell it from other spot checks. Audit outcomes and case decisions go back to the detection service as labels | Reviewing only flagged work measures false alarms but never misses. Labels are how detection improves (A27) | Review time spent on mostly honest work. The sample rate sets how quickly a miss rate can be estimated |
 
 ### Core entities
 
@@ -344,13 +396,17 @@ Each step lists the components involved, what each one is for, and what breaks w
 | Contract | id, vendor, kind of work (human work or environments), price, price unit (hour, task or environment), effective from, effective to | Raw cost inputs (VM7, PRD PD3) |
 | Allocation | id, project, vendor, contract, share, status | VP1 |
 | TaskRoute | task, vendor | Which vendors may work on a task (D17) |
-| Task / Assignment / Submission | task payload; assignment to a worker; the answer, with worker ID, vendor, review, acceptance, time on task and hold status | One open assignment per worker and task (N7); lineage (D14) |
+| Task / Assignment / Submission | task payload; assignment to a worker; the answer, with worker ID, vendor, review, acceptance, time on task, client and API signals, and hold status | One open assignment per worker and task (N7); lineage (D14); signals (AB11, AB12) |
+| SubmissionEvent | id, submission, signals, created_at, relayed_at | Outbox for the detection service (D24) |
+| DetectionProgress | detector version, processed up to (event id), reported_at | The export gate reads it (D25) |
+| Escalation | worker, project, extra gold rate, extra overlap, spot-check share, finding, expires_at | AB14, D26 |
+| AuditSample | submission, review, outcome (abuse, low quality, fine) | AB15, D28 |
 | GoldAnswer | task, answer | Separate table (D8) |
 | GoldRetirement | task, retired by, reason, when | Rotation (PRD PD2): retired gold tasks are no longer handed out; past answers on them still count |
 | Dataset / DatasetRow | dataset: project, uri, metric version, row count, the dataset it supersedes; row: dataset, submission | An exported snapshot (DC6); each row points to its source submission (D14) |
 | Cleanup / Removal | clean-up: case, worker, mode (discard or re-label), counts; removal: submission, clean-up, whether its task reopens | Submissions stay immutable; removal is recorded beside them (AB6, D21) |
 | TrainingRun / Episode | run; episode_id, version, vendor, reward, passed, length, transcript_uri | Episodes live in the analytics store, not Postgres (D5) |
-| Flag | id, subject (worker, vendor or version), rule (shared or vendor-private) and rule version, or person; evidence | AB1 AB2 TO3 |
+| Flag | id, subject (worker, vendor or version), source (detection service, vendor rule, reward-hack detector or person), rule or detector version, severity, mode (live or shadow), evidence | AB1 AB2 AB13 AB16 TO3 |
 | Case | id, subject, owner, flags, holds, vendor response, status, decision, decided_by | D13, N18 |
 | Action | id, case, type (warn, retrain, suspend, remove, lower allocation, pause, offboard, discard, re-label, quarantine) | AB4–AB6 |
 | Scorecard row | vendor, work (a project, or the vendor's environment work), worker or environment builder (optional), period, metric version, quality, volume, cost per accepted unit, turnaround | Analytics store (D11) |
@@ -375,6 +431,8 @@ Each step lists the components involved, what each one is for, and what breaks w
 | `GET /vendors/{id}/scorecard`, `GET /workers/{id}/quality` | Data ops; vendor admin (own vendor only) | VP3 VP4 |
 | `GET /cases`, `POST /cases/{id}/responses`, `POST /cases/{id}/decision`, `POST /cases/{id}/actions` | Vendor admin, data ops | AB3–AB5 AB7 AB8 |
 | `GET /lineage`, `POST /cleanups` | Data ops | AB6 |
+| `POST /detection/findings` (batch, with how far it has processed), `GET /detection/labels` | Detection service | AB13 AB15 D25 |
+| `PUT /detectors/{version}/mode` (shadow or live) | Data ops | AB16 |
 | `POST /ingest/episodes` (batch) | Training | TO1 N5 |
 | `GET /runs/{id}/stats`, `GET /runs/{id}/live` (SSE), `GET /episodes/{id}` | Researcher | TO2 TO4 TO5 |
 

@@ -21,6 +21,8 @@ Every product and design decision made so far, sorted by how hard it would be to
 | VM4 / N12 | The audit log is append-only | Events that were never recorded, or were overwritten, can't be recovered | Write audit events from the first state change |
 | PD2 | Gold-task accuracy is shown to vendors only as a daily aggregate | Tightening this later is easy. **Loosening** it is one-way: once per-task gold results are shown, those gold tasks are known and have to be retired | Rotate gold tasks (DC4), so any exposed set is replaced over time |
 | D8, D15 | Gold answers and detector rules are never exposed to vendors or workers | Same as PD2: a leaked gold set or a published rule can't be made secret again | Rotate gold tasks; keep rules pluggable (A27) so a known rule can be replaced |
+| D26 / PD6 | Automatic responses to a finding can't be perceived by its subject | Same as PD2: once workers have seen how and when the platform reacts, they know what triggers it, and that can't be taken back | Keep evidence shown to vendors to what was observed (N18), never thresholds |
+| AB11, AB12 | Client and API signals are recorded with every submission | A signal not captured at submission can't be reconstructed, so a new detector can't be tried in shadow mode (D27) against past work | Record raw signals, including ones no rule uses yet |
 | PD3 | Cost is compared per accepted unit, using platform-measured time on task | The comparison itself is two-way (it's a calculation). What's one-way is **recording the inputs**: each contract's price and unit (VM7), and each submission's time on task (DC9). Data not captured can't be recomputed under a different definition | Store raw inputs, never only the computed cost |
 
 ## Hardens
@@ -34,6 +36,7 @@ Every product and design decision made so far, sorted by how hard it would be to
 | D18 | What counts as an accepted answer (metric quality-v1) | Vendors are first shown acceptance numbers (M5 scorecards) | Record the metric version with every score (N19), so a new definition can run alongside the old one |
 | D5, D6 | Training results go straight to an intake that deduplicates by episode id | Training infrastructure integrates. The endpoint and the stable episode id become a contract with another team | Version the ingest API; keep the producer contract small (episode id, version, reward, transcript reference) |
 | D10 | Training pulls approved environments from a catalog API and datasets via signed URLs | Training integrates, as above | Version the catalog API |
+| D23 | Worker-abuse detection is a separate service behind a contract (events in, findings out) | The detection service integrates. The event and finding schemas become a contract with another team | Version both schemas; put raw signals in events, not derived ones |
 | D9 | Task types and environment configs are JSON schemas stored as data | Many projects exist. Every stored task follows the schema it was created under | Store the schema version with each task and config |
 
 ## Two-way
@@ -53,6 +56,10 @@ Every product and design decision made so far, sorted by how hard it would be to
 | D20 | Abuse rules look only at answers after the last decision on a worker | Changing the window rule |
 | D21 | Clean-up removes all of a worker's answers | Adding a narrower scope (for example, since the first flagged answer) |
 | D22 | Removed answers stay in scorecard history as delivered, never accepted | Changing the measure, with a new metric version (N19) |
+| D24 | Every submission publishes an event through an outbox; the detection service samples its costly checks by risk | Changing what's sampled, inside the service |
+| D25 | Exports include only submissions detection has processed and that aren't held | Dropping or loosening the gate, at the cost of exporting unchecked data |
+| D27 | New rules start in shadow mode | Changing the bar for going live |
+| D28 | A random share of unflagged work is reviewed, and outcomes return to detection as labels | Changing the sample rate |
 | | Three planes (control, execution, ingestion); Postgres, an analytics store and object storage | Replacing a store means a data migration, which is costly but loses nothing |
 | | Web app in React and TypeScript | A rewrite of the front end; the API (VM5) is unaffected |
 | B1 | The first build covers multi-vendor human data (flows 2, 4, 5), not the environment pipeline ([`BUILD.md`](BUILD.md)) | The environment slice can follow; nothing in slice A blocks it |
@@ -70,3 +77,4 @@ Whatever the build's scope, it should include these from the start, even in a mi
 5. Raw cost inputs: contract price and unit, time on task (PD3, DC9)
 6. Opaque, vendor-scoped worker IDs (D12)
 7. Metric and rule versions recorded with every score and flag (D11, PD5)
+8. Client and API signals recorded with every submission (AB11, AB12)
