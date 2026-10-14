@@ -10,6 +10,7 @@ import json
 import pytest
 from sqlalchemy import text
 
+from app import escalation
 from app.grades import LATER_GOLD, PROVEN, quality_grade, wilson
 from tests.builders import allocate, make_project, report
 from tests.people import DATA_OPS, NORTHWIND_ADMIN, NORTHWIND_WORKER, RESEARCHER
@@ -85,8 +86,10 @@ async def test_a_watch_finding_raises_the_bar_until_later_gold_clears_it(client,
     assert g["integrity"] == "watch" and g["later_gold_needed"] == LATER_GOLD["watch"] and g["watch_progress"] == [0, 0]
     assert (await client.get("/cases", headers=await login(NORTHWIND_ADMIN))).json() == []  # nobody at the vendor knows
     await answer_until_gold(client, session, worker, project_id, generated, 9)
+    await escalation.review(session)
     assert (await grade_of(client, login, project_id))["integrity"] == "watch"  # nine aren't enough
     await answer_until_gold(client, session, worker, project_id, generated, 1)
+    await escalation.review(session)
     g = await grade_of(client, login, project_id)
     assert g["integrity"] == "trusted" and g["watch_progress"] is None  # ten good gold answers cleared it
 

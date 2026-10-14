@@ -58,6 +58,18 @@ class GradesOut(BaseModel):
     workers: list[GradeRow]
 
 
+class EscalationRow(BaseModel):
+    id: uuid.UUID
+    handle: str
+    vendor_name: str
+    rule: str
+    started_at: datetime
+    ended_at: datetime | None
+    outcome: str | None
+    gold_since: int
+    gold_right_since: int
+
+
 class ReviewItem(BaseModel):
     submission_id: uuid.UUID
     vendor_name: str
@@ -127,6 +139,37 @@ async def project_grades(
     ]
     return GradesOut(version=grades.GRADES_VERSION, quality_bar=float(project.quality_bar),
                      workers=sorted(rows, key=lambda r: (r.vendor_name, r.handle)))
+
+
+@router.get("/projects/{project_id}/escalations")
+async def project_escalations(
+    project_id: uuid.UUID,
+    user: User = Depends(require_roles(Role.RESEARCHER, Role.DATA_OPS)),
+    session: AsyncSession = Depends(get_session),
+) -> list[EscalationRow]:
+    """Workers measured more closely after a watch finding, and how each escalation ended (AB14).
+    Anthropic only: the worker and their vendor never learn of it."""
+    project = await get_visible_project(project_id, user, session)
+    rows = await session.execute(
+        text(
+            """
+            SELECT x.id, u.handle, o.name AS vendor_name, f.rule, x.started_at, x.ended_at, x.outcome,
+                   count(g.task_id) AS gold_since, count(g.task_id) FILTER (WHERE s.answer @> g.answer) AS gold_right_since
+            FROM escalations x
+            JOIN users u ON u.id = x.worker_id
+            JOIN orgs o ON o.id = u.org_id
+            JOIN findings f ON f.id = x.finding_id
+            LEFT JOIN submission_events e ON e.worker_id = x.worker_id AND e.project_id = x.project_id AND e.id > x.after_event
+            LEFT JOIN submissions s ON s.id = e.submission_id AND (x.ended_at IS NULL OR s.submitted_at <= x.ended_at)
+            LEFT JOIN gold_answers g ON g.task_id = s.task_id
+            WHERE x.project_id = :p
+            GROUP BY x.id, u.handle, o.name, f.rule
+            ORDER BY x.started_at
+            """
+        ),
+        {"p": project.id},
+    )
+    return [EscalationRow(**r._mapping) for r in rows]
 
 
 @router.get("/projects/{project_id}/review-queue")

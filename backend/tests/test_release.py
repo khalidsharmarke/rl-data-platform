@@ -23,12 +23,15 @@ async def answer_n(client, session, headers, project_id, generated, n, *, correc
     gold = {str(t) for t in (await session.execute(text("SELECT task_id FROM gold_answers"))).scalars()}
     done = []
     for _ in range(n):
-        a = (await client.post("/assignments/next", headers=headers, json={"project_id": project_id})).json()
+        r = await client.post("/assignments/next", headers=headers, json={"project_id": project_id})
+        assert r.status_code == 200, (r.status_code, r.text)
+        a = r.json()
         is_gold = a["task"]["id"] in gold
         right = gold_correct(done) if is_gold and gold_correct else correct
         better = truth[a["task"]["payload"]["item"]]
         choice = better if right else ("B" if better == "A" else "A")
         s = await client.post(f"/assignments/{a['id']}/submit", headers=headers, json={"answer": {"choice": choice}})
+        assert s.status_code == 201, s.text
         done.append((s.json()["id"], is_gold))
     return done
 

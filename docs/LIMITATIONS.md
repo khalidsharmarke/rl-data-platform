@@ -2,15 +2,15 @@
 
 | | |
 |---|---|
-| Version | 0.1.0 (MVP) plus the integrity milestones built since: M9–M11 (see [`BUILD.md`](BUILD.md#integrity-milestones)) |
-| Covers | Slice A from [`BUILD.md`](BUILD.md): multi-vendor human data, with allocation, gold QA, scorecards, worker-abuse cases and lineage clean-up; a separate detection service; the release stage; contributor grades |
+| Version | 0.1.0 (MVP) plus the integrity milestones built since: M9–M12 (see [`BUILD.md`](BUILD.md#integrity-milestones)) |
+| Covers | Slice A from [`BUILD.md`](BUILD.md): multi-vendor human data, with allocation, gold QA, scorecards, worker-abuse cases and lineage clean-up; a separate detection service; the release stage; contributor grades; discreet escalation |
 | Related | [`POSTING.md`](POSTING.md) · [`PRD.md`](PRD.md) · [`DESIGN.md`](DESIGN.md) · [`DECISIONS.md`](DECISIONS.md) |
 
 What the build does not do, where it falls short, and what is still undecided. The design describes the full platform; this page describes the gap between the design and the build.
 
 ## 1. Coverage of the posting
 
-The posting names three areas: *"environment creation, data collection, and training observability."* The build covers the core of data collection, plus the vendor management, workspaces and audit trail it needs. It covers 25 of the design's 53 functional requirements.
+The posting names three areas: *"environment creation, data collection, and training observability."* The build covers the core of data collection, plus the vendor management, workspaces and audit trail it needs. It covers 26 of the design's 53 functional requirements.
 
 | Posting line | Coverage in the build |
 |---|---|
@@ -35,7 +35,8 @@ The posting names three areas: *"environment creation, data collection, and trai
 | The duplicate rule compares reason text | Paraphrased reasons pass it, and an LLM paraphrases for free | Similarity on meaning rather than wording, and patterns across workers |
 | One bad worker hardly moves a vendor's numbers | At 5% gold and a 25% share, one worker in ten pasting moved Brightline from about 80% to about 71% gold accuracy. The vendor drop alert (D19: two-proportion test, at least 60 gold per side, at least 8 points) fires on some runs of the demo and not on others. The worker rules catch the worker on every run | More gold, longer windows, or vendor-level rules built on behavior signals as well as gold (AB2). Each costs money or time |
 | Gold stays secret only if nothing reveals it indirectly | Gold can be recognized from how it's spread across questions, where it sits in a vendor's stream, or counts in events vendors can read. D8 forbids all three and tests cover them, but each new feature that touches routing, counts or timing can open another way | Tests for every vendor-visible endpoint and event, reviewed whenever routing changes |
-| Watch findings lead to nothing yet | A single signal is recorded as a watch finding (D32) but doesn't change how closely the worker is measured; only agreeing signals open a case | Discreet escalation: extra gold before a case (AB14, D26), milestone M12 |
+| Escalation only reorders gold | A watched worker meets their vendor's gold sooner, but gets no extra overlap or spot checks (AB14), and the gold they use up is gold their colleagues would otherwise have answered | Add gold for the watched worker instead of reordering it, kept out of the vendor's comparison (D26) |
+| A cleared worker isn't watched again for the same signal | The detection service reports each rule once per worker until a person decides a case; a cleared escalation isn't a decision, so the same signal later in the project raises nothing new | Send escalation outcomes to the detection service as labels, like case decisions |
 | No audit sample or shadow mode | The platform can count false alarms but not what its rules miss (AB15), and a new rule version goes live at once (AB16) | D27, D28 |
 | Trust is earned from gold only | A worker on a project with little gold, or a rare expert with none, stays unproven and their answers wait for the cap, then go out as provisional (D30, A35) | Other evidence routes into the grade: reviewer spot checks, agreement among experts |
 | Grades are per project | A worker trusted on one project starts unproven on the next | Carry evidence across projects, weighted by how similar the work is |
@@ -97,7 +98,7 @@ The design's scale estimate is about 1.2 million submissions a day ([`DESIGN.md`
 
 In order, from [`BUILD.md`](BUILD.md#stretch-in-order) and the gaps above:
 
-1. The integrity milestones M9–M12 in [`BUILD.md`](BUILD.md#integrity-milestones): detection behind its contract (AB13), the release stage (DC10), contributor grades (DC11) and discreet escalation (AB14). The audit sample and shadow mode (AB15, AB16) follow.
+1. The audit sample and shadow mode (AB15, AB16), which measure what detection misses and keep a new rule from acting before it's proven. Escalation outcomes sent back to detection as labels.
 2. A thin environment slice: immutable environment versions, reference and no-op checks in a locked-down container (EC1–EC3, D3). It covers the most posting lines the build doesn't.
 3. Broken-task flags and disagreement alerts (DC5).
 4. Vendor-level abuse rules and vendor actions (AB2, AB5).

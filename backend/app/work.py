@@ -20,7 +20,7 @@ from decimal import Decimal
 from sqlalchemy import delete, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app import clock
+from app import clock, escalation
 from app.models import Allocation, Assignment, GoldAnswer, Project, Task, TaskRoute
 
 LEASE = timedelta(minutes=20)
@@ -110,6 +110,7 @@ CLAIM = text(
       AND a.status = 'active'
       AND (CAST(:project_id AS uuid) IS NULL OR p.id = CAST(:project_id AS uuid))
       AND r.task_id <> ALL(CAST(:skip AS uuid[]))
+      AND (NOT :gold_only OR EXISTS (SELECT 1 FROM gold_answers g WHERE g.task_id = r.task_id))
       AND NOT EXISTS (SELECT 1 FROM gold_retirements g WHERE g.task_id = r.task_id)
       AND NOT EXISTS (SELECT 1 FROM assignments x WHERE x.task_id = r.task_id AND x.worker_id = :worker_id)
       AND (
@@ -139,10 +140,17 @@ async def claim_next(
     session: AsyncSession, *, worker_id: uuid.UUID, vendor_id: uuid.UUID, project_id: uuid.UUID | None
 ) -> Assignment | None:
     await expire_stale(session)
+    # A worker under escalation gets gold first part of the time (AB14, D26). Only the order
+    # changes: the tasks are the same gold any worker at the vendor would get.
+    gold_first = await escalation.is_escalated(session, worker_id, project_id) and escalation.prefer_gold()
     skip: list[uuid.UUID] = []
     for _ in range(MAX_ATTEMPTS):
-        params = {"vendor_id": vendor_id, "worker_id": worker_id, "project_id": project_id, "skip": skip, "now": clock.now()}
+        params = {"vendor_id": vendor_id, "worker_id": worker_id, "project_id": project_id, "skip": skip, "now": clock.now(),
+                  "gold_only": gold_first}
         row = (await session.execute(CLAIM, params)).first()
+        if row is None and gold_first:
+            gold_first = False  # no unseen gold left: carry on as usual
+            continue
         if row is None:
             return None
         project = await session.get(Project, (await session.get(Task, row.task_id)).project_id)

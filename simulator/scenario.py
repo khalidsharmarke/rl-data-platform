@@ -44,10 +44,13 @@ PROFILES = {
     "sloppy": dict(accuracy=0.62, seconds=(7, 15), reason=0.0, paste=False),
     # Pastes an answer without reading the task, so it is right about half the time.
     "ai_paster": dict(accuracy=0.5, seconds=(2, 4), reason=1.0, paste=True),
+    # Careful, but pastes each reason from their own notes: one signal on its own, so the
+    # platform watches them more closely (more gold) and later gold clears them (AB14).
+    "note_paster": dict(accuracy=0.95, seconds=(30, 70), reason=1.0, paste=True, notes=True),
 }
 
 ROSTERS = {
-    "Northwind Data": ["careful"] * 7 + ["average"] * 3,
+    "Northwind Data": ["careful"] * 6 + ["note_paster"] + ["average"] * 3,
     "Kestrel Labs": ["careful"] * 3 + ["average"] * 6 + ["sloppy"],
     "Brightline Annotation": ["careful"] * 2 + ["average"] * 5 + ["sloppy"] * 2 + ["switcher"],
 }
@@ -163,7 +166,8 @@ async def run_worker(c, project_id, truth, vendor, name, profile, progress: Prog
         choice = better if rng.random() < p["accuracy"] else ("B" if better == "A" else "A")
         answer = {"choice": choice}
         if rng.random() < p["reason"]:
-            answer["rationale"] = PASTED_REASON.format(choice=choice) if p["paste"] else rng.choice(TYPED_REASONS)
+            generic = p["paste"] and not p.get("notes")
+            answer["rationale"] = PASTED_REASON.format(choice=choice) if generic else rng.choice(TYPED_REASONS)
         s = await c.post(f"/assignments/{a['id']}/submit", headers=headers,
                          json={"answer": answer, "client_signals": {"pasted": p["paste"]}})
         if s.status_code == 403:
@@ -236,6 +240,9 @@ async def report(c, project_id) -> None:
     ops = await as_person(c, next(u["display_name"] for u in users if u["role"] == "data_ops"))
     q = (await c.get(f"/projects/{project_id}/quality", headers=ops)).json()
     pct = lambda x: "  —" if x is None else f"{x * 100:4.0f}%"  # noqa: E731
+    for x in (await c.get(f"/projects/{project_id}/escalations", headers=ops)).json():
+        print(f"  Escalation on {x['handle']} ({x['vendor_name']}) after a {x['rule']} signal: "
+              f"{x['outcome'] or 'still open'}, {x['gold_right_since']} of {x['gold_since']} later gold answers right", flush=True)
     print(f"\n{'Vendor':24} {'answers':>8} {'gold acc':>9} {'agreement':>10} {'accepted':>9}")
     for v in q["vendors"]:
         print(f"{v['label']:24} {v['submissions']:>8} {pct(v['gold_accuracy']):>9} {pct(v['agreement']):>10} {v['accepted']:>9}")

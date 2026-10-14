@@ -4,7 +4,8 @@ Only the detection service can call these routes: it signs in with its own token
 person. Events go out in commit order (app/events.py), findings come back with a severity
 and the point in the stream the detector has processed. The platform decides what a finding
 leads to: a case-severity finding opens or joins the worker's case and holds their answers;
-a watch finding is recorded, and nobody outside Anthropic sees it.
+a watch finding opens a discreet escalation (app/escalation.py), and nobody outside Anthropic
+sees it.
 """
 
 import json
@@ -18,7 +19,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app import clock
+from app import clock, escalation
 from app.abuse import Observation, open_or_join_case
 from app.config import settings
 from app.db import get_session
@@ -106,17 +107,22 @@ async def findings(body: FindingsIn, session: AsyncSession = Depends(get_session
                 findings=[Observation(f.rule, f.rule_version, f.observation, f.evidence) for f in cases],
             )
             opened += new
+            await escalation.end_for_case(session, worker_id, case_id)
         for f in group:
-            await session.execute(
+            finding_id = await session.scalar(
                 text(
                     "INSERT INTO findings (detector, rule, rule_version, severity, worker_id, vendor_id, project_id, observation, "
                     "evidence, through_event, case_id, created_at) VALUES (:d, :r, :rv, :sev, :w, :v, :p, :o, CAST(:e AS jsonb), "
-                    ":t, :c, :now) ON CONFLICT ON CONSTRAINT findings_once DO NOTHING"
+                    ":t, :c, :now) ON CONFLICT ON CONSTRAINT findings_once DO NOTHING RETURNING id"
                 ),
                 {"d": body.detector, "r": f.rule, "rv": f.rule_version, "sev": f.severity, "w": worker_id, "v": vendor_id,
                  "p": project_id, "o": f.observation, "e": json.dumps(f.evidence), "t": f.through_event,
                  "c": case_id if f.severity == "case" else None, "now": now},
             )
+            held = await session.scalar(text("SELECT 1 FROM holds WHERE worker_id = :w AND released_at IS NULL"), {"w": worker_id})
+            if f.severity == "watch" and finding_id and not held:
+                await escalation.start(session, finding_id=finding_id, worker_id=worker_id, project_id=project_id,
+                                       after_event=f.through_event)
     # Progress only moves forward, even if an older batch arrives late.
     await session.execute(
         text(

@@ -4,7 +4,7 @@ A working slice of a platform for sourcing AI training data through many vendors
 
 Built in response to Anthropic's [Full-Stack Software Engineer, Reinforcement Learning](docs/POSTING.md) posting. Version 0.1.0 is an MVP: it builds the data-collection core of the design, not environments or training observability. [Limitations](docs/LIMITATIONS.md) says what it doesn't do and where it falls short.
 
-**[Watch the 80-second walkthrough](docs/media/walkthrough.mp4)** · [Product requirements](docs/PRD.md) · [Design](docs/DESIGN.md) · [Decisions](docs/DECISIONS.md) · [Build plan](docs/BUILD.md) · [Limitations](docs/LIMITATIONS.md)
+**[Watch the 80-second walkthrough](docs/media/walkthrough.mp4)** (recorded at 0.1.0, before the release stage, grades and escalation) · [Product requirements](docs/PRD.md) · [Design](docs/DESIGN.md) · [Decisions](docs/DECISIONS.md) · [Build plan](docs/BUILD.md) · [Limitations](docs/LIMITATIONS.md)
 
 ![Scorecards: three vendors compared on identical measures, with Brightline's dip](docs/media/scorecards.png)
 
@@ -16,14 +16,17 @@ Three fictional vendors work on one project, *"Which of these two answers is mor
 2. **Every vendor is measured the same way.** The platform computes gold accuracy, agreement, acceptance, cost per accepted answer and turnaround. No vendor reports its own numbers. Brightline is the cheapest per task and the most expensive per accepted answer.
 3. **Halfway through its work, one Brightline worker starts pasting the same generic reason on every task**, faster than anyone could read it. Brightline's gold accuracy and acceptance drop.
 4. **The platform notices and opens a case.** A separate detection service reads every submission and reports three signals that agree: speed, pasting and duplicates. The worker's answers are held out of training automatically. Nothing is done *to the worker* yet.
-5. **Brightline's admin decides.** She sees what was observed, with examples, but never the rules' thresholds or which tasks were tests. She suspends the worker, with a reason on record.
-6. **Data ops cleans up.** Lineage shows every answer the worker gave, and that none of them reached a dataset: the release stage held them back, because the test questions she answered after them were failing. One click removes them and reopens those tasks for other workers.
-7. **Every export contains only released answers**: checked by detection, past a minimum gap, and backed by good test answers from the same worker afterwards. How many depends on the worker's grade: a trusted worker needs one, a new one three. Grades rate quality and integrity separately, so an honest but sloppy worker is trusted with low quality, not treated as abusive. Each row is tagged verified or provisional and points back to its source.
-8. **The audit log holds the whole chain** and can't be edited, even by direct SQL.
+5. **One signal on its own isn't a case.** A careful Northwind worker pastes reasons from their own notes. Pasting alone only puts them on watch, so the platform quietly gives them more test questions. Their good answers clear them, and their vendor never sees a case.
+6. **Brightline's admin decides.** She sees what was observed, with examples, but never the rules' thresholds or which tasks were tests. She suspends the worker, with a reason on record.
+7. **Data ops cleans up.** Lineage shows every answer the worker gave. None of her pasted answers reached a dataset: the release stage held them back, because the test questions she answered after them were failing. A few honest answers from before she switched may have gone out; nobody can say exactly when abuse begins, so one click removes all her answers and reopens those tasks for other workers.
+8. **Every export contains only released answers**: checked by detection, past a minimum gap, and backed by good test answers from the same worker afterwards. How many depends on the worker's grade: a trusted worker needs one, a new one three. Grades rate quality and integrity separately, so an honest but sloppy worker is trusted with low quality, not treated as abusive. Each row is tagged verified or provisional and points back to its source.
+9. **The audit log holds the whole chain** and can't be edited, even by direct SQL.
 
 | Brightline's admin: the case | Data ops: lineage and clean-up |
 |---|---|
 | ![Case as the vendor admin sees it](docs/media/case-vendor.png) | ![Case as data ops sees it, with lineage](docs/media/case-data-ops.png) |
+
+![Worker grades and a cleared escalation, as Anthropic sees them](docs/media/grades.png)
 
 ## Run it
 
@@ -32,7 +35,7 @@ Needs Docker with Compose.
 ```sh
 make demo    # fresh database, then the scripted scenario above (about 3 minutes)
 make up      # start Postgres, the API, the background worker and the web app on real time
-make test    # 101 backend tests (against a separate test database) and 9 detection-service tests
+make test    # 108 backend tests (against a separate test database) and 9 detection-service tests
 make down    # stop (make reset also deletes the database)
 ```
 
@@ -52,7 +55,7 @@ Open http://localhost:5173 and pick a demo user. The login page suggests a path 
 | An outbox table the detection service reads through a cursor feed | A message broker between the platform and the detection service ([D24](docs/DESIGN.md)) |
 | A demo clock running 180× real time, `make demo` only | Waiting five hours for the story |
 
-Out of scope for this slice: the environment pipeline and training observability, vendor-level abuse rules, vendor reviewers, and the rest of the design's [integrity layers](docs/DESIGN.md#integrity-layers): discreet escalation, audit sampling, shadow mode and the export gate. [BUILD.md](docs/BUILD.md#2-scope) lists everything left out and why, and [LIMITATIONS.md](docs/LIMITATIONS.md) covers where the built part falls short.
+Out of scope for this slice: the environment pipeline and training observability, vendor-level abuse rules, vendor reviewers, and the rest of the design's [integrity layers](docs/DESIGN.md#integrity-layers): audit sampling, shadow mode, and extra overlap and spot checks during escalation. [BUILD.md](docs/BUILD.md#2-scope) lists everything left out and why, and [LIMITATIONS.md](docs/LIMITATIONS.md) covers where the built part falls short.
 
 **On detecting AI-written answers.** The platform doesn't try to tell AI text from human text; that's unreliable. It flags the *behavior* around a submission: answering faster than the task can be read, pasting rather than typing, and giving the same reason to different questions. Honest but sloppy work isn't flagged: it shows up as low quality on the scorecard instead.
 
@@ -72,7 +75,7 @@ Each of these was found by testing or by looking at the demo's output, fixed, an
 ## Where things are
 
 ```
-backend/     FastAPI app, migrations, background worker (app/jobs.py), the detection contract (app/routes/detection.py), the release stage (app/release.py), contributor grades (app/grades.py), 101 tests
+backend/     FastAPI app, migrations, background worker (app/jobs.py), the detection contract (app/routes/detection.py), the release stage (app/release.py), contributor grades (app/grades.py), discreet escalation (app/escalation.py), 108 tests
 detection/   the separate detection service: abuse rules and severity (rules.py), its state (detector.py), 9 tests
 frontend/    React + TypeScript: one app, a view per role
 simulator/   the scripted scenario, driving the public API

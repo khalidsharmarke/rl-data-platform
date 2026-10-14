@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api, pct, savedToken, type Allocation, type Contract, type Dataset, type Grades, type Project, type Quality, type Release, type User } from "./api";
+import { api, pct, savedToken, type Allocation, type Contract, type Dataset, type Escalation, type Grades, type Project, type Quality, type Release, type User } from "./api";
 
 const UNIT: Record<string, string> = { task: "per task", hour: "per hour", environment: "per environment" };
 
@@ -20,6 +20,7 @@ export default function Projects({ me }: { me: User }) {
   const [datasets, setDatasets] = useState<Record<string, Dataset[]>>({});
   const [releases, setReleases] = useState<Record<string, Release>>({});
   const [grades, setGrades] = useState<Record<string, Grades>>({});
+  const [escalations, setEscalations] = useState<Record<string, Escalation[]>>({});
   const internal = me.org_kind === "internal";
 
   useEffect(() => {
@@ -38,6 +39,8 @@ export default function Projects({ me }: { me: User }) {
         setReleases((r) => ({ ...r, [p.id]: release }));
         const graded = await api<Grades>(`/projects/${p.id}/grades`);
         setGrades((g) => ({ ...g, [p.id]: graded }));
+        const escalated = await api<Escalation[]>(`/projects/${p.id}/escalations`);
+        setEscalations((x) => ({ ...x, [p.id]: escalated }));
         if (me.role === "data_ops") {
           for (const a of byProject[p.id]) {
             for (const c of await api<Contract[]>(`/orgs/${a.vendor_id}/contracts`)) byContract[c.id] = c;
@@ -96,7 +99,7 @@ export default function Projects({ me }: { me: User }) {
               </tbody>
             </table>
           )}
-          {internal && (grades[p.id]?.workers.length ?? 0) > 0 && <GradesTable g={grades[p.id]} />}
+          {internal && (grades[p.id]?.workers.length ?? 0) > 0 && <GradesTable g={grades[p.id]} escalations={escalations[p.id] ?? []} />}
           {internal && (
             <div className="datasets">
               <h4>Datasets</h4>
@@ -151,7 +154,13 @@ const INTEGRITY: Record<string, string> = {
   suspended: "Suspended",
 };
 
-function GradesTable({ g }: { g: Grades }) {
+const OUTCOME: Record<string, string> = {
+  cleared: "cleared by later gold",
+  confirmed: "confirmed: case opened",
+  case: "ended by a case",
+};
+
+function GradesTable({ g, escalations }: { g: Grades; escalations: Escalation[] }) {
   const counts = g.workers.reduce<Record<string, number>>((c, w) => ({ ...c, [w.integrity]: (c[w.integrity] ?? 0) + 1 }), {});
   return (
     <details className="grades">
@@ -195,6 +204,23 @@ function GradesTable({ g }: { g: Grades }) {
           ))}
         </tbody>
       </table>
+      {escalations.length > 0 && (
+        <>
+          <h4>Escalations</h4>
+          <p className="muted">
+            After a single signal, the platform gives the worker more gold tasks, unannounced, until ten later gold answers
+            clear them or confirm a case.
+          </p>
+          <ul>
+            {escalations.map((x) => (
+              <li key={x.id}>
+                {x.handle} ({x.vendor_name}) after a {x.rule} signal, {new Date(x.started_at).toLocaleString()}:{" "}
+                {x.outcome ? OUTCOME[x.outcome] : "open"} · {x.gold_right_since} of {x.gold_since} later gold answers right
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
     </details>
   );
 }

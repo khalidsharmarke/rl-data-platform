@@ -231,6 +231,10 @@ export type Grade = {
   integrity: "suspended" | "held" | "watch" | "unproven" | "trusted"; later_gold_needed: number | null;
   watch_progress: [number, number] | null;
 };
+export type Escalation = {
+  id: string; handle: string; vendor_name: string; rule: string; started_at: string; ended_at: string | null;
+  outcome: "cleared" | "confirmed" | "case" | null; gold_since: number; gold_right_since: number;
+};
 export type Grades = { version: string; quality_bar: number; workers: Grade[] };
 export type Release = {
   accepted: number; verified: number; provisional: number;

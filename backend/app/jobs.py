@@ -19,12 +19,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app import clock
 from app.config import settings
 from app.db import SessionLocal
+from app.escalation import review as review_escalations
 from app.scorecards import rollup_project
 
 log = logging.getLogger("jobs")
 
 HANDLERS: dict[str, Callable[[AsyncSession, dict], Awaitable[object]]] = {
     "scorecards": lambda session, payload: rollup_project(session, uuid.UUID(payload["project_id"])),
+    "escalations": lambda session, payload: review_escalations(session),
 }
 
 
@@ -42,6 +44,7 @@ async def enqueue(session: AsyncSession, kind: str, dedupe_key: str, payload: di
 async def schedule(session: AsyncSession) -> None:
     for (project_id,) in (await session.execute(text("SELECT id FROM projects WHERE status = 'active'"))).all():
         await enqueue(session, "scorecards", f"scorecards:{project_id}", {"project_id": str(project_id)})
+    await enqueue(session, "escalations", "escalations", {})
     await session.commit()
 
 
