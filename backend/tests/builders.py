@@ -16,7 +16,9 @@ async def org_ids(client, headers) -> dict[str, str]:
     return {o["name"]: o["id"] for o in (await client.get("/orgs", headers=headers)).json()}
 
 
-async def make_project(client, login, *, tasks: int, gold_every: int | None = None, overlap: int = 1) -> tuple[str, list]:
+async def make_project(client, login, *, tasks: int, gold_every: int | None = None, overlap: int = 1,
+                       release_after: int = 0, release_cap: int = 0, min_gold_results: int = 5) -> tuple[str, list]:
+    """A project; by default anything checked and accepted is released at once (no gap, no cap)."""
     researcher = await login(RESEARCHER)
     project = (
         await client.post(
@@ -30,6 +32,9 @@ async def make_project(client, login, *, tasks: int, gold_every: int | None = No
                 "target_volume": tasks * overlap,
                 "overlap": overlap,
                 "gold_rate": "0.05",
+                "release_after_minutes": release_after,
+                "release_cap_minutes": release_cap,
+                "min_gold_results": min_gold_results,
             },
         )
     ).json()

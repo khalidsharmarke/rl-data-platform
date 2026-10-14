@@ -31,7 +31,11 @@ SEED = 2026
 AUTOPILOT = os.environ.get("DEMO_AUTOPILOT", "true") == "true"
 REVIEW_DELAY_MINUTES = 30  # simulated time between a case opening and the admin deciding
 CLEANUP_DELAY_MINUTES = 15  # simulated time between the decision and data ops' clean-up
-EXPORT_EVERY_MINUTES = 30  # the researcher pulls accepted data every half hour (simulated)
+EXPORT_EVERY_MINUTES = 30  # the researcher pulls released data every half hour (simulated)
+# Release stage (PD7): an accepted answer waits at least this long, and at most this long
+# before it's released as provisional (simulated minutes).
+RELEASE_AFTER_MINUTES = 30
+RELEASE_CAP_MINUTES = 120
 
 PROFILES = {
     # accuracy on the better answer, simulated seconds per task, writes a reason, pastes it
@@ -99,7 +103,8 @@ async def setup(c: httpx.AsyncClient) -> tuple[str, dict, list[tuple[str, str, s
         "name": "Which answer is more helpful?", "task_type": demo_content.TASK_TYPE,
         "answer_schema": demo_content.ANSWER_SCHEMA, "instructions": demo_content.INSTRUCTIONS,
         "target_volume": TASKS * 2, "overlap": 2, "gold_rate": str(GOLD_RATE), "quality_bar": "0.8",
-        "min_gold_results": 5})).json()
+        "min_gold_results": 5, "release_after_minutes": RELEASE_AFTER_MINUTES,
+        "release_cap_minutes": RELEASE_CAP_MINUTES})).json()
     generated = demo_content.generate(TASKS, seed=SEED)
     truth = {g.payload["item"]: g.better for g in generated}
     gold = demo_content.gold_items(TASKS, GOLD_RATE, seed=SEED)
@@ -204,7 +209,8 @@ async def data_ops(c, project_id, progress: Progress, done: asyncio.Event) -> No
         if loop.time() >= next_export:
             exports += 1
             d = (await c.post(f"/projects/{project_id}/exports", headers=researcher)).json()
-            print(f"  Researcher exports dataset {exports}: {d['row_count']} accepted answers", flush=True)
+            print(f"  Researcher exports dataset {exports}: {d['row_count']} released answers"
+                  f" ({d['provisional']} provisional)", flush=True)
             next_export += EXPORT_EVERY_MINUTES * 60 / SPEED
         for case in (await c.get("/cases?status=decided", headers=ops)).json() if AUTOPILOT else []:
             if case["decision"] in ("suspend", "remove") and case["id"] not in cleaned:
@@ -215,8 +221,14 @@ async def data_ops(c, project_id, progress: Progress, done: asyncio.Event) -> No
                           f"{r['datasets_affected']} earlier dataset(s) contained them", flush=True)
                     cleaned.add(case["id"])
         await sim_sleep(10 * 60)
+    # The last answers need the release window to pass before they can go out.
+    await sim_sleep((RELEASE_CAP_MINUTES + 5) * 60)
     d = (await c.post(f"/projects/{project_id}/exports", headers=researcher)).json()
-    print(f"  Researcher exports the final dataset: {d['row_count']} accepted answers", flush=True)
+    print(f"  Researcher exports the final dataset: {d['row_count']} released answers"
+          f" ({d['provisional']} provisional)", flush=True)
+    r = (await c.get(f"/projects/{project_id}/release", headers=researcher)).json()
+    print(f"  Release: {r['verified']} verified, {r['provisional']} provisional, "
+          f"{sum(r['waiting'].values())} still waiting, of {r['accepted']} accepted", flush=True)
 
 
 async def report(c, project_id) -> None:

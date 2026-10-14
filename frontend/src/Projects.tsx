@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api, pct, savedToken, type Allocation, type Contract, type Dataset, type Project, type Quality, type User } from "./api";
+import { api, pct, savedToken, type Allocation, type Contract, type Dataset, type Project, type Quality, type Release, type User } from "./api";
 
 const UNIT: Record<string, string> = { task: "per task", hour: "per hour", environment: "per environment" };
 
@@ -18,6 +18,7 @@ export default function Projects({ me }: { me: User }) {
   const [contracts, setContracts] = useState<Record<string, Contract>>({});
   const [quality, setQuality] = useState<Record<string, Quality>>({});
   const [datasets, setDatasets] = useState<Record<string, Dataset[]>>({});
+  const [releases, setReleases] = useState<Record<string, Release>>({});
   const internal = me.org_kind === "internal";
 
   useEffect(() => {
@@ -32,6 +33,8 @@ export default function Projects({ me }: { me: User }) {
         byQuality[p.id] = await api<Quality>(`/projects/${p.id}/quality`);
         const sets = await api<Dataset[]>(`/projects/${p.id}/datasets`);
         setDatasets((d) => ({ ...d, [p.id]: sets }));
+        const release = await api<Release>(`/projects/${p.id}/release`);
+        setReleases((r) => ({ ...r, [p.id]: release }));
         if (me.role === "data_ops") {
           for (const a of byProject[p.id]) {
             for (const c of await api<Contract[]>(`/orgs/${a.vendor_id}/contracts`)) byContract[c.id] = c;
@@ -93,18 +96,22 @@ export default function Projects({ me }: { me: User }) {
           {internal && (
             <div className="datasets">
               <h4>Datasets</h4>
+              {releases[p.id] && <ReleaseLine r={releases[p.id]} />}
               <button
                 onClick={async () => {
                   const d = await api<Dataset>(`/projects/${p.id}/exports`, { method: "POST" });
                   setDatasets((all) => ({ ...all, [p.id]: [d, ...(all[p.id] ?? [])] }));
+                  const release = await api<Release>(`/projects/${p.id}/release`);
+                  setReleases((r) => ({ ...r, [p.id]: release }));
                 }}
               >
-                Export accepted answers
+                Export released answers
               </button>
               <ul>
                 {(datasets[p.id] ?? []).slice(0, 5).map((d, i) => (
                   <li key={d.id}>
-                    {new Date(d.created_at).toLocaleString()} · {d.row_count.toLocaleString()} rows · {d.metric_version}
+                    {new Date(d.created_at).toLocaleString()} · {d.row_count.toLocaleString()} rows
+                    {d.provisional > 0 && ` (${d.provisional.toLocaleString()} provisional)`} · {d.metric_version}
                     {i === 0 ? " · current" : " · superseded"} ·{" "}
                     <a href="#" onClick={(e) => (e.preventDefault(), download(d.id))}>download</a>
                   </li>
@@ -116,5 +123,18 @@ export default function Projects({ me }: { me: User }) {
         </div>
       ))}
     </section>
+  );
+}
+
+function ReleaseLine({ r }: { r: Release }) {
+  const waiting = r.waiting.detection + r.waiting.gap + r.waiting.evidence;
+  const hours = (m: number) => (m % 60 === 0 ? `${m / 60} h` : `${m} min`);
+  return (
+    <p className="muted">
+      Of {r.accepted.toLocaleString()} accepted answers, {r.verified.toLocaleString()} are released as verified and{" "}
+      {r.provisional.toLocaleString()} as provisional. {waiting.toLocaleString()} are waiting: {r.waiting.detection} for
+      detection, {r.waiting.gap} for the minimum gap ({hours(r.release_after_minutes)}), {r.waiting.evidence} for later
+      evidence about their worker (provisional after {hours(r.release_cap_minutes)}).
+    </p>
   );
 }

@@ -1,4 +1,4 @@
-"""Lineage, clean-up and exports (AB6, DC6, D14)."""
+"""Lineage, clean-up, the release stage and exports (AB6, DC6, DC10, D14)."""
 
 import json
 import uuid
@@ -11,7 +11,7 @@ from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app import clock
+from app import clock, release
 from app.abuse import add_action
 from app.audit import record
 from app.config import settings
@@ -61,6 +61,7 @@ class DatasetOut(BaseModel):
     created_at: datetime
     metric_version: str
     row_count: int
+    provisional: int
     supersedes: uuid.UUID | None
 
 
@@ -143,25 +144,47 @@ async def cleanup(body: CleanupIn, user: User = Depends(require_roles(Role.DATA_
     return CleanupOut(id=cleanup_id, removed=len(targets), tasks_reopened=len(targets) if requeue else 0, datasets_affected=affected)
 
 
-EXPORT_ROWS = f"""
-SELECT f.id AS submission_id, s.task_id, t.payload, s.answer, s.schema_version, s.submitted_at, u.handle, o.name AS vendor
-FROM ({SUBMISSION_FACTS}) f
-JOIN submissions s ON s.id = f.id
+EXPORT_ROWS = """
+SELECT s.id AS submission_id, s.task_id, t.payload, s.answer, s.schema_version, s.submitted_at, u.handle, o.name AS vendor
+FROM submissions s
 JOIN tasks t ON t.id = s.task_id
 JOIN users u ON u.id = s.worker_id
 JOIN orgs o ON o.id = s.vendor_id
-WHERE f.accepted
-ORDER BY s.submitted_at
+WHERE s.id = ANY(CAST(:ids AS uuid[]))
+ORDER BY s.submitted_at, s.id
 """
+
+
+class ReleaseOut(BaseModel):
+    accepted: int
+    verified: int
+    provisional: int
+    waiting: dict[str, int]
+    detection_through: int
+    as_of: datetime
+    release_after_minutes: int
+    release_cap_minutes: int
+
+
+@router.get("/projects/{project_id}/release")
+async def release_summary(
+    project_id: uuid.UUID, user: User = Depends(require_roles(Role.RESEARCHER, Role.DATA_OPS)), session: AsyncSession = Depends(get_session)
+) -> ReleaseOut:
+    """How much accepted data is released, and what the rest is waiting for (DC10)."""
+    project: Project = await get_visible_project(project_id, user, session)
+    view = await release.evaluate(session, project)
+    return ReleaseOut(**view.summary(), release_after_minutes=project.release_after_minutes,
+                      release_cap_minutes=project.release_cap_minutes)
 
 
 @router.post("/projects/{project_id}/exports", status_code=status.HTTP_201_CREATED)
 async def export(
     project_id: uuid.UUID, user: User = Depends(require_roles(Role.RESEARCHER, Role.DATA_OPS)), session: AsyncSession = Depends(get_session)
 ) -> DatasetOut:
-    """Write accepted answers to a dataset file, each row with its lineage (DC6, D14)."""
+    """Write released answers to a dataset file, each row with its lineage and tier (DC6, DC10, D14, D31)."""
     project: Project = await get_visible_project(project_id, user, session)
-    rows = (await session.execute(text(EXPORT_ROWS), {"project_id": project.id})).all()
+    tiers = {d.submission_id: d.state for d in (await release.evaluate(session, project)).released()}
+    rows = (await session.execute(text(EXPORT_ROWS), {"ids": list(tiers)})).all()
     previous = await session.scalar(text("SELECT id FROM datasets WHERE project_id = :p ORDER BY created_at DESC LIMIT 1"), {"p": project.id})
     dataset_id = uuid.uuid4()
     path = Path(settings.export_dir) / f"{dataset_id}.jsonl"
@@ -171,8 +194,9 @@ async def export(
             out.write(json.dumps({
                 "submission_id": str(r.submission_id), "task_id": str(r.task_id), "task": r.payload, "answer": r.answer,
                 "worker": r.handle, "vendor": r.vendor, "schema_version": r.schema_version, "metric_version": METRIC_VERSION,
-                "submitted_at": r.submitted_at.isoformat(),
+                "submitted_at": r.submitted_at.isoformat(), "tier": tiers[r.submission_id],
             }) + "\n")
+    provisional = sum(1 for r in rows if tiers[r.submission_id] == "provisional")
     now = clock.now()
     await session.execute(
         text("INSERT INTO datasets (id, project_id, created_by, created_at, metric_version, row_count, uri, supersedes) "
@@ -181,13 +205,16 @@ async def export(
     )
     if rows:
         await session.execute(
-            text("INSERT INTO dataset_rows (dataset_id, submission_id) SELECT :d, unnest(CAST(:ids AS uuid[]))"),
-            {"d": dataset_id, "ids": [r.submission_id for r in rows]},
+            text("INSERT INTO dataset_rows (dataset_id, submission_id, tier) "
+                 "SELECT :d, unnest(CAST(:ids AS uuid[])), unnest(CAST(:tiers AS text[]))"),
+            {"d": dataset_id, "ids": [r.submission_id for r in rows], "tiers": [tiers[r.submission_id] for r in rows]},
         )
     record(session, actor=user, action="dataset.exported", entity_type="dataset", entity_id=dataset_id, org_id=user.org_id,
-           after={"project_id": str(project.id), "rows": len(rows), "supersedes": str(previous) if previous else None})
+           after={"project_id": str(project.id), "rows": len(rows), "provisional": provisional,
+                  "supersedes": str(previous) if previous else None})
     await session.commit()
-    return DatasetOut(id=dataset_id, project_id=project.id, created_at=now, metric_version=METRIC_VERSION, row_count=len(rows), supersedes=previous)
+    return DatasetOut(id=dataset_id, project_id=project.id, created_at=now, metric_version=METRIC_VERSION, row_count=len(rows),
+                      provisional=provisional, supersedes=previous)
 
 
 @router.get("/projects/{project_id}/datasets")
@@ -195,8 +222,11 @@ async def datasets(
     project_id: uuid.UUID, user: User = Depends(require_roles(Role.RESEARCHER, Role.DATA_OPS)), session: AsyncSession = Depends(get_session)
 ) -> list[DatasetOut]:
     await get_visible_project(project_id, user, session)
-    rows = await session.execute(text("SELECT * FROM datasets WHERE project_id = :p ORDER BY created_at DESC"), {"p": project_id})
-    return [DatasetOut(id=r.id, project_id=r.project_id, created_at=r.created_at, metric_version=r.metric_version, row_count=r.row_count, supersedes=r.supersedes) for r in rows]
+    rows = await session.execute(text(
+        "SELECT d.*, (SELECT count(*) FROM dataset_rows r WHERE r.dataset_id = d.id AND r.tier = 'provisional') AS provisional "
+        "FROM datasets d WHERE d.project_id = :p ORDER BY d.created_at DESC"), {"p": project_id})
+    return [DatasetOut(id=r.id, project_id=r.project_id, created_at=r.created_at, metric_version=r.metric_version,
+                       row_count=r.row_count, provisional=r.provisional, supersedes=r.supersedes) for r in rows]
 
 
 @router.get("/datasets/{dataset_id}/download")

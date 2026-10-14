@@ -125,6 +125,9 @@ class Project(Base):
     gold_rate: Mapped[Decimal] = mapped_column(Numeric(4, 3))
     quality_bar: Mapped[Decimal] = mapped_column(Numeric(4, 3), default=Decimal("0.800"))
     min_gold_results: Mapped[int] = mapped_column(Integer, default=5)
+    # Release stage (DC10, PD7): the least and the most an accepted answer waits.
+    release_after_minutes: Mapped[int] = mapped_column(Integer, default=60)
+    release_cap_minutes: Mapped[int] = mapped_column(Integer, default=24 * 60)
     status: Mapped[str] = mapped_column(Text, default="active")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 

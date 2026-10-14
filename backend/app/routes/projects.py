@@ -6,7 +6,7 @@ from typing import Any
 
 import jsonschema
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -32,6 +32,14 @@ class ProjectIn(BaseModel):
     gold_rate: Decimal = Field(ge=0, lt=1)
     quality_bar: Decimal = Field(default=Decimal("0.8"), ge=0, le=1)
     min_gold_results: int = Field(default=5, ge=1)
+    release_after_minutes: int = Field(default=60, ge=0)
+    release_cap_minutes: int = Field(default=24 * 60, ge=0)
+
+    @model_validator(mode="after")
+    def cap_after_gap(self) -> "ProjectIn":
+        if self.release_cap_minutes < self.release_after_minutes:
+            raise ValueError("The release cap can't be shorter than the minimum gap")
+        return self
 
 
 class ProjectOut(BaseModel):
@@ -112,6 +120,7 @@ async def create_project(
         name=body.name, created_by=user.id, task_type=body.task_type, current_schema_version=1,
         target_volume=body.target_volume, deadline=body.deadline, overlap=body.overlap, gold_rate=body.gold_rate,
         quality_bar=body.quality_bar, min_gold_results=body.min_gold_results,
+        release_after_minutes=body.release_after_minutes, release_cap_minutes=body.release_cap_minutes,
     )
     session.add(project)
     await session.flush()

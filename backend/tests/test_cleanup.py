@@ -10,11 +10,13 @@ from tests.test_abuse import PASTE
 
 
 async def setup_case(client, login, session, *, overlap=1):
-    """A pasting worker and an honest one; a dataset exported before anyone noticed."""
+    """A pasting worker and an honest one; a dataset exported after detection had checked the
+    answers but before it had enough of them to report anything."""
     project_id, _ = await make_project(client, login, tasks=40, overlap=overlap)
     await allocate(client, login, project_id, "Northwind Data", "1")
     bad = await answer_like(client, await login(NORTHWIND_WORKER), project_id, n=12, pasted=True, reason=PASTE)
     good = await answer_like(client, await login(NORTHWIND_WORKER_2), project_id, n=12, pasted=False, reason="Clearer steps.")
+    await report(client, project_id, NORTHWIND_WORKER, rules=())  # checked, nothing found yet
     first = (await client.post(f"/projects/{project_id}/exports", headers=await login(RESEARCHER))).json()
     await report(client, project_id, NORTHWIND_WORKER, submission_ids=bad[:6])
     admin = await login(NORTHWIND_ADMIN)
@@ -35,7 +37,7 @@ async def worker_id(client, login, project_id, name):
 
 async def test_cleanup_and_reexport_remove_every_answer_the_worker_gave(client, login, session):
     project_id, case_id, first, bad, good = await setup_case(client, login, session)
-    assert first["row_count"] == 24  # before detection, both workers' answers went out
+    assert first["row_count"] == 24  # before a case, both workers' answers went out
     await suspend(client, login, case_id)
     ops = await login(DATA_OPS)
     wid = await worker_id(client, login, project_id, NORTHWIND_WORKER)

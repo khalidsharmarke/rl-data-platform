@@ -2,17 +2,17 @@
 
 | | |
 |---|---|
-| Version | 0.1.0 (MVP) |
-| Covers | Slice A from [`BUILD.md`](BUILD.md): multi-vendor human data, with allocation, gold QA, scorecards, worker-abuse cases and lineage clean-up |
+| Version | 0.1.0 (MVP) plus the integrity milestones built since: M9–M10 (see [`BUILD.md`](BUILD.md#integrity-milestones)) |
+| Covers | Slice A from [`BUILD.md`](BUILD.md): multi-vendor human data, with allocation, gold QA, scorecards, worker-abuse cases and lineage clean-up; a separate detection service; the release stage |
 | Related | [`POSTING.md`](POSTING.md) · [`PRD.md`](PRD.md) · [`DESIGN.md`](DESIGN.md) · [`DECISIONS.md`](DECISIONS.md) |
 
-What version 0.1.0 does not do, where it falls short, and what is still undecided. The design describes the full platform; this page describes the gap between the design and the build.
+What the build does not do, where it falls short, and what is still undecided. The design describes the full platform; this page describes the gap between the design and the build.
 
 ## 1. Coverage of the posting
 
-The posting names three areas: *"environment creation, data collection, and training observability."* Version 0.1.0 builds the core of data collection, plus the vendor management, workspaces and audit trail it needs. It covers 21 of the design's 51 functional requirements.
+The posting names three areas: *"environment creation, data collection, and training observability."* The build covers the core of data collection, plus the vendor management, workspaces and audit trail it needs. It covers 24 of the design's 53 functional requirements.
 
-| Posting line | Coverage in 0.1.0 |
+| Posting line | Coverage in the build |
 |---|---|
 | *"platforms for human data collection at scale, including labeling workflows, quality assurance systems, and feedback mechanisms that surface reward signal integrity issues early"* | Mostly. Labeling, gold QA, agreement, spot checks and worker feedback are built. DC5 isn't: workers can't flag broken tasks, and disagreement spikes raise no alert |
 | *"a unified platform for human data collection that integrates labeling workflows, vendor management, and QA for complex agentic tasks"* | Except for agentic tasks. There is one task type: pick the more helpful of two answers, with a reason |
@@ -43,7 +43,6 @@ The posting names three areas: *"environment creation, data collection, and trai
 
 | Limitation | Effect | What would address it |
 |---|---|---|
-| Exports don't wait for detection (AB17) | An answer can be exported before the scan reaches it. Lineage clean-up removes it from later datasets, but the earlier dataset already holds it | The export gate (D25) |
 | Clean-up stops at the dataset | Lineage names every shipped row from a removed worker. Nothing records which training runs used which datasets, so the platform can't say which models are affected | Record dataset use by training runs (TO1, D14) |
 | Clean-up removes every answer the worker gave (D21) | Honest work from before the behavior started is removed too | Remove from a defensible start point, once there is a reliable way to find it |
 | Time on task is measured on the server | It includes network and page time. Under the 180× demo clock this adds about 2–3 simulated seconds to every answer, which narrows the gap between pasting and typing. In real time it is small next to the time a task takes | Use start and end times reported by the client, checked against the server's |
@@ -51,11 +50,12 @@ The posting names three areas: *"environment creation, data collection, and trai
 
 ### Scale
 
-The design's scale estimate is about 1.2 million submissions a day ([`DESIGN.md`](DESIGN.md), scale estimate). Version 0.1.0 has run at about 6,600 answers per project and has no load test.
+The design's scale estimate is about 1.2 million submissions a day ([`DESIGN.md`](DESIGN.md), scale estimate). The build has run at about 6,600 answers per project and has no load test.
 
 | Limitation | Effect at the design's scale |
 |---|---|
 | Each scorecard roll-up recomputes the whole project | Work grows with project size on every run, not with new answers |
+| Release is recomputed from the whole project's facts at every export (D29) | The same: an export's cost grows with the project, not with what's new since the last one |
 | The detection service keeps every worker's recent answers in memory and rebuilds them on start by replaying the whole event stream | Memory and restart time grow with the stream. A real service would keep its own store and replay only from a checkpoint |
 | Claiming a task checks several conditions in one query, under a row lock and a recount | Claims could become the bottleneck at peak (about 50 per second) |
 | The job queue and summary tables live in Postgres (D2) | Fine at this load. The design moves them to a queue and an analytics store at much higher volume |
@@ -74,7 +74,7 @@ The design's scale estimate is about 1.2 million submissions a day ([`DESIGN.md`
 
 | Question | Depends on it |
 |---|---|
-| Are vendors paid for every submitted answer, or only for accepted ones? Version 0.1.0 assumes every submitted answer (A30) | Cost per accepted answer; whether cheap vendors look expensive |
+| Are vendors paid for every submitted answer, or only for accepted ones? The build assumes every submitted answer (A30) | Cost per accepted answer; whether cheap vendors look expensive |
 | Should clean-up remove all of a worker's answers, or only those after the behavior started? (D21) | How much honest data is lost per case |
 | A suspended worker can rejoin through another vendor, because workers are pseudonymous (PD1). When is a cross-vendor match on a keyed hash (C5.10) worth its privacy cost? | Whether suspensions hold across vendors |
 | Who sets the gold rate and alert thresholds for a project, and how much gold is worth paying for? | How quickly a vendor-level drop can be detected |
@@ -95,7 +95,7 @@ The design's scale estimate is about 1.2 million submissions a day ([`DESIGN.md`
 In order, from [`BUILD.md`](BUILD.md#stretch-in-order) and the gaps above:
 
 1. The integrity milestones M9–M12 in [`BUILD.md`](BUILD.md#integrity-milestones): detection behind its contract (AB13), the release stage (DC10), contributor grades (DC11) and discreet escalation (AB14). The audit sample and shadow mode (AB15, AB16) follow.
-2. A thin environment slice: immutable environment versions, reference and no-op checks in a locked-down container (EC1–EC3, D3). It covers the most posting lines that 0.1.0 doesn't.
+2. A thin environment slice: immutable environment versions, reference and no-op checks in a locked-down container (EC1–EC3, D3). It covers the most posting lines the build doesn't.
 3. Broken-task flags and disagreement alerts (DC5).
 4. Vendor-level abuse rules and vendor actions (AB2, AB5).
 5. The vendor reviewer step (DC8).

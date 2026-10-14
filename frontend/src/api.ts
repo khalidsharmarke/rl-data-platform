@@ -222,4 +222,11 @@ export type Lineage = {
   datasets: { dataset_id: string; created_at: string; rows_from_subject: number; current: boolean }[];
 };
 
-export type Dataset = { id: string; project_id: string; created_at: string; metric_version: string; row_count: number; supersedes: string | null };
+export type Dataset = {
+  id: string; project_id: string; created_at: string; metric_version: string; row_count: number; provisional: number; supersedes: string | null;
+};
+export type Release = {
+  accepted: number; verified: number; provisional: number;
+  waiting: { detection: number; gap: number; evidence: number };
+  detection_through: number; as_of: string; release_after_minutes: number; release_cap_minutes: number;
+};
