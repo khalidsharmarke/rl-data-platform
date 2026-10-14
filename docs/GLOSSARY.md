@@ -43,7 +43,9 @@ Terms used in [`POSTING.md`](POSTING.md), [`PRD.md`](PRD.md) and [`DESIGN.md`](D
 | **RL** | Reinforcement learning: the model attempts tasks, gets a score (reward), and is trained to do better | *"Reinforcement Learning"* |
 | **Environment** | A packaged practice task for the model: instructions, the software it acts in (a container), and a grader. TechCrunch: *"training grounds that simulate what an AI agent would be doing in a real software application"* | *"training environments"*; *"RL environment creation"* |
 | **Environment version** | One immutable snapshot of an environment. Training always refers to an exact version | *"versioning"* |
-| **Grader** | The code that scores an attempt at an environment, for example a test suite | |
+| **Task files** | The part of an environment the model works in: the task statement and the code or data it acts on. Kept apart from the grader and the reference solution | |
+| **Grader** | The code that scores an attempt at an environment, for example a test suite. The model never sees it: it runs after the attempt, outside anything the model can touch | |
+| **Reference solution** | A known-good answer the environment's builder supplies, to prove the task can be solved. Used only in validation; never given to training | |
 | **Reward signal** | The score a grader (or human judgment) gives an attempt. Training pushes the model toward higher rewards, so a wrong reward teaches a wrong lesson | *"robust reward signals"*; *"reward signal integrity"* |
 | **Reward hacking** | The model earning a high reward without doing the task, by exploiting a flaw in the grader. Like a student editing the answer key | *"catch reward hacks"*; *"reward hacking"* |
 | **Validation** | Automated checks on an environment before training uses it: the reference solution passes, a no-op fails, repeated runs agree | *"validate correctness and difficulty calibration"* |

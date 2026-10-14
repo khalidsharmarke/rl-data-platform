@@ -49,12 +49,13 @@ Personas are described in the [PRD](PRD.md#3-who-cares-about-what). Each vendor 
 |---|---|---|---|
 | EC0 | A researcher writes an environment brief, a project of the environment kind: what environments are wanted (skills, languages, constraints such as no public benchmark content), how many, the difficulty mix, the review rubric and a deadline. Data ops allocates it to vendors with the environments capability (VP1) | PRD C1.1; *"translate ambiguous requirements into well-scoped, well-designed products"* | |
 | EC1 | An environment builder can define an environment against a brief allocated to their vendor: task prompt, container image, grader or reward function, and metadata (language, intended difficulty) | *"environment configuration"* | |
-| EC2 | Every change creates an immutable version; history and diffs are viewable | *"versioning"* | |
+| EC2 | Every change creates an immutable version; history and diffs (file by file) are viewable | *"versioning"* | |
 | EC3 | Submitting a version triggers automated checks: the reference solution passes, a no-op solution fails, repeated runs agree, and difficulty is estimated | *"validate correctness and difficulty calibration before environments hit production training"* | A11, A12 |
 | EC4 | An environment builder sees check results and reviewer feedback, then fixes and resubmits | *"iterate on training environments with minimal friction"* | |
 | EC5 | A researcher browses environments (filter by brief, status, vendor, difficulty), grades them against the brief's rubric and leaves feedback | *"let researchers browse, grade, and provide feedback on training environments"* | A20 |
 | EC6 | Approved versions are promoted and exposed to training infrastructure through an API | *"connect environment authoring tools, data collection systems, and RL training infrastructure"* | A23 |
 | EC7 | Programming tasks are generated in bulk across languages and difficulty levels, each with tests as the reward signal, and pass through EC3 | *"scalable code data generation pipelines, producing diverse programming tasks with robust reward signals"* | A21 |
+| EC8 | An environment version has three parts, stored separately: the task files the model works in, the grader that scores an attempt, and the reference solution that proves the task can be solved. The model never sees the grader or the reference solution; training receives the task files and the grader, never the reference solution | *"robust reward signals"*; *"catch reward hacks"* | A14 |
 
 ### Data collection
 
@@ -144,6 +145,7 @@ Five flows carry most of the value. Two entities anchor them: the **vendor works
 |---|---|---|---|
 | Labeling | 5,000 active labelers (A1), 30 items/hour over 8-hour days (A2) | 5k × 30 × 8 ≈ 1.2M submissions/day ≈ 14/s average, ~50/s peak | Modest. One Postgres handles it |
 | Validation | 50 vendors (A3), 5k version submissions/day (A4), 5 sandbox runs of ~5 min each (A5) | 25k runs × 5 min ≈ 125k container-minutes/day ≈ 90 containers running at once | Compute is the bottleneck, not the API |
+| Environment storage | 5k versions/day (A4); versions share base images and differ in ~1 MB of files (A36) | ~5 GB/day of new content, ~2 TB a year; whole images per version (~500 MB) would be ~2.5 TB a day | Store content by hash, so a file or layer shared by many versions is stored once (D34) |
 | Training results | 1k episodes/s peak across runs (A6); ~1 KB metadata plus 100 KB–1 MB transcript each (A7) | ~1 MB/s metadata; 100 GB+/day of transcripts | The heaviest write path. Transcripts go in object storage, metadata in an analytics store |
 
 Every labeling submission publishes one small event for the detection service (AB13): about 14 events/s on average and 50/s at peak, a light load for any queue. How much work the service does per event is its own choice (D24). Vendor-level checks (AB2) and scorecards (VP3) are periodic rollups over data already collected.
@@ -174,6 +176,8 @@ The system is light on reads, heavy on writes for training results, and compute-
 | N18 | Due process | Every abuse action is tied to a case holding the evidence behind it, and can be reviewed and reversed | A false finding against a worker or vendor has real consequences (PRD PD4) | |
 | N19 | Versioned definitions | Metric definitions, abuse rules and task and config schemas are versioned, and every score, flag, task and config records the version that produced it | A definition can then change without rewriting history: old and new versions can run side by side, and past numbers stay explainable ([decision register](DECISIONS.md)) | |
 | N20 | Detection decoupling and lag | Collection never waits on the detection service: events queue durably, and if the service is slow or down, work continues and exports wait (AB17). Findings arrive within 5 minutes of submission at p95 | Labeling availability (N3) can't depend on a separate service; held-back exports are the safe failure | A33 |
+| N21 | Answer-key secrecy | During training, the grader runs in a separate step after the model's attempt, on a copy of the task files; nothing the model does can read or change it. The reference solution is used only for validation | A grader the model can read or edit is a reward hack waiting to happen (A14); the environment-side equivalent of secret gold answers (N17) | A14 |
+| N22 | Environment retention and access | Every version training has pulled is kept for good, including quarantined ones; only versions that never passed validation may be deleted, after 90 days. A version's content is readable by its vendor, Anthropic reviewers and training (which never gets the reference solution); other vendors can't read it | Lineage and reproducibility (N6, N12) need the exact content training used; vendors' environments are their work product (N9) | A36 |
 
 ## 7. Out of scope
 
@@ -231,6 +235,7 @@ Each assumption names the requirements that depend on it and what changes if it'
 | A33 | Findings within about 5 minutes of submission are early enough, because datasets are exported hourly or less often | N20, AB17, D25 | If training consumes data continuously, waiting for detection adds its lag to every row |
 | A34 | Researchers accept a release gap of about an hour by default, longer for production runs | DC10, PD7 | A shorter default lets more data through on less evidence; the setting is per project, so the default is all that changes |
 | A35 | The integrity tiers' evidence counts (20 gold answers to stop being unproven; 1, 3 or 5 later gold answers to release) are starting points | DC11, D30 | Too low and a turncoat's answers are released before their later gold shows the change; too high and honest work waits for the cap |
+| A36 | Environment versions mostly share base images and differ from each other in about 1 MB of files | Scale estimate, N22, D34 | If each version is a whole new image, storage grows ~500×; layer-level deduplication in the registry becomes essential, not an optimization |
 
 ## 9. High-level design
 
@@ -253,7 +258,7 @@ Each step lists the components involved, what each one is for, and what breaks w
 - *Pseudonymous worker IDs:* Anthropic sees each worker as an ID, never a name. Vendors keep their workers' identities, so they can work with the platform without handing over personal data.
 
 **2. A researcher writes a brief, and an environment builder makes practice tasks for it.** The brief says what's wanted ("500 bug-fix tasks in Rust, mixed difficulty, nothing copied from public benchmarks"), and data ops allocates it to vendors that build environments, just as human-data projects are allocated. The vendor's builder writes each task ("fix this bug"), package the code it runs in as a container, and include an answer key: a reference solution plus the grader that scores attempts.
-- *Container registry:* stores each vendor's packaged code.
+- *Container registry and object storage:* hold each version's content, copied into storage the platform owns when the version is submitted, so a vendor can't change or delete what training used. Content is stored by its hash: the task files the model works in, the grader and the reference solution as three separate parts (D34).
 - *Environments module and Postgres:* record the task. Every edit creates a new version, and old versions never change. Without that rule, training would say "I used task #42" and nobody could tell which #42.
 
 **3. Machines check the task before any person spends time on it.** Like checking an exam before giving it: the answer key should score full marks, a blank answer should score zero, and grading the same answer twice should give the same score.
@@ -264,7 +269,7 @@ Each step lists the components involved, what each one is for, and what breaks w
 - *Review module:* a queue of tasks for researchers to browse, grade and comment on. Feedback goes back to the environment builder, who fixes the task and resubmits, which sends it back to step 3.
 
 **5. Approved tasks become available to training.**
-- *Catalog API:* training asks for "all approved tasks" and gets exact versions. Without it, training would read our database directly, and the two systems couldn't change independently.
+- *Catalog API:* training asks for "all approved tasks" and gets exact versions: the task files and the grader, never the reference solution. The grader runs after the model's attempt, outside anything the model can touch (N21). Without it, training would read our database directly, and the two systems couldn't change independently.
 - *Code task generator:* creates coding tasks in bulk and submits them through the same front door as a vendor, so they get the same checks. Without that reuse, we'd build and maintain a second quality pipeline.
 
 **6. Data ops splits human-data work across vendors.** A researcher defines a project (such as "compare these pairs of answers, 50,000 of them, by Friday"), and data ops allocates it across vendors that can do that kind of work, each under one of its contracts.
@@ -344,7 +349,7 @@ Step 2 also turns a suspicion into evidence: a few dozen extra gold answers conf
 | Background jobs | Execution | Trusted platform code: vendor oversight rules, and scorecard roll-ups written to the analytics store | AB2 VP2–VP4 N16 N17 |
 | Outbox and relay | Control | Submission events written in the same transaction as the submission, then relayed to the detection queue | AB13 N5 D24 |
 | Detection service | Execution (separate service) | A black box behind a contract: consumes submission events, returns findings and how far it has processed through the API, and receives labels from manual review | AB1 AB13 AB15 AB16 N17 N20 |
-| Container registry | Execution | Vendor images, with per-vendor push and pull credentials | VM2 |
+| Container registry | Execution | Base images, and vendor images copied in on submission and pinned by digest; per-vendor push and pull credentials | VM2 D34 |
 | Code task generator | Execution | Generates programming tasks and submits them through the public API, like any vendor | EC7 A21 |
 | Results intake | Ingestion | Accepts batches of episode results from training; deduplicates by episode id; acknowledges once written to the log | TO1 N5 |
 | Durable log | Ingestion | Buffers bursts so training is never slowed by downstream processing | N4 |
@@ -352,7 +357,7 @@ Step 2 also turns a suspicion into evidence: a few dozen extra gold answers conf
 | Reward-hack detector | Ingestion | Pluggable rules over the episode stream; raises flags through the API, which open cases | TO3 AB3 A14 |
 | Analytics store | Ingestion | Stats tables built for time-range queries (e.g. ClickHouse): per environment, run, vendor, project and worker | TO2 TO7 VP2–VP4 |
 | Dashboard API | Ingestion | Scorecards, vendor comparisons, run dashboards and drill-down, plus a live feed over server-sent events | TO2 TO4 TO5 VP2–VP4 |
-| Object storage | Shared | Episode transcripts, exported datasets, validation logs | TO5 DC6 |
+| Object storage | Shared | Environment content by hash (task files, grader, reference solution), episode transcripts, exported datasets, validation logs | TO5 DC6 EC8 N22 |
 
 ### Key decisions
 
@@ -391,6 +396,7 @@ Step 2 also turns a suspicion into evidence: a few dozen extra gold answers conf
 | D31 | An answer still unreleased at the project's cap is released as provisional if detection has processed it, nothing holds it and the minimum gap has passed. Every exported row records its tier and the worker's grades at release | Integrity stays a hard gate while quality confidence becomes data researchers can filter on, so slow-to-prove contributors aren't silently dropped (PD7) | Training has to choose what to do with provisional rows; a grade not recorded at release can't be recovered later |
 | D32 | Detector findings carry a severity. A single signal is a watch finding and leads to escalation (AB14); two or more signals agreeing on the same answers lead to a case. A client signal on its own is never more than a watch finding (AB11). A watch finding is cleared when the worker's next 10 gold answers meet the bar, and becomes a case when they don't | Weak evidence earns closer measurement, not a case the vendor admin sees; a client signal can be forged (A32). Later gold turns a watch finding into a decision either way | A worker abusing in a way only one signal sees is measured for longer before anyone looks |
 | D33 | One project model with two kinds: human-data projects and environment briefs. Both are created by a researcher, allocated by data ops under contracts, and scored on the vendor scorecard; every environment belongs to the brief it answers | Vendors fulfil Anthropic's request in both kinds of work. Tying environments to a brief gives review a standard (its rubric), lets vendors be compared on the same request, and lets progress and contracts be tracked against a target | Some fields apply to one kind only, so the project has kind-specific parts; a vendor's own idea for an environment needs a brief before it can be submitted |
+| D34 | An environment version is a manifest in Postgres pointing at content stored by hash in platform-owned storage, in three parts: task files, grader and reference solution. Submitting copies the content in; nothing references a vendor's own registry. During validation the sandbox mounts the grader only for the grading step; in training the grader runs after the attempt on a copy of the task files | A hash names exactly one content, so immutability holds even outside Postgres (N6), and identical files across versions are stored once (A36). Keeping the parts apart is what stops the model reading or editing its own answer key (N21). Hashes also make diffs cheap (EC2) and let identical or copied content across vendors be spotted (AB2) | Builders must mark which files are which; an environment whose tests need to live inside the task files has to be restructured. Grading becomes a separate step with its own container start |
 
 ### Core entities
 
@@ -400,7 +406,9 @@ Step 2 also turns a suspicion into evidence: a few dozen extra gold answers conf
 | User | id, org, role (researcher, data ops, vendor admin, vendor reviewer, worker, environment builder), pseudonymous id | Identity fields visible only inside the user's own org (D12) |
 | ApiToken | id, org, scopes, hash, expires_at, revoked_at | Stored hashed (N11) |
 | Environment | id, org, project (the brief it answers), name | Groups versions |
-| EnvironmentVersion | id, environment, number, config (JSON), image digest, status | Immutable (D3) |
+| EnvironmentVersion | id, environment, number, manifest (base image digest, test command, and the content hash of each file, marked task, grader or reference), status | Immutable (D3); parts stored separately (D34) |
+| ContentObject | hash, size, stored_at | One stored file or layer, shared by every version that contains it (D34) |
+| CatalogPull | version, puller, at | Who received which version; kept with the version for lineage (N22) |
 | ValidationRun | id, version, check (reference, no-op, repeat), result, logs_uri | |
 | Review | id, subject (version or submission), reviewer, grade, rubric scores, feedback | Researcher or vendor reviewer (EC5, DC8) |
 | Project | id, kind (human data or environment brief), deadline, volume; human data: task_type schema and schema version, instructions, quality bar, overlap, gold rate; brief: description, constraints, difficulty mix, review rubric | DC1 EC0 D33 |

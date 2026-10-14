@@ -24,6 +24,8 @@ Every product and design decision made so far, sorted by how hard it would be to
 | D26 / PD6 | Automatic responses to a finding can't be perceived by its subject | Same as PD2: once workers have seen how and when the platform reacts, they know what triggers it, and that can't be taken back | Keep evidence shown to vendors to what was observed (N18), never thresholds |
 | D31 | Each exported row records its tier and the worker's grades at release | A row exported without them can never be filtered by trust later, because the evidence at that moment isn't kept anywhere else | Record both from the first export after release ships |
 | AB11, AB12 | Client and API signals are recorded with every submission | A signal not captured at submission can't be reconstructed, so a new detector can't be tried in shadow mode (D27) against past work | Record raw signals, including ones no rule uses yet |
+| D34 / N21 | The grader and reference solution are stored apart from the task files and never shown to the model | Same as D8: once a model has trained on environments whose grader it could read or edit, the lessons it learned can't be removed | Separate the parts from the first environment stored |
+| N22 | Versions training has pulled are kept for good | A deleted version can't be recovered, and nobody can then reproduce or explain what training used | Keep every pulled version, including quarantined ones |
 | PD3 | Cost is compared per accepted unit, using platform-measured time on task | The comparison itself is two-way (it's a calculation). What's one-way is **recording the inputs**: each contract's price and unit (VM7), and each submission's time on task (DC9). Data not captured can't be recomputed under a different definition | Store raw inputs, never only the computed cost |
 
 ## Hardens
@@ -77,7 +79,7 @@ Every product and design decision made so far, sorted by how hard it would be to
 
 Whatever the build's scope, it should include these from the start, even in a minimal form, because they can't be added later for data already collected:
 
-1. Immutable environment versions (D3)
+1. Immutable environment versions (D3), with the grader and reference solution stored apart from the task files (D34)
 2. Lineage on every submission and episode (D14)
 3. An append-only audit log (VM4)
 4. Gold tasks kept secret and rotatable (D8, PD2)
