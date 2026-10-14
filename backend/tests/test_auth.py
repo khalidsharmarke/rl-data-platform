@@ -1,3 +1,7 @@
+from datetime import UTC, datetime, timedelta
+
+import jwt
+
 from app.config import settings
 
 
@@ -31,3 +35,18 @@ async def test_me_rejects_missing_and_forged_tokens(client):
 async def test_demo_logins_are_off_unless_enabled(client, monkeypatch):
     monkeypatch.setattr(settings, "demo_logins", False)
     assert (await client.get("/auth/demo-users")).status_code == 404
+
+
+async def test_a_token_survives_a_small_backward_clock_step_but_not_a_large_one(client):
+    # The wall clock can be stepped back by most of a second (WSL2 does this), which makes a
+    # token issued a moment ago look as if it came from the future.
+    users = (await client.get("/auth/demo-users")).json()
+    user_id = users[0]["id"]
+
+    def token(seconds_ahead: int) -> dict:
+        now = datetime.now(UTC) + timedelta(seconds=seconds_ahead)
+        claims = {"sub": user_id, "iat": now, "exp": now + timedelta(hours=1)}
+        return {"Authorization": f"Bearer {jwt.encode(claims, settings.jwt_secret, algorithm='HS256')}"}
+
+    assert (await client.get("/auth/me", headers=token(2))).status_code == 200
+    assert (await client.get("/auth/me", headers=token(600))).status_code == 401

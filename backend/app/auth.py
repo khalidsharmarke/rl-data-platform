@@ -13,6 +13,9 @@ from app.db import get_session
 from app.models import User
 
 bearer = HTTPBearer(auto_error=False)
+# Clocks drift and get corrected in steps (WSL2 steps its clock back by most of a second), so a
+# token checked moments after it was issued can look as if it came from the future.
+CLOCK_SKEW_SECONDS = 10
 
 
 def issue_token(user: User) -> str:
@@ -29,7 +32,7 @@ async def current_user(
     if credentials is None:
         raise unauthorized
     try:
-        claims = jwt.decode(credentials.credentials, settings.jwt_secret, algorithms=["HS256"])
+        claims = jwt.decode(credentials.credentials, settings.jwt_secret, algorithms=["HS256"], leeway=CLOCK_SKEW_SECONDS)
         user_id = uuid.UUID(claims["sub"])
     except (jwt.PyJWTError, KeyError, ValueError):
         raise unauthorized
