@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import clock
 from app.db import get_session
+from app.events import publish_submission
 from app.models import Allocation, Assignment, Contract, Org, Project, Role, Submission, Task, TaskSchema, User
 from app.scoping import can_see_org, require_roles, shows_identity
 from app.work import claim_next
@@ -124,6 +125,8 @@ async def submit(
     )
     assignment.status = "submitted"
     session.add(submission)
+    await session.flush()
+    await publish_submission(session, submission, task)
     await session.commit()
     return SubmissionOut(id=submission.id, submitted_at=submission.submitted_at, time_on_task_ms=submission.time_on_task_ms)
 

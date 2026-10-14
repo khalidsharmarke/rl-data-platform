@@ -21,6 +21,7 @@ services:
       DATABASE_URL: postgresql+asyncpg://rl:rl@db:5432/rl
       JWT_SECRET: dev-only-not-a-secret
       DEMO_LOGINS: "true"
+      DETECTION_TOKEN: dev-only-detection-token
     command: >
       sh -c "alembic upgrade head && python -m app.seed &&
              uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
@@ -42,6 +43,18 @@ services:
     restart: unless-stopped
     volumes:
       - ./backend:/app
+    depends_on:
+      - api
+
+  # The detection service (AB13, D23): a separate process that only talks to the API.
+  detection:
+    build: ./detection
+    environment:
+      API_URL: http://api:8000
+      DETECTION_TOKEN: dev-only-detection-token
+    restart: unless-stopped
+    volumes:
+      - ./detection:/detection
     depends_on:
       - api
 

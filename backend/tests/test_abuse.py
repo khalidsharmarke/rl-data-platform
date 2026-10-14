@@ -1,61 +1,36 @@
-"""M6 done-check: abusive behavior is flagged, held and decided on by a person; every action
-links to its case (AB1, AB3, AB4, AB7, AB8, D13, D16, N17, N18)."""
+"""M6 done-check, through the detection contract (M9): a case-severity finding opens a case
+with a hold for the vendor admin, who decides; every action links to its case (AB3, AB4,
+AB7, AB8, D13, D16, N17, N18). The rules themselves live in the detection service
+(detection/tests)."""
 
 import json
 
 from sqlalchemy import text
 
-from app.abuse import scan_project
-from app.rules import Answer, evaluate
-from tests.builders import allocate, answer_like, make_project
+from tests.builders import allocate, answer_like, make_project, report
 from tests.people import DATA_OPS, KESTREL_ADMIN, NORTHWIND_ADMIN, NORTHWIND_WORKER, NORTHWIND_WORKER_2
 
 PASTE = "Answer A is more helpful because it directly addresses the user's question with accurate, actionable detail."
 
 
-def window(seconds, pasted=False, reason=None, words=48):
-    return [Answer(str(i), int(seconds * 1000), words, pasted, reason) for i in range(10)]
-
-
-def test_rules_flag_pasted_duplicated_fast_answers():
-    found = {f.rule for f in evaluate(window(3, pasted=True, reason=PASTE))}
-    assert found == {"speed", "paste", "duplicate"}
-
-
-def test_rules_leave_honest_low_quality_alone():
-    # Sloppy but honest: quick-ish, typed, short or no reasons. Low quality is not abuse (PD4).
-    assert evaluate(window(9)) == []
-    assert evaluate(window(30, reason="Clearer steps.")) == []
-    assert evaluate(window(3)[:9]) == []  # not enough answers to judge
-
-
-async def set_time_on_task(session, submission_ids, seconds):
-    """Tests answer instantly; give answers a realistic measured duration."""
-    await session.execute(text("ALTER TABLE submissions DISABLE TRIGGER submissions_immutable"))
-    await session.execute(text("UPDATE submissions SET time_on_task_ms = :ms WHERE id = ANY(CAST(:ids AS uuid[]))"),
-                          {"ms": seconds * 1000, "ids": submission_ids})
-    await session.execute(text("ALTER TABLE submissions ENABLE TRIGGER submissions_immutable"))
-
-
 async def flagged_case(client, login, session):
-    """One worker pastes the same reason at speed; another works honestly at a normal pace."""
+    """One worker pastes the same reason; another works honestly. Detection reports the first."""
     project_id, _ = await make_project(client, login, tasks=30)
     await allocate(client, login, project_id, "Northwind Data", "1")
-    await answer_like(client, await login(NORTHWIND_WORKER), project_id, n=12, pasted=True, reason=PASTE)
-    honest = await answer_like(client, await login(NORTHWIND_WORKER_2), project_id, n=12, pasted=False, reason="Clearer steps.")
-    await set_time_on_task(session, honest, 30)
-    await scan_project(session, project_id)
+    bad = await answer_like(client, await login(NORTHWIND_WORKER), project_id, n=12, pasted=True, reason=PASTE)
+    await answer_like(client, await login(NORTHWIND_WORKER_2), project_id, n=12, pasted=False, reason="Clearer steps.")
+    await report(client, project_id, NORTHWIND_WORKER, submission_ids=bad[:6])
     return project_id
 
 
-async def test_scan_opens_one_case_with_a_hold_for_the_vendor_admin(client, login, session):
+async def test_a_case_finding_opens_one_case_with_a_hold_for_the_vendor_admin(client, login, session):
     project_id = await flagged_case(client, login, session)
     cases = (await client.get("/cases", headers=await login(NORTHWIND_ADMIN))).json()
     assert len(cases) == 1
     case = cases[0]
     assert case["subject_name"] == NORTHWIND_WORKER and case["owner"] == "vendor_admin" and case["held"]
     assert any("pasted" in o for o in case["observations"])
-    await scan_project(session, project_id)  # scanning again joins the open case
+    await report(client, project_id, NORTHWIND_WORKER)  # reporting again joins the open case
     assert len((await client.get("/cases", headers=await login(NORTHWIND_ADMIN))).json()) == 1
 
 

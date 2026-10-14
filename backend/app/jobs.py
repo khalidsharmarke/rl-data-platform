@@ -3,6 +3,7 @@
 Run as its own process: `python -m app.jobs`. Each tick it queues a scorecard roll-up for
 every active project (a dedupe key keeps one pending per project), then works through the
 queue. Jobs are claimed with FOR UPDATE SKIP LOCKED, so several workers can run safely.
+Abuse detection isn't a job here: it runs in the separate detection service (D23).
 """
 
 import asyncio
@@ -18,13 +19,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app import clock
 from app.config import settings
 from app.db import SessionLocal
-from app.abuse import scan_project
 from app.scorecards import rollup_project
 
 log = logging.getLogger("jobs")
 
 HANDLERS: dict[str, Callable[[AsyncSession, dict], Awaitable[object]]] = {
-    "abuse_scan": lambda session, payload: scan_project(session, uuid.UUID(payload["project_id"])),
     "scorecards": lambda session, payload: rollup_project(session, uuid.UUID(payload["project_id"])),
 }
 
@@ -42,8 +41,6 @@ async def enqueue(session: AsyncSession, kind: str, dedupe_key: str, payload: di
 
 async def schedule(session: AsyncSession) -> None:
     for (project_id,) in (await session.execute(text("SELECT id FROM projects WHERE status = 'active'"))).all():
-        # Abuse first, so holds are in place before the roll-up counts accepted answers.
-        await enqueue(session, "abuse_scan", f"abuse_scan:{project_id}", {"project_id": str(project_id)})
         await enqueue(session, "scorecards", f"scorecards:{project_id}", {"project_id": str(project_id)})
     await session.commit()
 

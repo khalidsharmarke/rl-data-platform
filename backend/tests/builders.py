@@ -3,6 +3,14 @@
 from app import demo_content
 from tests.people import DATA_OPS, RESEARCHER
 
+# How the detection service signs in (see the client fixture).
+DETECTION = {"Authorization": "Bearer test-detection-token"}
+SIGNALS = {
+    "speed": "9 of the last 10 answers were submitted faster than the task can be read.",
+    "paste": "Reason text was pasted rather than typed in 10 of the last 10 answers.",
+    "duplicate": "The same reason, word for word, was given for 10 of the last 10 answers to different questions.",
+}
+
 
 async def org_ids(client, headers) -> dict[str, str]:
     return {o["name"]: o["id"] for o in (await client.get("/orgs", headers=headers)).json()}
@@ -83,3 +91,22 @@ async def answer_like(client, headers, project_id, *, n: int, pasted: bool, reas
         s = await client.post(f"/assignments/{a['id']}/submit", headers=headers, json={"answer": answer, "client_signals": {"pasted": pasted}})
         ids.append(s.json()["id"])
     return ids
+
+
+async def user_id(client, name: str) -> str:
+    return next(u["id"] for u in (await client.get("/auth/demo-users")).json() if u["display_name"] == name)
+
+
+async def report(client, project_id: str, worker: str, *, severity: str = "case", rules=("speed", "paste", "duplicate"),
+                 submission_ids=(), processed_through: int | None = None):
+    """Report findings the way the detection service does."""
+    events = (await client.get("/detection/events", headers=DETECTION, params={"limit": 2000})).json()["events"]
+    through = processed_through if processed_through is not None else (events[-1]["id"] if events else 0)
+    worker_id = await user_id(client, worker)
+    body = {"detector": "rules-v1", "processed_through": through, "findings": [
+        {"worker_id": worker_id, "project_id": project_id, "rule": r, "rule_version": f"{r}-v1", "severity": severity,
+         "observation": SIGNALS[r], "evidence": {"submission_ids": list(submission_ids)}, "through_event": through}
+        for r in rules]}
+    r = await client.post("/detection/findings", headers=DETECTION, json=body)
+    assert r.status_code == 202, r.text
+    return r.json()

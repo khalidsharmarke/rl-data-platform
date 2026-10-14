@@ -15,7 +15,7 @@ Three fictional vendors work on one project, *"Which of these two answers is mor
 1. **Data ops splits the work.** Northwind (40%, $0.80 per task), Kestrel (35%, $38 per hour) and Brightline (25%, $0.55 per task).
 2. **Every vendor is measured the same way.** The platform computes gold accuracy, agreement, acceptance, cost per accepted answer and turnaround. No vendor reports its own numbers. Brightline is the cheapest per task and the most expensive per accepted answer.
 3. **Halfway through its work, one Brightline worker starts pasting the same generic reason on every task**, faster than anyone could read it. Brightline's gold accuracy and acceptance drop.
-4. **The platform notices and opens a case.** Three signals fire: speed, pasting and duplicates. The worker's answers are held out of training automatically. Nothing is done *to the worker* yet.
+4. **The platform notices and opens a case.** A separate detection service reads every submission and reports three signals that agree: speed, pasting and duplicates. The worker's answers are held out of training automatically. Nothing is done *to the worker* yet.
 5. **Brightline's admin decides.** She sees what was observed, with examples, but never the rules' thresholds or which tasks were tests. She suspends the worker, with a reason on record.
 6. **Data ops cleans up.** Lineage shows every answer the worker gave, including the ones already shipped in earlier datasets before anyone noticed. One click removes them and reopens those tasks for other workers.
 7. **A fresh export contains none of her answers**, and every row points back to its source.
@@ -32,7 +32,7 @@ Needs Docker with Compose.
 ```sh
 make demo    # fresh database, then the scripted scenario above (about 3 minutes)
 make up      # start Postgres, the API, the background worker and the web app on real time
-make test    # 78 backend tests against a separate test database
+make test    # 83 backend tests (against a separate test database) and 9 detection-service tests
 make down    # stop (make reset also deletes the database)
 ```
 
@@ -49,7 +49,7 @@ Open http://localhost:5173 and pick a demo user. The login page suggests a path 
 | Postgres job table claimed with `SKIP LOCKED` | A message queue (needless at this load; see [D2](docs/DESIGN.md)) |
 | Summary tables in Postgres | An analytics store |
 | A Docker volume | Object storage for exported datasets |
-| An abuse-scan job inside the platform, running three rules | A separate detection service fed by a queue of submission events ([D23](docs/DESIGN.md)) |
+| An outbox table the detection service reads through a cursor feed | A message broker between the platform and the detection service ([D24](docs/DESIGN.md)) |
 | A demo clock running 180× real time, `make demo` only | Waiting five hours for the story |
 
 Out of scope for this slice: the environment pipeline and training observability, vendor-level abuse rules, vendor reviewers, and the rest of the design's [integrity layers](docs/DESIGN.md#integrity-layers): discreet escalation, audit sampling, shadow mode and the export gate. [BUILD.md](docs/BUILD.md#2-scope) lists everything left out and why, and [LIMITATIONS.md](docs/LIMITATIONS.md) covers where the built part falls short.
@@ -72,7 +72,8 @@ Each of these was found by testing or by looking at the demo's output, fixed, an
 ## Where things are
 
 ```
-backend/     FastAPI app, migrations, background worker (app/jobs.py), abuse rules (app/rules.py), 78 tests
+backend/     FastAPI app, migrations, background worker (app/jobs.py), the detection contract (app/routes/detection.py), 83 tests
+detection/   the separate detection service: abuse rules and severity (rules.py), its state (detector.py), 9 tests
 frontend/    React + TypeScript: one app, a view per role
 simulator/   the scripted scenario, driving the public API
 docs/        posting, glossary, PRD, design, decisions, build plan, diagrams, media

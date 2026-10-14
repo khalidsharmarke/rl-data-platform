@@ -14,8 +14,9 @@ reset:   ## Stop everything and delete the database
 logs:    ## Follow logs from all services
 	docker compose logs -f
 
-test:    ## Run the backend tests against a separate test database
+test:    ## Run the backend tests (against a separate test database) and the detection service's tests
 	docker compose run --rm --no-deps api pytest -q
+	docker compose run --rm --no-deps --build detection pytest -q
 
 seed:    ## Re-run the (idempotent) seed
 	docker compose exec api python -m app.seed

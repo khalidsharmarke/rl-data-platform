@@ -4,6 +4,11 @@ Each rule looks at a worker's most recent answers on a project and either return
 an observation: a plain statement of what was seen, plus the evidence behind it. Vendors see
 observations and evidence, never thresholds or rule names (N17). Low quality on its own is
 not abuse (PRD PD4): none of these rules looks at accuracy.
+
+Severity (D32): one rule on its own is a watch finding, which the platform answers by
+measuring the worker more closely. Two or more rules agreeing make it a case. A rule built
+only on what the browser reports (pasting) can be forged (A32), so it never counts toward a
+case by itself.
 """
 
 import re
@@ -78,7 +83,17 @@ def duplicates(window: list[Answer]) -> Finding | None:
 RULES: list[Callable[[list[Answer]], Finding | None]] = [too_fast, pasted, duplicates]
 
 
+# Rules that rest only on signals the browser reports.
+CLIENT_ONLY = {"paste"}
+
+
 def evaluate(window: list[Answer]) -> list[Finding]:
     if len(window) < WINDOW:
         return []
     return [f for rule in RULES if (f := rule(window)) is not None]
+
+
+def severity(findings: list[Finding]) -> str:
+    """'case' when at least two rules agree and one of them rests on server-side evidence."""
+    rules = {f.rule for f in findings}
+    return "case" if len(rules) >= 2 and rules - CLIENT_ONLY else "watch"

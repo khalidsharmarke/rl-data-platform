@@ -16,6 +16,8 @@ class Settings(BaseSettings):
     jobs_tick_seconds: float = 30
     # The seed's small sample project; the scripted demo creates its own project instead.
     seed_sample_project: bool = True
+    # The detection service signs in with this token (AB13). Empty disables its routes.
+    detection_token: str = ""
     # Object storage stand-in: exported datasets are written here.
     export_dir: str = "/data/exports"
 

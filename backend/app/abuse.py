@@ -1,57 +1,33 @@
-"""Running the abuse rules and opening cases (AB1, AB3, AB8, D13, D16).
+"""Opening cases from findings (AB3, AB8, D13, D16).
 
-A finding opens a case for the worker's vendor admin (or joins the worker's open case), and
-the platform immediately holds the worker's answers: reversible, protective, automatic.
-Anything done to the worker as a person waits for a human decision.
+Detection happens in the separate detection service (AB13, D23); the platform owns what a
+finding leads to. A finding at case severity opens a case for the worker's vendor admin (or
+joins the worker's open case), and the platform immediately holds the worker's answers:
+reversible, protective, automatic. Anything done to the worker as a person waits for a
+human decision.
 """
 
 import json
 import uuid
+from dataclasses import dataclass
 
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import clock
 from app.audit import record
-from app.rules import WINDOW, Answer, evaluate
-
-RECENT = text(
-    """
-    SELECT s.id, s.worker_id, s.vendor_id, s.time_on_task_ms, s.answer->>'rationale' AS rationale,
-           coalesce((s.client_signals->>'pasted')::boolean, false) AS pasted,
-           array_length(regexp_split_to_array(trim(
-               coalesce(t.payload->>'prompt', '') || ' ' || coalesce(t.payload->>'response_a', '') || ' ' ||
-               coalesce(t.payload->>'response_b', '')), '\\s+'), 1) AS words,
-           row_number() OVER (PARTITION BY s.worker_id ORDER BY s.submitted_at DESC) AS n
-    FROM submissions s
-    JOIN tasks t ON t.id = s.task_id
-    JOIN users u ON u.id = s.worker_id
-    WHERE s.project_id = :p
-      AND u.suspended_at IS NULL
-      -- after a decision, judge only what happens next
-      AND s.submitted_at > coalesce((
-            SELECT max(c.decided_at) FROM cases c WHERE c.subject_type = 'worker' AND c.subject_id = s.worker_id
-          ), '-infinity')
-    """
-)
 
 
-async def scan_project(session: AsyncSession, project_id: uuid.UUID) -> int:
-    rows = (await session.execute(text(f"SELECT * FROM ({RECENT.text}) x WHERE n <= :w"), {"p": project_id, "w": WINDOW})).all()
-    by_worker: dict[uuid.UUID, list] = {}
-    for r in rows:
-        by_worker.setdefault(r.worker_id, []).append(r)
-    opened = 0
-    for worker_id, recent in by_worker.items():
-        window = [Answer(str(r.id), r.time_on_task_ms, r.words or 0, r.pasted, r.rationale) for r in recent]
-        findings = evaluate(window)
-        if findings:
-            opened += await open_or_join_case(session, worker_id=worker_id, vendor_id=recent[0].vendor_id, project_id=project_id, findings=findings)
-    await session.commit()
-    return opened
+@dataclass(frozen=True)
+class Observation:
+    """One signal behind a case, as the vendor admin will read it (N17: no thresholds)."""
+
+    rule: str
+    version: str
+    observation: str
+    evidence: dict
 
 
-async def open_or_join_case(session, *, worker_id, vendor_id, project_id, findings) -> int:
+async def open_or_join_case(session, *, worker_id, vendor_id, project_id, findings: list[Observation]) -> tuple[uuid.UUID, int]:
     now = clock.now()
     case_id = await session.scalar(
         text("SELECT id FROM cases WHERE subject_type = 'worker' AND subject_id = :w AND status = 'open'"), {"w": worker_id}
@@ -81,7 +57,7 @@ async def open_or_join_case(session, *, worker_id, vendor_id, project_id, findin
             ),
             {"c": case_id, "r": f.rule, "v": f.version, "o": f.observation, "e": json.dumps(f.evidence), "now": now},
         )
-    return opened
+    return case_id, opened
 
 
 async def add_action(session, case_id, action, actor_id, note, at) -> None:

@@ -30,13 +30,12 @@ The posting names three areas: *"environment creation, data collection, and trai
 
 | Limitation | Effect | What would address it |
 |---|---|---|
-| The paste signal is reported by the browser, and one rule's finding is enough to open a case | A worker answering through the API, or with a modified client, can omit it. Only the platform's own UI reports it reliably | Treat client signals as hints that can't open a case alone (AB11), and give more weight to server signals (AB12) and the detection service's combined view (AB13) |
+| The paste signal is reported by the browser | A worker answering through the API, or with a modified client, can omit it. Pasting alone is only ever a watch finding (D32), so a forged signal can't open a case, but omitting it removes one of the signals that make a case | Give more weight to server signals (AB12) |
 | The speed rule uses server-measured time on task | A worker who waits before submitting passes it | Combine speed with quality signals: gold accuracy over time and agreement with other workers |
 | The duplicate rule compares reason text | Paraphrased reasons pass it, and an LLM paraphrases for free | Similarity on meaning rather than wording, and patterns across workers |
 | One bad worker hardly moves a vendor's numbers | At 5% gold and a 25% share, one worker in ten pasting moved Brightline from about 80% to about 71% gold accuracy. The vendor drop alert (D19: two-proportion test, at least 60 gold per side, at least 8 points) fires on some runs of the demo and not on others. The worker rules catch the worker on every run | More gold, longer windows, or vendor-level rules built on behavior signals as well as gold (AB2). Each costs money or time |
 | Gold stays secret only if nothing reveals it indirectly | Gold can be recognized from how it's spread across questions, where it sits in a vendor's stream, or counts in events vendors can read. D8 forbids all three and tests cover them, but each new feature that touches routing, counts or timing can open another way | Tests for every vendor-visible endpoint and event, reviewed whenever routing changes |
-| Detection runs inside the platform, not behind the detection service's contract (D23) | Changing a rule means a platform deploy, and nothing separates how abuse is found from what the platform does about it | Publish submission events through an outbox (D24) and accept findings through the API |
-| The only automatic response is a hold | A finding goes straight to a case. There is no quieter step that measures the worker more closely first (AB14), so a weak finding either does nothing or reaches the vendor admin | Discreet escalation: extra gold, overlap and spot checks before a case (D26) |
+| Watch findings lead to nothing yet | A single signal is recorded as a watch finding (D32) but doesn't change how closely the worker is measured; only agreeing signals open a case | Discreet escalation: extra gold before a case (AB14, D26), milestone M12 |
 | No audit sample or shadow mode | The platform can count false alarms but not what its rules miss (AB15), and a new rule version goes live at once (AB16) | D27, D28 |
 | Rule thresholds were set against simulated workers | The demo's results depend on the simulator's settings (clock speed, Rosa's accuracy, when she switches, how often workers take breaks). Real workers will behave differently | Recalibrate the thresholds on real cases. Rules are versioned (N19), so a change shows in every flag |
 
@@ -57,7 +56,7 @@ The design's scale estimate is about 1.2 million submissions a day ([`DESIGN.md`
 | Limitation | Effect at the design's scale |
 |---|---|
 | Each scorecard roll-up recomputes the whole project | Work grows with project size on every run, not with new answers |
-| Each abuse scan re-reads every worker's recent answers in the project | The same: cost grows with the number of workers, not the number of new answers |
+| The detection service keeps every worker's recent answers in memory and rebuilds them on start by replaying the whole event stream | Memory and restart time grow with the stream. A real service would keep its own store and replay only from a checkpoint |
 | Claiming a task checks several conditions in one query, under a row lock and a recount | Claims could become the bottleneck at peak (about 50 per second) |
 | The job queue and summary tables live in Postgres (D2) | Fine at this load. The design moves them to a queue and an analytics store at much higher volume |
 

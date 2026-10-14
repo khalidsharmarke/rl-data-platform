@@ -4,10 +4,9 @@ removes it, and a re-exported dataset contains none of it; the audit log shows t
 
 import json
 
-from app.abuse import scan_project
-from tests.builders import allocate, answer_like, make_project
+from tests.builders import allocate, answer_like, make_project, report
 from tests.people import DATA_OPS, NORTHWIND_ADMIN, NORTHWIND_WORKER, NORTHWIND_WORKER_2, RESEARCHER
-from tests.test_abuse import PASTE, set_time_on_task
+from tests.test_abuse import PASTE
 
 
 async def setup_case(client, login, session, *, overlap=1):
@@ -16,9 +15,8 @@ async def setup_case(client, login, session, *, overlap=1):
     await allocate(client, login, project_id, "Northwind Data", "1")
     bad = await answer_like(client, await login(NORTHWIND_WORKER), project_id, n=12, pasted=True, reason=PASTE)
     good = await answer_like(client, await login(NORTHWIND_WORKER_2), project_id, n=12, pasted=False, reason="Clearer steps.")
-    await set_time_on_task(session, good, 30)
     first = (await client.post(f"/projects/{project_id}/exports", headers=await login(RESEARCHER))).json()
-    await scan_project(session, project_id)
+    await report(client, project_id, NORTHWIND_WORKER, submission_ids=bad[:6])
     admin = await login(NORTHWIND_ADMIN)
     case_id = (await client.get("/cases", headers=admin)).json()[0]["id"]
     return project_id, case_id, first, bad, good

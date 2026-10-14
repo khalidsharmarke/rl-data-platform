@@ -63,6 +63,7 @@ async def session(test_database_url: str) -> AsyncIterator[AsyncSession]:
 @pytest.fixture
 async def client(session: AsyncSession, monkeypatch) -> AsyncIterator[AsyncClient]:
     monkeypatch.setattr(settings, "demo_logins", True)
+    monkeypatch.setattr(settings, "detection_token", "test-detection-token")
 
     async def override() -> AsyncIterator[AsyncSession]:
         yield session
