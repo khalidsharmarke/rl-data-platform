@@ -38,6 +38,7 @@ Every product and design decision made so far, sorted by how hard it would be to
 | D5, D6 | Training results go straight to an intake that deduplicates by episode id | Training infrastructure integrates. The endpoint and the stable episode id become a contract with another team | Version the ingest API; keep the producer contract small (episode id, version, reward, transcript reference) |
 | D10 | Training pulls approved environments from a catalog API and datasets via signed URLs | Training integrates, as above | Version the catalog API |
 | D23 | Worker-abuse detection is a separate service behind a contract (events in, findings out) | The detection service integrates. The event and finding schemas become a contract with another team | Version both schemas; put raw signals in events, not derived ones |
+| D33 | One project model for human-data projects and environment briefs; every environment belongs to a brief | The first environment vendor builds against a brief. After that, environments, reviews and scorecards all refer to briefs | Keep kind-specific fields in their own part of the project, so a third kind of work can be added the same way |
 | D9 | Task types and environment configs are JSON schemas stored as data | Many projects exist. Every stored task follows the schema it was created under | Store the schema version with each task and config |
 
 ## Two-way

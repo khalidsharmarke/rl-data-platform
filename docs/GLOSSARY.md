@@ -26,7 +26,8 @@ Terms used in [`POSTING.md`](POSTING.md), [`PRD.md`](PRD.md) and [`DESIGN.md`](D
 
 | Term | Meaning here | In the posting |
 |---|---|---|
-| **Project** | A unit of work defined by a researcher: what to produce, instructions, quality bar, volume and deadline. Can be split across several vendors | |
+| **Project** | A unit of work defined by a researcher and split across vendors. Two kinds: a *human-data project* (tasks for workers to answer, with instructions, quality bar, volume and deadline) and an *environment brief* | |
+| **Brief** | An environment project: the researcher's request for environments (what skills, languages and constraints, how many, what difficulty mix, and the rubric reviewers will grade against). Vendors build environments to a brief; the brief is the standard they're reviewed and compared against | *"translate ambiguous requirements into well-scoped, well-designed products"* |
 | **Task** | One unit of human work inside a project, such as "compare these two answers". Engineering term: *item* | *"many task types"* |
 | **Submission** | A worker's answer to a task, or a vendor's upload of an environment version | *"create, submit, and iterate"* |
 | **Contract** | The commercial terms between Anthropic and a vendor for one kind of work: price, the unit it's priced in (per hour, per task or per environment) and the dates it applies. Allocations point to a contract | |

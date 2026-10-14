@@ -10,7 +10,7 @@ What the build does not do, where it falls short, and what is still undecided. T
 
 ## 1. Coverage of the posting
 
-The posting names three areas: *"environment creation, data collection, and training observability."* The build covers the core of data collection, plus the vendor management, workspaces and audit trail it needs. It covers 26 of the design's 53 functional requirements.
+The posting names three areas: *"environment creation, data collection, and training observability."* The build covers the core of data collection, plus the vendor management, workspaces and audit trail it needs. It covers 26 of the design's 54 functional requirements.
 
 | Posting line | Coverage in the build |
 |---|---|
@@ -18,7 +18,7 @@ The posting names three areas: *"environment creation, data collection, and trai
 | *"a unified platform for human data collection that integrates labeling workflows, vendor management, and QA for complex agentic tasks"* | Except for agentic tasks. There is one task type: pick the more helpful of two answers, with a reason |
 | *"evaluation dashboards and observability UIs that give researchers real-time insight into environment quality, training run health, and reward hacking"* | Partly. Vendor scorecards and drop alerts exist; nothing covers environments, training runs or reward hacking |
 | *"backend services and APIs that connect environment authoring tools, data collection systems, and RL training infrastructure"* | Partly. Datasets are exported as files. Nothing comes back from training |
-| *"web platforms for RL environment creation, management, and quality review"* and *"vendor-facing interfaces… to create, submit, and iterate on training environments"* | No. This is the next slice (EC1–EC7) |
+| *"web platforms for RL environment creation, management, and quality review"* and *"vendor-facing interfaces… to create, submit, and iterate on training environments"* | No. This is the next slice (EC0–EC7) |
 | *"scalable code data generation pipelines"* | No (EC7) |
 | *"onboarding automation… Docker registry access, API token management, and environment validation"* | No. Vendors and users are seeded (VM2, VM3) |
 
@@ -98,7 +98,7 @@ The design's scale estimate is about 1.2 million submissions a day ([`DESIGN.md`
 
 In order, from [`BUILD.md`](BUILD.md#stretch-in-order) and the gaps above:
 
-1. The environment slice, milestones M13–M16 in [`BUILD.md`](BUILD.md#environment-milestones): versions, sandboxed checks, review, a catalog and quarantine (EC1–EC6, TO6). It covers the most posting lines the build doesn't.
+1. The environment slice, milestones M13–M16 in [`BUILD.md`](BUILD.md#environment-milestones): briefs, versions, sandboxed checks, review, a catalog and quarantine (EC0–EC6, TO6). It covers the most posting lines the build doesn't.
 2. The audit sample and shadow mode (AB15, AB16), which measure what detection misses and keep a new rule from acting before it's proven. Escalation outcomes sent back to detection as labels.
 3. Broken-task flags and disagreement alerts (DC5).
 4. Vendor-level abuse rules and vendor actions (AB2, AB5).

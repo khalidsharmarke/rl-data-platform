@@ -82,7 +82,7 @@ Priority: **P0** is needed for the product to make sense, **P1** makes it good, 
 ### C1. Projects and allocation
 | # | Capability | Who | Priority | Design |
 |---|---|---|---|---|
-| C1.1 | Create a project: task type, instructions, quality bar, volume, deadline | Researcher | P0 | DC1 |
+| C1.1 | Create a project of either kind: **human data** (task type, instructions, quality bar, volume, deadline) or an **environment brief** (what environments are wanted, how many, difficulty mix, constraints, review rubric, deadline) | Researcher | P0 | DC1 EC0 |
 | C1.2 | Allocate a project across vendors by **vendor capability**; change allocation while it runs | Data ops | P0 | VP1 VM6 |
 | C1.3 | See project progress: volume, acceptance, turnaround, per vendor | Researcher, data ops | P0 | DC7 |
 
@@ -91,13 +91,13 @@ Priority: **P0** is needed for the product to make sense, **P1** makes it good, 
 |---|---|---|---|---|
 | C2.1 | Receive tasks, answer them, see feedback on rejected work | Worker | P0 | DC2 DC3 |
 | C2.2 | Review workers' output before it goes to Anthropic | Vendor reviewer | P1 | DC8 |
-| C2.3 | Submit an environment, see validation results and reviewer feedback, resubmit | Environment builder | P0 | EC1–EC4 |
+| C2.3 | Build environments against a brief the vendor has been allocated; submit them, see validation results and reviewer feedback, resubmit | Environment builder | P0 | EC0–EC4 |
 
 ### C3. Measuring quality
 | # | Capability | Who | Priority | Design |
 |---|---|---|---|---|
 | C3.1 | Hidden **gold tasks**, rotated regularly, and overlap between workers, applied the same way across vendors | Platform | P0 | DC4 |
-| C3.2 | Researcher review and grading of human data and environments | Researcher | P0 | EC5 |
+| C3.2 | Researcher review and grading of human data, and of environments against their brief's rubric | Researcher | P0 | EC5 |
 | C3.3 | Automated environment **validation** | Platform | P0 | EC3 |
 | C3.4 | Training outcomes (reward hacking, solve rates) attributed back to the environment and vendor | Platform | P1 | TO7 |
 | C3.5 | Time on task measured by the platform for every submission | Platform | P1 | DC9 |

@@ -33,7 +33,7 @@ Personas are described in the [PRD](PRD.md#3-who-cares-about-what). Each vendor 
 
 | Actor | Side | Role on the platform | Source |
 |---|---|---|---|
-| Researcher | Anthropic | Defines projects, reviews environments and data, watches training runs | *"researchers, external vendors, and thousands of data labelers use every day"* |
+| Researcher | Anthropic | Defines projects (human data) and briefs (environments), reviews environments and data, watches training runs | *"researchers, external vendors, and thousands of data labelers use every day"* |
 | Data ops | Anthropic | Sets up vendors, allocates work, compares performance, handles vendor abuse | *"data operations, and vendor management"* |
 | Vendor admin | Vendor | Manages the vendor's users and quality; handles worker abuse | *"vendor management workflows"* |
 | Vendor reviewer | Vendor | Checks workers' output before it goes to Anthropic (some vendors only) | PRD C2.2 (A29) |
@@ -47,11 +47,12 @@ Personas are described in the [PRD](PRD.md#3-who-cares-about-what). Each vendor 
 
 | # | Requirement | Source | Assumes |
 |---|---|---|---|
-| EC1 | An environment builder can define an environment: task prompt, container image, grader or reward function, and metadata (language, intended difficulty) | *"environment configuration"* | |
+| EC0 | A researcher writes an environment brief, a project of the environment kind: what environments are wanted (skills, languages, constraints such as no public benchmark content), how many, the difficulty mix, the review rubric and a deadline. Data ops allocates it to vendors with the environments capability (VP1) | PRD C1.1; *"translate ambiguous requirements into well-scoped, well-designed products"* | |
+| EC1 | An environment builder can define an environment against a brief allocated to their vendor: task prompt, container image, grader or reward function, and metadata (language, intended difficulty) | *"environment configuration"* | |
 | EC2 | Every change creates an immutable version; history and diffs are viewable | *"versioning"* | |
 | EC3 | Submitting a version triggers automated checks: the reference solution passes, a no-op solution fails, repeated runs agree, and difficulty is estimated | *"validate correctness and difficulty calibration before environments hit production training"* | A11, A12 |
 | EC4 | An environment builder sees check results and reviewer feedback, then fixes and resubmits | *"iterate on training environments with minimal friction"* | |
-| EC5 | A researcher browses environments (filter by status, vendor, difficulty), grades them against a rubric and leaves feedback | *"let researchers browse, grade, and provide feedback on training environments"* | A20 |
+| EC5 | A researcher browses environments (filter by brief, status, vendor, difficulty), grades them against the brief's rubric and leaves feedback | *"let researchers browse, grade, and provide feedback on training environments"* | A20 |
 | EC6 | Approved versions are promoted and exposed to training infrastructure through an API | *"connect environment authoring tools, data collection systems, and RL training infrastructure"* | A23 |
 | EC7 | Programming tasks are generated in bulk across languages and difficulty levels, each with tests as the reward signal, and pass through EC3 | *"scalable code data generation pipelines, producing diverse programming tasks with robust reward signals"* | A21 |
 
@@ -59,7 +60,7 @@ Personas are described in the [PRD](PRD.md#3-who-cares-about-what). Each vendor 
 
 | # | Requirement | Source | Assumes |
 |---|---|---|---|
-| DC1 | A researcher creates a collection project: task type, instructions, answer schema (rate, compare, write, trajectory review), quality bar, volume and deadline | *"labeling workflows"*; *"many task types"*; *"complex agentic tasks"* | |
+| DC1 | A researcher creates a human-data project: task type, instructions, answer schema (rate, compare, write, trajectory review), quality bar, volume and deadline | *"labeling workflows"*; *"many task types"*; *"complex agentic tasks"* | |
 | DC2 | Tasks are assigned to workers within the vendors allocated to the project (VP1) | *"human data collection at scale"* | |
 | DC3 | Workers complete tasks in a UI built for non-technical users, and see feedback on their rejected work: reviewer rejections with the reviewer's reasons. Gold-task results are never shown per task (PRD PD2) | *"interfaces that are intuitive for both technical researchers and non-technical labelers"*; PRD C2.1 | |
 | DC4 | QA: gold tasks with known answers (rotated regularly), overlapping assignments to measure agreement, reviewer spot checks, and a quality score per worker, computed the same way for every vendor (N16) | *"quality assurance systems"* | A13 |
@@ -90,7 +91,7 @@ Personas are described in the [PRD](PRD.md#3-who-cares-about-what). Each vendor 
 |---|---|---|---|
 | VP1 | Data ops allocates a project across vendors whose capabilities match, and changes the allocation while it runs | PRD C1.2; *"vendor management workflows"* | A24 |
 | VP2 | Project view: vendors side by side on one project, comparing quality, volume, cost per accepted unit and turnaround. Hourly contracts are converted using time on task (DC9) | PRD C4.1; PRD PD3 | |
-| VP3 | Vendor scorecard: one vendor's performance over time, across its projects and its environment work, with alerts on significant drops. Environment work is scored on validation pass rate, review grades and training outcomes (TO7) | PRD C4.2; PRD PD3 | |
+| VP3 | Vendor scorecard: one vendor's performance over time, across its human-data projects and environment briefs, with alerts on significant drops. Environment work is scored on validation pass rate, review grades and training outcomes (TO7) | PRD C4.2; PRD PD3 | |
 | VP4 | Vendor's own view: vendor admins see their scorecard as Anthropic sees it, broken down by worker, with each worker's quality history. Reviewer feedback and agreement are live; gold-task accuracy appears only as a per-worker running score after ~20 gold results, refreshed daily | PRD C4.3, C4.4; PRD PD2 | |
 
 ### Abuse
@@ -131,7 +132,7 @@ Personas are described in the [PRD](PRD.md#3-who-cares-about-what). Each vendor 
 
 Five flows carry most of the value. Two entities anchor them: the **vendor workspace** (who supplied the work) and the **environment version** or **task** (what was supplied). Lineage links every piece of training data to both.
 
-1. **Submit → validate → review → approve** (EC1–EC6)
+1. **Brief → submit → validate → review → approve** (EC0–EC6)
 2. **Allocate → collect → QA → release → export** (VP1, DC1–DC11)
 3. **Run → monitor → flag → quarantine** (TO1–TO7), which loops back into flow 1
 4. **Measure → compare → reallocate** (VP2–VP4, TO7): every vendor scored the same way, per project and over time
@@ -251,7 +252,7 @@ Each step lists the components involved, what each one is for, and what breaks w
 - *Workspaces module:* creates workspaces, records capabilities and contracts, invites people, issues and revokes keys. Without it, data ops would set up every vendor by hand, against the posting's *"ramp up in hours, not weeks"*.
 - *Pseudonymous worker IDs:* Anthropic sees each worker as an ID, never a name. Vendors keep their workers' identities, so they can work with the platform without handing over personal data.
 
-**2. An environment builder makes a practice task.** They write the task ("fix this bug"), package the code it runs in as a container, and include an answer key: a reference solution plus the grader that scores attempts.
+**2. A researcher writes a brief, and an environment builder makes practice tasks for it.** The brief says what's wanted ("500 bug-fix tasks in Rust, mixed difficulty, nothing copied from public benchmarks"), and data ops allocates it to vendors that build environments, just as human-data projects are allocated. The vendor's builder writes each task ("fix this bug"), package the code it runs in as a container, and include an answer key: a reference solution plus the grader that scores attempts.
 - *Container registry:* stores each vendor's packaged code.
 - *Environments module and Postgres:* record the task. Every edit creates a new version, and old versions never change. Without that rule, training would say "I used task #42" and nobody could tell which #42.
 
@@ -259,7 +260,7 @@ Each step lists the components involved, what each one is for, and what breaks w
 - *Job queue (a Postgres table):* checks take minutes each and thousands arrive a day, so they wait in line. Submitting a task and queueing its checks happen in one database transaction, so a task can never be "submitted" with no check started. Workers take the next job from whichever vendor has the fewest running, so one vendor's 500 submissions can't push everyone else to the back.
 - *Sandbox workers:* run the vendor's code in a sealed box with no internet access and strict time and memory limits. Without them, we'd be running strangers' code on our own machines.
 
-**4. A researcher looks at it.** Machines catch tasks that are broken. People catch tasks that work but aren't worth training on: too easy, off-topic, or teaching the wrong skill.
+**4. A researcher looks at it.** Machines catch tasks that are broken. People catch tasks that work but aren't worth training on: too easy, off-topic, or teaching the wrong skill. The brief's rubric says what to check, so two vendors' environments for the same brief are graded the same way.
 - *Review module:* a queue of tasks for researchers to browse, grade and comment on. Feedback goes back to the environment builder, who fixes the task and resubmits, which sends it back to step 3.
 
 **5. Approved tasks become available to training.**
@@ -336,7 +337,7 @@ Step 2 also turns a suspicion into evidence: a few dozen extra gold answers conf
 |---|---|---|---|
 | Web app | Edge | One React + TS app with a surface per role: vendor workspace (admin, reviewer, worker, environment builder), researcher review, data ops console, dashboards and scorecards. The work UI records client signals | EC4 EC5 DC3 DC8 TO4 TO5 VP2–VP4 AB3 AB11 |
 | API gateway | Edge | Authenticates (SSO for people, API tokens for vendors and services), applies roles and workspace scoping, rate-limits | VM1 VM2 N9 N11 AB12 |
-| API service | Control | One service split into modules: workspaces, capabilities and contracts, environments and versions, review and quarantine, projects and allocation, collection and QA (with API signals), escalation, cases and actions, lineage and clean-up, grades and release, audit | EC1–EC6 DC1–DC11 VP1 AB3–AB8 AB12 AB14–AB17 VM1–VM7 TO6 |
+| API service | Control | One service split into modules: workspaces, capabilities and contracts, environments and versions, review and quarantine, projects and allocation, collection and QA (with API signals), escalation, cases and actions, lineage and clean-up, grades and release, audit | EC0–EC6 DC1–DC11 VP1 AB3–AB8 AB12 AB14–AB17 VM1–VM7 TO6 |
 | Postgres | Control | Source of truth: immutable versions, the version state machine, contracts, allocations, assignments and submissions with lineage, cases and holds, the audit log, and the job queue (a table) | N6 N7 N12 N18 N19 |
 | Job queue | Control (a Postgres table) | Holds validation, abuse-detection and scorecard jobs. Workers claim the next one with `SELECT … FOR UPDATE SKIP LOCKED`; validation jobs are taken from the vendor with the fewest running first | N10 |
 | Sandbox workers | Execution | Run each submitted version: reference solution must pass, no-op must fail, repeat runs must agree, difficulty estimated. No network; CPU, memory and time limits | EC3 N8 |
@@ -389,6 +390,7 @@ Step 2 also turns a suspicion into evidence: a few dozen extra gold answers conf
 | D30 | Grades have two axes. Quality is gold accuracy with a 95% Wilson interval, read against the project's bar: meets it (lower bound at or above), below it (upper bound below) or uncertain. Integrity is a tier: suspended (a person decided to suspend or remove the worker), held (an open case), watch (a finding below case severity that later gold hasn't yet cleared), unproven (fewer than 20 gold answers), trusted. Release needs 1, 3 or 5 later gold answers for trusted, unproven and watch workers; suspended and held workers' answers aren't released | Low quality and abuse need different responses (PRD PD4), so one combined score would blur them. The interval keeps "90% on 20 answers" apart from "90% on 200" | The counts are starting points (A35). Trust is earned from gold only, so domains with little gold rely on the cap |
 | D31 | An answer still unreleased at the project's cap is released as provisional if detection has processed it, nothing holds it and the minimum gap has passed. Every exported row records its tier and the worker's grades at release | Integrity stays a hard gate while quality confidence becomes data researchers can filter on, so slow-to-prove contributors aren't silently dropped (PD7) | Training has to choose what to do with provisional rows; a grade not recorded at release can't be recovered later |
 | D32 | Detector findings carry a severity. A single signal is a watch finding and leads to escalation (AB14); two or more signals agreeing on the same answers lead to a case. A client signal on its own is never more than a watch finding (AB11). A watch finding is cleared when the worker's next 10 gold answers meet the bar, and becomes a case when they don't | Weak evidence earns closer measurement, not a case the vendor admin sees; a client signal can be forged (A32). Later gold turns a watch finding into a decision either way | A worker abusing in a way only one signal sees is measured for longer before anyone looks |
+| D33 | One project model with two kinds: human-data projects and environment briefs. Both are created by a researcher, allocated by data ops under contracts, and scored on the vendor scorecard; every environment belongs to the brief it answers | Vendors fulfil Anthropic's request in both kinds of work. Tying environments to a brief gives review a standard (its rubric), lets vendors be compared on the same request, and lets progress and contracts be tracked against a target | Some fields apply to one kind only, so the project has kind-specific parts; a vendor's own idea for an environment needs a brief before it can be submitted |
 
 ### Core entities
 
@@ -397,11 +399,11 @@ Step 2 also turns a suspicion into evidence: a few dozen extra gold answers conf
 | Org | id, name, kind (vendor or internal), capabilities (human work, environments; domains) | A vendor workspace is a vendor org (VM1, VM6) |
 | User | id, org, role (researcher, data ops, vendor admin, vendor reviewer, worker, environment builder), pseudonymous id | Identity fields visible only inside the user's own org (D12) |
 | ApiToken | id, org, scopes, hash, expires_at, revoked_at | Stored hashed (N11) |
-| Environment | id, org, name | Groups versions |
+| Environment | id, org, project (the brief it answers), name | Groups versions |
 | EnvironmentVersion | id, environment, number, config (JSON), image digest, status | Immutable (D3) |
 | ValidationRun | id, version, check (reference, no-op, repeat), result, logs_uri | |
 | Review | id, subject (version or submission), reviewer, grade, rubric scores, feedback | Researcher or vendor reviewer (EC5, DC8) |
-| Project | id, task_type schema and schema version, instructions, quality bar, volume, deadline, overlap, gold rate | DC1 |
+| Project | id, kind (human data or environment brief), deadline, volume; human data: task_type schema and schema version, instructions, quality bar, overlap, gold rate; brief: description, constraints, difficulty mix, review rubric | DC1 EC0 D33 |
 | Contract | id, vendor, kind of work (human work or environments), price, price unit (hour, task or environment), effective from, effective to | Raw cost inputs (VM7, PRD PD3) |
 | Allocation | id, project, vendor, contract, share, status | VP1 |
 | TaskRoute | task, vendor | Which vendors may work on a task (D17) |
@@ -419,7 +421,7 @@ Step 2 also turns a suspicion into evidence: a few dozen extra gold answers conf
 | Flag | id, subject (worker, vendor or version), source (detection service, vendor rule, reward-hack detector or person), rule or detector version, severity, mode (live or shadow), evidence | AB1 AB2 AB13 AB16 TO3 |
 | Case | id, subject, owner, flags, holds, vendor response, status, decision, decided_by | D13, N18 |
 | Action | id, case, type (warn, retrain, suspend, remove, lower allocation, pause, offboard, discard, re-label, quarantine) | AB4–AB6 |
-| Scorecard row | vendor, work (a project, or the vendor's environment work), worker or environment builder (optional), period, metric version, quality, volume, cost per accepted unit, turnaround | Analytics store (D11) |
+| Scorecard row | vendor, project (human data or environment brief), worker or environment builder (optional), period, metric version, quality, volume, cost per accepted unit, turnaround | Analytics store (D11) |
 | AuditEvent | id, actor, action, entity, before, after, at | Append-only (VM4) |
 
 ### API sketch
@@ -428,11 +430,11 @@ Step 2 also turns a suspicion into evidence: a few dozen extra gold answers conf
 |---|---|---|
 | `POST /orgs`, `PUT /orgs/{id}/capabilities`, `POST /orgs/{id}/contracts` | Data ops | VM1 VM6 VM7 |
 | `POST /orgs/{id}/invites`, `POST /orgs/{id}/tokens`, `DELETE /tokens/{id}`, `GET /onboarding/checks` | Vendor admin | VM1–VM3 |
-| `POST /environments`, `POST /environments/{id}/versions`, `POST /versions/{id}/submit`, `GET /versions/{id}` | Environment builder | EC1–EC4 |
-| `GET /versions?status=in_review`, `POST /versions/{id}/reviews` | Researcher | EC5 |
+| `GET /projects?kind=environment` (briefs allocated to the builder's vendor), `POST /environments`, `POST /environments/{id}/versions`, `POST /versions/{id}/submit`, `GET /versions/{id}` | Environment builder | EC0–EC4 |
+| `GET /versions?status=in_review&project={brief}`, `POST /versions/{id}/reviews` | Researcher | EC5 |
 | `POST /versions/{id}/approve`, `POST /versions/{id}/quarantine` | Researcher, detector | EC6 TO6 |
 | `GET /catalog` | Training | EC6 |
-| `POST /projects`, `POST /projects/{id}/tasks` | Researcher | DC1 |
+| `POST /projects` (either kind), `POST /projects/{id}/tasks` | Researcher | DC1 EC0 |
 | `POST /projects/{id}/allocations`, `PATCH /allocations/{id}` | Data ops | VP1 |
 | `POST /assignments/next`, `POST /assignments/{id}/submit`, `POST /tasks/{id}/flag`, `GET /me/feedback` | Worker | DC2 DC3 DC5 |
 | `POST /submissions/{id}/review` | Vendor reviewer | DC8 |
