@@ -3,28 +3,30 @@
 | | |
 |---|---|
 | Status | 0.1.0 (MVP): M0–M8. 0.2.0: integrity milestones M9–M12. Environment milestones M13–M16 planned. Stretch goals not started. Known limitations in [`LIMITATIONS.md`](LIMITATIONS.md) |
-| Timebox | About a week: ~33 hours across nine milestones |
+| Timebox | ~33 hours for 0.1.0 (M0–M8), ~15 for the integrity milestones (M9–M12), ~15 planned for the environment milestones (M13–M16) |
 | Stack | Python (FastAPI, async) · Postgres · React + TypeScript (Vite) · Docker Compose |
 | Delivered as | This repo, runnable with `make demo`, plus a 100-second recorded walkthrough linked from the README |
 | Related | [`PRD.md`](PRD.md) · [`DESIGN.md`](DESIGN.md) · [`DECISIONS.md`](DECISIONS.md) · [`LIMITATIONS.md`](LIMITATIONS.md) · [`GLOSSARY.md`](GLOSSARY.md) |
 
 ## 1. What the build shows
 
-The build covers the PRD's core: **several vendors working on the same project, measured the same way, with abuse caught and cleaned up.** These are core flows 2, 4 and 5 in [`DESIGN.md`](DESIGN.md#4-core-flows). The environment pipeline (flows 1 and 3) isn't part of this build.
+The build covers the PRD's core: **several vendors working on the same project, measured the same way, with abuse caught and cleaned up.** These are core flows 2, 4 and 5 in [`DESIGN.md`](DESIGN.md#4-core-flows), built in M0–M12. The environment milestones (M13–M16, planned) add flow 1 and the quarantine end of flow 3.
 
 ### The demo story
 
 The seeded scenario runs on its own, so a reviewer can watch it from start to finish:
 
 1. A researcher creates a project: *"Which of these two answers is more helpful?"*, 3,000 comparisons, 5% gold tasks drawn at random.
-2. Data ops allocates it across three vendors with different contracts: Vendor A per task, Vendor B hourly, Vendor C per task at a lower price.
+2. Data ops allocates it across three vendors with different contracts: Northwind per task, Kestrel hourly, Brightline per task at a lower price.
 3. Simulated workers at each vendor start answering. Each vendor has a mix of careful, average and sloppy workers.
 4. The project view compares the three vendors on quality, volume, cost per accepted unit and turnaround, using one measure for all.
-5. Partway through, one worker at Vendor C starts pasting answers far faster than anyone could read the task.
-6. Vendor C's gold accuracy and agreement drop. The speed and paste rules flag the worker, a case opens, and the worker's pending answers are **held** automatically.
-7. Vendor C's admin sees the case with its evidence and suspends the worker. Data ops can see the case and its outcome. (`make demo` plays the people's decisions too: the admin's suspension after a review delay and data ops' clean-up. Set `DEMO_AUTOPILOT=false` to make them by hand; the researcher's half-hourly exports run either way.)
-8. Data ops runs the clean-up: lineage finds every answer the worker submitted, they're removed, and the dataset is re-exported without them.
-9. The audit log shows every step, and Vendor C's scorecard shows the dip and the recovery.
+5. A careful Northwind worker pastes reasons from their own notes. One signal on its own is a watch finding: the platform quietly gives them more gold tasks, their answers clear them, and Northwind never sees a case.
+6. Partway through, one Brightline worker starts pasting the same answer far faster than anyone could read the task. Brightline's gold accuracy and agreement drop. The separate detection service reports three agreeing signals, a case opens, and the worker's answers are **held** automatically.
+7. Brightline's admin sees the case with its evidence and suspends the worker. Data ops can see the case and its outcome. (`make demo` plays the people's decisions too: the admin's suspension after a review delay and data ops' clean-up. Set `DEMO_AUTOPILOT=false` to make them by hand; the researcher's half-hourly exports run either way.)
+8. Data ops runs the clean-up: lineage shows every answer the worker submitted and that none of the pasted ones reached a dataset, because the release stage held them back. They're removed, and their tasks reopen.
+9. Every export contains only released answers, tagged verified or provisional. The audit log shows every step, and Brightline's scorecard shows the dip.
+
+The [environment milestones](#environment-milestones) add a second act: a researcher's brief, Kestrel's builder submitting four environments, the sandbox stopping the three broken ones, review and approval of the sound one, and its quarantine.
 
 ## 2. Scope
 
@@ -38,6 +40,9 @@ The seeded scenario runs on its own, so a reviewer can watch it from start to fi
 | Measuring quality | DC4, DC7, N16, N17 | Hidden, rotatable gold tasks, overlap and agreement, worker quality scores |
 | Scorecards | VP2, VP3, VP4, D11 | Background jobs compute roll-ups into Postgres summary tables, which stand in for the analytics store. The vendor's own view follows PD2 |
 | Abuse | AB1, AB3, AB4, AB6, AB7, AB8, D13, D16, N18 | Worker-level rules, cases, automatic holds, human decisions, lineage clean-up |
+| Integrity layers | AB11 and AB12 (partly), AB13, AB14, D20, D23–D27, D32, N20 | A separate detection service behind its contract, findings with severity, discreet escalation (M9, M12) |
+| Release and grades | DC10, DC11, AB17, D25, D29–D31 | The release stage between acceptance and export, and contributor grades on quality and integrity (M10, M11) |
+| Environments (planned) | EC0–EC6, EC8, D3, D4, D33, D34, N8, N10, N21, N22, TO6 | The [environment milestones](#environment-milestones), M13–M16 |
 | Export | DC6 | Datasets exported as files; re-export excludes removed data |
 | Versioning | N19 | Metric and rule versions recorded with every score and flag; task schema version recorded with every task |
 | Simulator | none (demo tooling) | Synthetic workers with behavior profiles, driven through the public API like real clients |
@@ -80,7 +85,7 @@ From the [decision register](DECISIONS.md#what-this-means-for-the-first-build): 
 
 | # | Must-have | How the build covers it | Milestone |
 |---|---|---|---|
-| 1 | Immutable environment versions (D3), answer key stored apart (D34) | Planned in M13–M14. Until then, the build stores no environments. The same rule is applied to what it does store: tasks and gold answers are immutable, and a changed task design is a new schema version | M2 |
+| 1 | Immutable environment versions (D3), answer key stored apart (D34) | Planned in M13–M14. Until then, the build stores no environments. The same rule is applied to what it does store: tasks and gold answers are immutable, and a changed task design is a new schema version | M2; M13–M14 (planned) |
 | 2 | Lineage on every submission (D14) | Every submission stores task, worker ID, vendor, project, schema version and review; every dataset row references its submission | M2, M7 |
 | 3 | Append-only audit log (VM4) | Every state change writes an audit event; the table has no update or delete path | M1 |
 | 4 | Gold tasks secret and rotatable (D8, PD2) | Gold answers in their own table, never read by worker or vendor endpoints; rotation by gold-set version | M2, M3 |
@@ -124,7 +129,7 @@ The second half of the product: a researcher writes a brief for the environments
 
 **What the slice covers.** Environment briefs, allocated like human-data projects (EC0, D33); immutable environment versions with a state machine (EC1, EC2, D3), stored by hash in three separate parts so the model never sees its own answer key (EC8, D34, N21, N22); automated checks in a sandbox: the reference solution passes, an empty solution fails, repeated runs agree (EC3, A11, A12); fair-share validation jobs (D4, N10); the builder's fix-and-resubmit loop (EC4); researcher review against the brief's rubric (EC5); a catalog that training pulls approved versions from (EC6); quarantine through an environment case (TO6, AB6, AB8, D13); environment work on the vendor scorecard (VP3).
 
-**What it leaves out.** Difficulty estimates (the rest of EC3) need a model attempting the task. Generated programming tasks (EC7), training results and reward-hack detection (TO1–TO5, TO7) need a training stand-in. Vendor-built container images (A15) and registry credentials (VM2) are replaced by build decision B4 below.
+**What it leaves out.** Difficulty estimates (the rest of EC3) need a model attempting the task. Generated programming tasks (EC7), training results and reward-hack detection (TO1–TO5, TO7) need a training stand-in. Vendor-built container images (A15) and registry credentials (VM2) are replaced by build decision B4 below. Deleting drafts that never passed validation (N22) isn't needed at demo scale.
 
 **Build decisions for this slice**
 
@@ -174,11 +179,12 @@ Hostile environments (task-file code that reaches for the network, runs forever,
 anthropic-jobs-5186067008/
   README.md           what this is and how to run it
   docker-compose.yml
-  Makefile            up, down, test, seed, logs
+  Makefile            up, down, reset, logs, test, seed, psql, demo
   backend/            FastAPI app, migrations, background worker, tests
   detection/          the detection service: rules, severity, its own tests
   frontend/           React + TypeScript (Vite)
-  simulator/          synthetic workers and the demo scenario
+  sandbox/            the sandbox runner and its base image (planned, M14)
+  simulator/          synthetic workers, the demo scenario, and its fixture environments (planned, M16)
   docs/               posting, glossary, PRD, design, decisions, this plan, diagrams
 ```
 

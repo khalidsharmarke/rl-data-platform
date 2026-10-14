@@ -365,7 +365,7 @@ Step 2 also turns a suspicion into evidence: a few dozen extra gold answers conf
 |---|---|---|---|
 | D1 | The control plane is one modular service, not microservices | Priorities shift fast (N13); one deploy and one database keep iteration quick | Modules must keep clean boundaries so the ingestion or execution side can split off later |
 | D2 | The job queue is a Postgres table. Submitting a version updates its status and inserts its jobs in one transaction; workers claim jobs with `SKIP LOCKED`, then re-check capacity in a fresh statement, because the claiming query's snapshot predates the lock | ~25k validation runs a day is about 0.3 jobs/s (A4, A5), and batched abuse checks add little (§5), far below what Postgres handles. One transaction means a version can't be "submitted" with no job, or have a job after a rollback (N5, N7), with no message broker to run for the platform's own jobs | Workers poll the database, and a crashed worker's job is retried after a lease expires, so jobs must be idempotent. Move to a dedicated broker (with an outbox) only if volume grows ~1,000× |
-| D3 | Environment versions are immutable, and their status changes only through a state machine (draft → submitted → validating → failed or in review → approved → quarantined) | Training always refers to an exact, unchanging version (N6); every transition is a single audited event (N12) | Fixing a typo means a new version |
+| D3 | Environment versions are immutable, and their status changes only through a state machine (draft → submitted → validating → failed or in review → approved → quarantined; a quarantined version goes back to review, TO6) | Training always refers to an exact, unchanging version (N6); every transition is a single audited event (N12) | Fixing a typo means a new version |
 | D4 | Validation runs in sandboxes, taking jobs from the queue with a fair share per vendor | Vendor code is untrusted (N8, A15); one vendor can't starve the rest (N10) | Sandboxing (e.g. gVisor or Firecracker) adds startup time to each run |
 | D5 | Training results bypass the gateway and the control plane: intake → durable log → processors | Training is never blocked by the platform (N4); the heaviest write path stays off the control database | Two paths to secure and monitor; dashboards are eventually consistent (N7) |
 | D6 | Intake deduplicates by episode id, and every processor is idempotent | Retries can't double-count results (N5) | Producers must assign stable episode ids |
@@ -460,5 +460,7 @@ Step 2 also turns a suspicion into evidence: a few dozen extra gold answers conf
 ## 10. Next steps
 
 1. **First slice: built.** Multi-vendor human data (core flows 2, 4 and 5), scoped in [`BUILD.md`](BUILD.md) and described in the [project README](../README.md).
-2. **Next slice:** the environment pipeline and training observability (flows 1 and 3), starting with immutable environment versions and sandboxed validation.
-3. **Deeper diagrams if needed:** the environment-version state machine (D3), the case life cycle (D13), and sequence diagrams for the five core flows.
+2. **Integrity: built in 0.2.0.** A separate detection service, the release stage, contributor grades and discreet escalation (the [integrity layers](#integrity-layers)).
+3. **Next: the environment slice,** planned in [`BUILD.md`](BUILD.md#environment-milestones) as M13–M16: briefs, versions stored in three parts, sandboxed validation, review, the catalog and quarantine (flow 1 and the end of flow 3).
+4. **After that:** training observability (TO1–TO7), which needs a training stand-in that produces episodes.
+5. **Deeper diagrams if needed:** the environment-version state machine (D3), the case life cycle (D13), and sequence diagrams for the five core flows.

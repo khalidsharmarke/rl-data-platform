@@ -55,7 +55,7 @@ Open http://localhost:5173 and pick a demo user. The login page suggests a path 
 | An outbox table the detection service reads through a cursor feed | A message broker between the platform and the detection service ([D24](docs/DESIGN.md)) |
 | A demo clock running 180× real time, `make demo` only | Waiting five hours for the story |
 
-Out of scope for this slice: the environment pipeline and training observability, vendor-level abuse rules, vendor reviewers, and the rest of the design's [integrity layers](docs/DESIGN.md#integrity-layers): audit sampling, shadow mode, and extra overlap and spot checks during escalation. [BUILD.md](docs/BUILD.md#2-scope) lists everything left out and why, and [LIMITATIONS.md](docs/LIMITATIONS.md) covers where the built part falls short.
+Out of scope so far: the environment pipeline (planned as the [environment milestones](docs/BUILD.md#environment-milestones)) and training observability, vendor-level abuse rules, vendor reviewers, and the rest of the design's [integrity layers](docs/DESIGN.md#integrity-layers): audit sampling, shadow mode, and extra overlap and spot checks during escalation. [BUILD.md](docs/BUILD.md#2-scope) lists everything left out and why, and [LIMITATIONS.md](docs/LIMITATIONS.md) covers where the built part falls short.
 
 **On detecting AI-written answers.** The platform doesn't try to tell AI text from human text; that's unreliable. It flags the *behavior* around a submission: answering faster than the task can be read, pasting rather than typing, and giving the same reason to different questions. Honest but sloppy work isn't flagged: it shows up as low quality on the scorecard instead.
 
