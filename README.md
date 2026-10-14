@@ -4,7 +4,7 @@ A working slice of a platform for sourcing AI training data through many vendors
 
 Built in response to Anthropic's [Full-Stack Software Engineer, Reinforcement Learning](docs/POSTING.md) posting. Version 0.1.0 is an MVP: it builds the data-collection core of the design, not environments or training observability. [Limitations](docs/LIMITATIONS.md) says what it doesn't do and where it falls short.
 
-**[Watch the 80-second walkthrough](docs/media/walkthrough.mp4)** (recorded at 0.1.0, before the release stage, grades and escalation) · [Product requirements](docs/PRD.md) · [Design](docs/DESIGN.md) · [Decisions](docs/DECISIONS.md) · [Build plan](docs/BUILD.md) · [Limitations](docs/LIMITATIONS.md)
+**[Watch the 100-second walkthrough](docs/media/walkthrough.mp4)** · [Product requirements](docs/PRD.md) · [Design](docs/DESIGN.md) · [Decisions](docs/DECISIONS.md) · [Build plan](docs/BUILD.md) · [Limitations](docs/LIMITATIONS.md)
 
 ![Scorecards: three vendors compared on identical measures, with Brightline's dip](docs/media/scorecards.png)
 
