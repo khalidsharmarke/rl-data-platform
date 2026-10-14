@@ -2,9 +2,9 @@
 
 A working slice of a platform for sourcing AI training data through many vendors. Work is split across vendors, every vendor is measured the same way by the platform, and abuse is caught, decided on by a person, and cleaned out of the data, with a trail back to every answer.
 
-Built in response to Anthropic's [Full-Stack Software Engineer, Reinforcement Learning](docs/POSTING.md) posting.
+Built in response to Anthropic's [Full-Stack Software Engineer, Reinforcement Learning](docs/POSTING.md) posting. Version 0.1.0 is an MVP: it builds the data-collection core of the design, not environments or training observability. [Limitations](docs/LIMITATIONS.md) says what it doesn't do and where it falls short.
 
-**[Watch the 80-second walkthrough](docs/media/walkthrough.mp4)** · [Product requirements](docs/PRD.md) · [Design](docs/DESIGN.md) · [Decisions](docs/DECISIONS.md) · [Build plan](docs/BUILD.md)
+**[Watch the 80-second walkthrough](docs/media/walkthrough.mp4)** · [Product requirements](docs/PRD.md) · [Design](docs/DESIGN.md) · [Decisions](docs/DECISIONS.md) · [Build plan](docs/BUILD.md) · [Limitations](docs/LIMITATIONS.md)
 
 ![Scorecards: three vendors compared on identical measures, with Brightline's dip](docs/media/scorecards.png)
 
@@ -51,7 +51,7 @@ Open http://localhost:5173 and pick a demo user. The login page suggests a path 
 | A Docker volume | Object storage for exported datasets |
 | A demo clock running 180× real time, `make demo` only | Waiting five hours for the story |
 
-Out of scope for this slice: the environment pipeline and training observability (the next slice), vendor-level abuse rules, and vendor reviewers. [BUILD.md](docs/BUILD.md#2-scope) lists everything left out and why.
+Out of scope for this slice: the environment pipeline and training observability (the next slice), vendor-level abuse rules, and vendor reviewers. [BUILD.md](docs/BUILD.md#2-scope) lists everything left out and why, and [LIMITATIONS.md](docs/LIMITATIONS.md) covers where the built part falls short.
 
 **On detecting AI-written answers.** The platform doesn't try to tell AI text from human text; that's unreliable. It flags the *behavior* around a submission: answering faster than the task can be read, pasting rather than typing, and giving the same reason to different questions. Honest but sloppy work isn't flagged: it shows up as low quality on the scorecard instead.
 

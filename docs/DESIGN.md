@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Requirements and high-level design; first slice built (see [`BUILD.md`](BUILD.md)) |
+| Status | Requirements and high-level design; first slice released as 0.1.0 (see [`BUILD.md`](BUILD.md) and [`LIMITATIONS.md`](LIMITATIONS.md)) |
 | Date | 2026-10-13 |
 | Source | [`POSTING.md`](POSTING.md), Anthropic's Full-Stack Software Engineer, Reinforcement Learning posting |
 | Related | [`PRD.md`](PRD.md) (product requirements) · [`GLOSSARY.md`](GLOSSARY.md) (terms) · [`DECISIONS.md`](DECISIONS.md) (decision register, by reversibility) |

@@ -2,11 +2,11 @@
 
 | | |
 |---|---|
-| Status | Complete: M0–M8 done. Stretch goals not started |
+| Status | Released as 0.1.0 (MVP): M0–M8 done. Stretch goals not started. Known limitations in [`LIMITATIONS.md`](LIMITATIONS.md) |
 | Timebox | About a week: ~33 hours across nine milestones |
 | Stack | Python (FastAPI, async) · Postgres · React + TypeScript (Vite) · Docker Compose |
 | Delivered as | This repo, runnable with `make demo`, plus an 80-second recorded walkthrough linked from the README |
-| Related | [`PRD.md`](PRD.md) · [`DESIGN.md`](DESIGN.md) · [`DECISIONS.md`](DECISIONS.md) · [`GLOSSARY.md`](GLOSSARY.md) |
+| Related | [`PRD.md`](PRD.md) · [`DESIGN.md`](DESIGN.md) · [`DECISIONS.md`](DECISIONS.md) · [`LIMITATIONS.md`](LIMITATIONS.md) · [`GLOSSARY.md`](GLOSSARY.md) |
 
 ## 1. What the build shows
 
