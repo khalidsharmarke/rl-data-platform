@@ -101,3 +101,17 @@ tr.clickable:hover td { background: var(--bg); }
 .brief-lists { display: flex; gap: 32px; flex-wrap: wrap; }
 .brief-lists h4 { margin: 8px 0 4px; }
 .brief-lists ul { margin: 0; padding-left: 18px; list-style: disc; }
+.env-detail { margin-top: 12px; border-top: 1px solid var(--line); padding-top: 12px; }
+.version-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+.version h4 { margin: 14px 0 6px; }
+.version pre { background: #f3f2ee; padding: 10px; border-radius: 6px; overflow-x: auto; font-size: 0.8rem; max-height: 320px; }
+.version pre.diff { white-space: pre; }
+.checks, .rubric, .files { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+.ok { color: #1f7a3d; font-weight: 600; }
+.bad { color: #b42318; font-weight: 600; }
+.review { margin-bottom: 8px; }
+.review-form { display: grid; gap: 8px; margin-top: 12px; padding: 12px; border: 1px solid var(--line); border-radius: 8px; }
+.review-form .criterion { display: flex; gap: 8px; align-items: center; }
+.review-form textarea { min-height: 70px; font: inherit; padding: 8px; }
+.review-form .actions { display: flex; gap: 8px; }
+tr.clickable { cursor: pointer; }

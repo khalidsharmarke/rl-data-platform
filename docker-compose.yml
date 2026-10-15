@@ -22,6 +22,7 @@ services:
       JWT_SECRET: dev-only-not-a-secret
       DEMO_LOGINS: "true"
       DETECTION_TOKEN: dev-only-detection-token
+      TRAINING_TOKEN: dev-only-training-token
     command: >
       sh -c "alembic upgrade head && python -m app.seed &&
              uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"

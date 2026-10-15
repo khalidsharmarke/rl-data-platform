@@ -1,14 +1,15 @@
 import { useEffect, useState } from "react";
-import { api, type Project, type ReviewItem } from "./api";
+import { api, type Project, type ReviewItem, type User, type VersionRow } from "./api";
+import EnvironmentDetail from "./EnvironmentDetail";
 
-export default function Review() {
+export default function Review({ me }: { me: User }) {
   const [project, setProject] = useState<Project | null>(null);
   const [items, setItems] = useState<ReviewItem[]>([]);
   const [reasons, setReasons] = useState<Record<string, string>>({});
   const [done, setDone] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    api<Project[]>("/projects").then((list) => setProject(list[0] ?? null));
+    api<Project[]>("/projects").then((list) => setProject(list.find((p) => p.kind === "human_data") ?? null));
   }, []);
 
   async function load() {
@@ -32,6 +33,7 @@ export default function Review() {
 
   return (
     <section>
+      <EnvironmentQueue me={me} />
       <h2>Spot checks</h2>
       <p className="muted">A random sample of answers on regular tasks. Rejections need a reason; the worker sees it.</p>
       <button onClick={load}>New sample</button>
@@ -68,5 +70,60 @@ export default function Review() {
         </div>
       ))}
     </section>
+  );
+}
+
+/** Environment versions that passed the sandbox's checks and wait for a researcher (EC5). */
+function EnvironmentQueue({ me }: { me: User }) {
+  const [queue, setQueue] = useState<VersionRow[]>([]);
+  const [briefs, setBriefs] = useState<Record<string, Project>>({});
+  const [open, setOpen] = useState<VersionRow | null>(null);
+
+  async function load() {
+    setQueue(await api<VersionRow[]>("/versions?status=in_review"));
+    const list = await api<Project[]>("/projects");
+    setBriefs(Object.fromEntries(list.filter((p) => p.kind === "environment").map((p) => [p.id, p])));
+  }
+
+  useEffect(() => {
+    load();
+  }, []);
+
+  return (
+    <div className="card">
+      <h2>Environments to review</h2>
+      {queue.length === 0 ? (
+        <p className="muted">Nothing waiting. Versions appear here once they pass the sandbox's checks.</p>
+      ) : (
+        <table>
+          <thead>
+            <tr><th>Environment</th><th>Brief</th><th>Vendor</th><th>Version</th></tr>
+          </thead>
+          <tbody>
+            {queue.map((v) => (
+              <tr key={v.id} className="clickable" onClick={() => setOpen(open?.id === v.id ? null : v)}>
+                <td>{v.environment_name}</td>
+                <td>{briefs[v.project_id]?.name ?? "—"}</td>
+                <td>{v.vendor_name}</td>
+                <td>v{v.number}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      {open && briefs[open.project_id] && (
+        <EnvironmentDetail
+          key={open.id}
+          environmentId={open.environment_id}
+          initialVersion={open.id}
+          me={me}
+          rubric={briefs[open.project_id].brief!.review_rubric}
+          onChange={() => {
+            setOpen(null);
+            load();
+          }}
+        />
+      )}
+    </div>
   );
 }

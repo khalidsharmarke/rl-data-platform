@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Version | 0.2.0 (the 0.1.0 MVP plus integrity milestones M9–M12), plus environment milestones M13–M14 (see [`BUILD.md`](BUILD.md#environment-milestones)) |
+| Version | 0.2.0 (the 0.1.0 MVP plus integrity milestones M9–M12), plus environment milestones M13–M15 (see [`BUILD.md`](BUILD.md#environment-milestones)) |
 | Covers | Slice A from [`BUILD.md`](BUILD.md): multi-vendor human data, with allocation, gold QA, scorecards, worker-abuse cases and lineage clean-up; a separate detection service; the release stage; contributor grades; discreet escalation |
 | Related | [`POSTING.md`](POSTING.md) · [`PRD.md`](PRD.md) · [`DESIGN.md`](DESIGN.md) · [`DECISIONS.md`](DECISIONS.md) |
 
@@ -10,7 +10,7 @@ What the build does not do, where it falls short, and what is still undecided. T
 
 ## 1. Coverage of the posting
 
-The posting names three areas: *"environment creation, data collection, and training observability."* The build covers the core of data collection, plus the vendor management, workspaces and audit trail it needs. It covers 29 of the design's 55 functional requirements.
+The posting names three areas: *"environment creation, data collection, and training observability."* The build covers the core of data collection, plus the vendor management, workspaces and audit trail it needs. It covers 34 of the design's 55 functional requirements.
 
 | Posting line | Coverage in the build |
 |---|---|
@@ -18,7 +18,7 @@ The posting names three areas: *"environment creation, data collection, and trai
 | *"a unified platform for human data collection that integrates labeling workflows, vendor management, and QA for complex agentic tasks"* | Except for agentic tasks. There is one task type: pick the more helpful of two answers, with a reason |
 | *"evaluation dashboards and observability UIs that give researchers real-time insight into environment quality, training run health, and reward hacking"* | Partly. Vendor scorecards and drop alerts exist; nothing covers environments, training runs or reward hacking |
 | *"backend services and APIs that connect environment authoring tools, data collection systems, and RL training infrastructure"* | Partly. Datasets are exported as files. Nothing comes back from training |
-| *"web platforms for RL environment creation, management, and quality review"* and *"vendor-facing interfaces… to create, submit, and iterate on training environments"* | Started. Researchers write briefs, data ops allocates them, and builders upload versions that never change, stored by hash in three parts (EC0, EC1, M13), and every submitted version is checked in a sandbox (EC3 without difficulty, M14). Review, the catalog and quarantine are M15–M16 |
+| *"web platforms for RL environment creation, management, and quality review"* and *"vendor-facing interfaces… to create, submit, and iterate on training environments"* | Started. Researchers write briefs, data ops allocates them, and builders upload versions that never change, stored by hash in three parts (EC0, EC1, M13), every submitted version is checked in a sandbox (EC3 without difficulty, M14), builders see why a check failed and what changed between versions, researchers grade against the brief's rubric, and training pulls approved versions from a catalog without the reference solution (EC2, EC4–EC6, EC8, M15). Quarantine is M16 |
 | *"scalable code data generation pipelines"* | No (EC7) |
 | *"onboarding automation… Docker registry access, API token management, and environment validation"* | No. Vendors and users are seeded (VM2, VM3) |
 
@@ -42,6 +42,7 @@ The posting names three areas: *"environment creation, data collection, and trai
 | Grades are per project | A worker trusted on one project starts unproven on the next | Carry evidence across projects, weighted by how similar the work is |
 | Vendors get no view of grades | DC11 gives vendors an aggregate (for example, how much of their work is released); the build shows them nothing | An aggregate on the vendor's own scorecard, coarse enough not to single out a watched worker |
 | The grader runs alongside the code it grades | In the grading step, the task code is imported by the tests, so it runs with the grader in the same container. The grader's files are read-only, but code that exits early with success, or patches the test runner, could still fool a grader that only checks the exit code (N21) | Run the grader in its own process or container and call the task code through a narrow interface, and judge results from a report the task code can't write |
+| Training's access is one shared token | The catalog trusts anything holding the training token, and a pull records only a free-text run label. Nothing ties a pull to a real training run | Per-run credentials issued by training infrastructure, and runs reported back (TO1) |
 | A crashed check is stuck | If the sandbox runner dies mid-check, the job stays running and the version stays validating; nothing retries it | A lease on running jobs, as D2 describes for the job queue |
 | Rule thresholds were set against simulated workers | The demo's results depend on the simulator's settings (clock speed, Rosa's accuracy, when she switches, how often workers take breaks). Real workers will behave differently | Recalibrate the thresholds on real cases. Rules are versioned (N19), so a change shows in every flag |
 

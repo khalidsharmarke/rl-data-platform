@@ -12,6 +12,7 @@ The manifest never changes (a database trigger enforces it). Only the status mov
 along the state machine below, with an audit event for every move.
 """
 
+import difflib
 import hashlib
 import uuid
 from pathlib import Path, PurePosixPath
@@ -64,6 +65,16 @@ async def store(session: AsyncSession, data: bytes) -> str:
 
 def read(digest: str) -> bytes:
     return content_path(digest).read_bytes()
+
+
+def text_diff(old_hash: str, new_hash: str, path: str, limit: int = 400) -> list[str] | None:
+    """A unified diff of two stored files, or None if either isn't text."""
+    try:
+        old, new = read(old_hash).decode(), read(new_hash).decode()
+    except UnicodeDecodeError:
+        return None
+    lines = list(difflib.unified_diff(old.splitlines(), new.splitlines(), f"a/{path}", f"b/{path}", lineterm=""))
+    return lines[:limit]
 
 
 def clean_path(path: str) -> str:

@@ -68,7 +68,7 @@ function Views({ me }: { me: User }) {
       {tab === "Work" && <Work />}
       {tab === "Feedback" && <Feedback />}
       {tab === "Projects" && <Projects me={me} />}
-      {tab === "Review" && <Review />}
+      {tab === "Review" && <Review me={me} />}
       {tab === "Scorecards" && <Scorecards me={me} />}
       {tab === "Cases" && <Cases me={me} />}
       {tab === "Workspaces" && <Workspaces me={me} />}

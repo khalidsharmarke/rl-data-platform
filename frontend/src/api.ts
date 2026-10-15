@@ -88,6 +88,20 @@ export type EnvironmentRow = {
   id: string; project_id: string; vendor_name: string; name: string; created_at: string;
   versions: number; latest_status: string | null;
 };
+export type VersionFile = { path: string; part: "task" | "grader" | "reference"; hash: string; size: number };
+export type EnvVersion = {
+  id: string; environment_id: string; number: number; status: string; created_at: string; status_changed_at: string;
+  manifest: { base_image: string; test_command: string; prepare_command: string | null; files: VersionFile[] };
+};
+export type VersionRow = {
+  id: string; environment_id: string; environment_name: string; project_id: string; vendor_name: string;
+  number: number; status: string; status_changed_at: string;
+};
+export type CheckRun = { check_name: string; passed: boolean; outcome: string; detail: string; duration_ms: number; logs: string; created_at: string };
+export type EnvReview = { decision: "approve" | "send_back"; rubric: Record<string, boolean>; feedback: string; reviewer: string; created_at: string };
+export type FileDiff = { path: string; part: string; change: "added" | "removed" | "changed" | "unchanged"; diff: string[] | null };
+export type VersionDiff = { version_id: string; against: string | null; against_number: number | null; files: FileDiff[] };
+export type EnvProgress = { target: number; environments: number; approved: number; in_review: number; failed: number; in_progress: number };
 export type Allocation = {
   id: string;
   vendor_id: string;

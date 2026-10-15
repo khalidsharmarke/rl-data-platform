@@ -64,6 +64,7 @@ async def session(test_database_url: str) -> AsyncIterator[AsyncSession]:
 async def client(session: AsyncSession, monkeypatch) -> AsyncIterator[AsyncClient]:
     monkeypatch.setattr(settings, "demo_logins", True)
     monkeypatch.setattr(settings, "detection_token", "test-detection-token")
+    monkeypatch.setattr(settings, "training_token", "test-training-token")
 
     async def override() -> AsyncIterator[AsyncSession]:
         yield session

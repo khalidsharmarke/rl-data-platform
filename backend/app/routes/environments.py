@@ -7,11 +7,12 @@ their vendor supplies environments (VM6). Other vendors can't see a vendor's env
 
 import base64
 import binascii
+import json
 import uuid
 from datetime import datetime
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -227,3 +228,154 @@ async def version_checks(version_id: uuid.UUID, user: User = Depends(current_use
     )
     return [CheckOut(check_name=r.check_name, passed=r.passed, outcome=r.outcome, detail=r.detail, duration_ms=r.duration_ms,
                      logs=environments.read(r.logs_hash).decode(errors="replace"), created_at=r.created_at) for r in rows]
+
+
+class VersionRow(BaseModel):
+    id: uuid.UUID
+    environment_id: uuid.UUID
+    environment_name: str
+    project_id: uuid.UUID
+    vendor_name: str
+    number: int
+    status: str
+    status_changed_at: datetime
+
+
+@router.get("/versions")
+async def list_versions_by_status(
+    project_id: uuid.UUID | None = None, status_filter: str | None = Query(default=None, alias="status"),
+    user: User = Depends(current_user), session: AsyncSession = Depends(get_session),
+) -> list[VersionRow]:
+    """Versions across environments, for a brief and a status: the researcher's review queue (EC5)."""
+    query = (select(EnvironmentVersion, Environment, Org.name)
+             .join(Environment, Environment.id == EnvironmentVersion.environment_id)
+             .join(Org, Org.id == Environment.org_id)
+             .order_by(EnvironmentVersion.status_changed_at))
+    if not is_internal(user):
+        query = query.where(Environment.org_id == user.org_id)
+    if project_id:
+        query = query.where(Environment.project_id == project_id)
+    if status_filter:
+        query = query.where(EnvironmentVersion.status == status_filter)
+    return [VersionRow(id=v.id, environment_id=e.id, environment_name=e.name, project_id=e.project_id, vendor_name=name,
+                       number=v.number, status=v.status, status_changed_at=v.status_changed_at)
+            for v, e, name in (await session.execute(query)).all()]
+
+
+class FileDiff(BaseModel):
+    path: str
+    part: str
+    change: str  # added, removed, changed or unchanged
+    diff: list[str] | None = None
+
+
+class DiffOut(BaseModel):
+    version_id: uuid.UUID
+    against: uuid.UUID | None
+    against_number: int | None
+    files: list[FileDiff]
+
+
+@router.get("/versions/{version_id}/diff")
+async def version_diff(
+    version_id: uuid.UUID, against: uuid.UUID | None = None,
+    user: User = Depends(current_user), session: AsyncSession = Depends(get_session),
+) -> DiffOut:
+    """What changed from another version of the same environment, file by file (EC2); by default the previous one."""
+    version, env = await visible_version(version_id, user, session)
+    if against is not None:
+        other, other_env = await visible_version(against, user, session)
+        if other_env.id != env.id:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Both versions must belong to the same environment")
+    else:
+        other = await session.scalar(select(EnvironmentVersion).where(
+            EnvironmentVersion.environment_id == env.id, EnvironmentVersion.number < version.number
+        ).order_by(EnvironmentVersion.number.desc()).limit(1))
+    new = {f["path"]: f for f in version.manifest["files"]}
+    old = {f["path"]: f for f in other.manifest["files"]} if other else {}
+    files = []
+    for path in sorted(set(new) | set(old), key=lambda p: (environments.PARTS.index((new.get(p) or old[p])["part"]), p)):
+        a, b = old.get(path), new.get(path)
+        part = (b or a)["part"]
+        if a and b and a["hash"] == b["hash"]:
+            files.append(FileDiff(path=path, part=part, change="unchanged"))
+        elif a and b:
+            files.append(FileDiff(path=path, part=part, change="changed", diff=environments.text_diff(a["hash"], b["hash"], path)))
+        else:
+            files.append(FileDiff(path=path, part=part, change="added" if b else "removed"))
+    return DiffOut(version_id=version.id, against=other.id if other else None, against_number=other.number if other else None, files=files)
+
+
+class ReviewIn(BaseModel):
+    decision: str = Field(pattern="^(approve|send_back)$")
+    # Every criterion in the brief's rubric, met or not.
+    rubric: dict[str, bool]
+    feedback: str = Field(min_length=3, max_length=4000)
+
+
+class ReviewOut(BaseModel):
+    decision: str
+    rubric: dict[str, bool]
+    feedback: str
+    reviewer: str
+    created_at: datetime
+
+
+@router.post("/versions/{version_id}/reviews", status_code=status.HTTP_201_CREATED)
+async def review_version(
+    version_id: uuid.UUID, body: ReviewIn,
+    user: User = Depends(require_roles(Role.RESEARCHER)), session: AsyncSession = Depends(get_session),
+) -> VersionOut:
+    """A researcher grades a version against its brief's rubric (EC5): approve, or send it back."""
+    version, env = await visible_version(version_id, user, session)
+    if version.status != "in_review":
+        raise HTTPException(status.HTTP_409_CONFLICT, "Only a version in review can be reviewed")
+    criteria = (await session.get(Project, env.project_id)).brief["review_rubric"]
+    if set(body.rubric) != set(criteria):
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Answer every criterion in the brief's rubric, and only those")
+    if body.decision == "approve" and not all(body.rubric.values()):
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Approval needs every rubric criterion met")
+    await session.execute(
+        text("INSERT INTO environment_reviews (version_id, reviewer_id, decision, rubric, feedback, created_at) "
+             "VALUES (:v, :u, :d, CAST(:r AS jsonb), :f, :now)"),
+        {"v": version.id, "u": user.id, "d": body.decision, "r": json.dumps(body.rubric), "f": body.feedback, "now": clock.now()},
+    )
+    await environments.transition(session, version, "approved" if body.decision == "approve" else "failed", actor=user,
+                                  note=body.feedback)
+    await session.commit()
+    return version_out(version)
+
+
+@router.get("/versions/{version_id}/reviews")
+async def version_reviews(version_id: uuid.UUID, user: User = Depends(current_user), session: AsyncSession = Depends(get_session)) -> list[ReviewOut]:
+    """Reviews of a version, for its vendor (the builder's feedback, EC4) and for Anthropic."""
+    version, _ = await visible_version(version_id, user, session)
+    rows = await session.execute(text(
+        "SELECT r.*, u.display_name FROM environment_reviews r JOIN users u ON u.id = r.reviewer_id "
+        "WHERE r.version_id = :v ORDER BY r.created_at"), {"v": version.id})
+    return [ReviewOut(decision=r.decision, rubric=r.rubric, feedback=r.feedback, reviewer=r.display_name, created_at=r.created_at) for r in rows]
+
+
+class ProgressOut(BaseModel):
+    target: int
+    environments: int
+    approved: int
+    in_review: int
+    failed: int
+    in_progress: int
+
+
+@router.get("/projects/{project_id}/environment-progress")
+async def environment_progress(project_id: uuid.UUID, user: User = Depends(current_user), session: AsyncSession = Depends(get_session)) -> ProgressOut:
+    """Environments against the brief's target, by the status of each one's latest version (M15)."""
+    project = await session.get(Project, project_id)
+    if project is None or project.kind != "environment":
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Not found")
+    rows = await environment_rows(session, user, project_id=project.id)
+    if not is_internal(user) and not rows and not await session.scalar(
+            select(Allocation.id).where(Allocation.project_id == project.id, Allocation.vendor_id == user.org_id)):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Not found")
+    latest = [r.latest_status for r in rows]
+    return ProgressOut(target=project.target_volume, environments=len(rows), approved=latest.count("approved"),
+                       in_review=latest.count("in_review"), failed=latest.count("failed"),
+                       in_progress=sum(1 for s in latest if s in ("draft", "submitted", "validating")))

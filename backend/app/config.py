@@ -18,6 +18,8 @@ class Settings(BaseSettings):
     seed_sample_project: bool = True
     # The detection service signs in with this token (AB13). Empty disables its routes.
     detection_token: str = ""
+    # Training infrastructure signs in with this token to use the catalog (EC6). Empty disables it.
+    training_token: str = ""
     # Object storage stand-in: exported datasets are written here.
     export_dir: str = "/data/exports"
     # Environment content, stored once per SHA-256 (D34).
