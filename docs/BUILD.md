@@ -44,6 +44,7 @@ The [environment milestones](#environment-milestones) add a second act: a resear
 | Vendor review | DC8, D44, A29 | Per allocation, the vendor's reviewers accept or correct answers before they reach Anthropic; workers are measured on their own answers, vendors on what they submit (M24) |
 | Release and grades | DC10, DC11, AB17, D25, D29–D31 | The release stage between acceptance and export, and contributor grades on quality and integrity (M10, M11) |
 | Environments | EC0–EC6, EC8, D3, D4, D33, D34, N8, N10, N21, N22, TO6, VP3 (environment work) | The [environment milestones](#environment-milestones): briefs and versions (M13), sandboxed checks (M14), the builder's loop, review and the catalog (M15), quarantine through a case and environment work on the scorecard (M16) |
+| Training observability | TO1–TO5, TO7, TO8, EC3 (difficulty), D35–D39, B6, B7 | The [training observability milestones](#training-observability-milestones): episode intake from a training stand-in, run statistics and a live dashboard with drill-down, a reward-hack detector behind its contract, recalls training answers, and training outcomes on the vendor scorecard |
 | Export | DC6 | Datasets exported as files; re-export excludes removed data |
 | Versioning | N19 | Metric and rule versions recorded with every score and flag; task schema version recorded with every task |
 | Simulator | none (demo tooling) | Synthetic workers with behavior profiles, driven through the public API like real clients |
@@ -67,7 +68,7 @@ These keep the boundaries from [`DESIGN.md`](DESIGN.md) but use simpler parts:
 
 | Left out | Requirements | Why |
 |---|---|---|
-| Parts of the environment pipeline | EC3's difficulty estimate, EC7, vendor-built images (A15, VM2) | The [environment milestones](#environment-milestones) build a thin slice; these come after it |
+| Parts of the environment pipeline | EC7, vendor-built images (A15, VM2) | The [environment milestones](#environment-milestones) build a thin slice; difficulty came with training results (M18); these come after it |
 | Real training and real models | none (A23) | Training is modeled by scripted agents; see the [training observability milestones](#training-observability-milestones) and [`NOT-SOLVED.md`](NOT-SOLVED.md) |
 | Vendor rules that need identities across vendors | Part of AB2 (removed workers returning, matching answers across vendors), AB10 | They need a cross-vendor worker match, which is P2 in the PRD |
 | The rest of the integrity layers | AB11 and AB12 beyond paste and time on task; AB14's extra overlap; DC11's aggregate view for vendors | Not needed to show the layers working |
