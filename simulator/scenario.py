@@ -427,6 +427,7 @@ REVIEWING_VENDOR = "Northwind Data"
 VENDOR_REVIEWER = "Hana Kowalski"
 REVIEW_EVERY_MINUTES = 3  # simulated time between the reviewer's batches
 CATCHES = 0.7  # share of wrong picks the reviewer notices and corrects; she never makes a right one wrong
+LEFT_FOR_YOU = 10  # with DEMO_AUTOPILOT=false, the newest answers she leaves waiting
 
 
 async def vendor_reviewer(c, project_id, truth, done: asyncio.Event) -> None:
@@ -442,8 +443,13 @@ async def vendor_reviewer(c, project_id, truth, done: asyncio.Event) -> None:
     reviewed = corrected = 0
     while True:
         items = (await c.get("/vendor-review/queue", headers=reviewer, params={"n": 50})).json()["items"]
-        if not items and done.is_set():
+        if done.is_set() and (not items or not AUTOPILOT):
             break
+        if not AUTOPILOT:
+            # By hand, the newest answers on ordinary tasks are left for you to review as Hana Kowalski.
+            ordinary = [i for i in items if i["payload"]["response_a"] != i["payload"]["response_b"]]
+            left = {i["submission_id"] for i in ordinary[-LEFT_FOR_YOU:]}
+            items = [i for i in items if i["submission_id"] not in left]
         for item in items:
             right = truth[item["payload"]["item"]]
             if item["answer"]["choice"] != right and rng.random() < CATCHES:

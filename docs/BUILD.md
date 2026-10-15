@@ -5,7 +5,7 @@
 | Status | 0.1.0 (MVP): M0–M8. 0.2.0: integrity milestones M9–M12. 0.3.0: environment milestones M13–M16. 0.4.0: training observability milestones M17–M20. Oversight milestones: M21–M24 done. Known limitations in [`LIMITATIONS.md`](LIMITATIONS.md) |
 | Timebox | ~33 hours for 0.1.0 (M0–M8), ~15 for the integrity milestones (M9–M12), ~15 for the environment milestones (M13–M16), ~17 planned for the training observability milestones (M17–M20) |
 | Stack | Python (FastAPI, async) · Postgres · React + TypeScript (Vite) · Docker Compose |
-| Delivered as | This repo, runnable with `make demo`, plus a five-minute recorded walkthrough linked from the README |
+| Delivered as | This repo, runnable with `make demo`, plus a six-minute recorded walkthrough linked from the README |
 | Related | [`PRD.md`](PRD.md) · [`DESIGN.md`](DESIGN.md) · [`DECISIONS.md`](DECISIONS.md) · [`LIMITATIONS.md`](LIMITATIONS.md) · [`NOT-SOLVED.md`](NOT-SOLVED.md) · [`GLOSSARY.md`](GLOSSARY.md) |
 
 ## 1. What the build shows

@@ -4,7 +4,7 @@ A working slice of a platform for sourcing AI training data through many vendors
 
 Built in response to Anthropic's [Full-Stack Software Engineer, Reinforcement Learning](docs/POSTING.md) posting. It builds the data-collection core of the design and thin slices of environment creation and training observability, with training itself played by a stand-in. [Limitations](docs/LIMITATIONS.md) says what it doesn't do and where it falls short.
 
-**[Watch the five-minute walkthrough](docs/media/walkthrough.mp4)** · [Product requirements](docs/PRD.md) · [Design](docs/DESIGN.md) · [Decisions](docs/DECISIONS.md) · [Build plan](docs/BUILD.md) · [Limitations](docs/LIMITATIONS.md) · [What we chose not to solve](docs/NOT-SOLVED.md)
+**[Watch the six-minute walkthrough](docs/media/walkthrough.mp4)** · [Product requirements](docs/PRD.md) · [Design](docs/DESIGN.md) · [Decisions](docs/DECISIONS.md) · [Build plan](docs/BUILD.md) · [Limitations](docs/LIMITATIONS.md) · [What we chose not to solve](docs/NOT-SOLVED.md)
 
 ![Scorecards: three vendors compared on identical measures, with Brightline's dip](docs/media/scorecards.png)
 
@@ -64,7 +64,7 @@ make down    # stop (make reset also deletes the database)
 
 Open http://localhost:5173 and pick a demo user. The login page suggests a path through the story. The API is at http://localhost:8000 (interactive docs at `/docs`).
 
-`make demo` plays the people in the story too: the admin's suspension and data ops' clean-up. To make those decisions yourself, run `DEMO_AUTOPILOT=false make demo`, then sign in as Grace Adeyemi (Brightline's admin) and then Sam Lindqvist (data ops).
+`make demo` plays the people in the story too: the admin's suspension, data ops' clean-up and vendor cases, and the researcher's environment reviews and broken-task decisions. To make those decisions yourself, run `DEMO_AUTOPILOT=false make demo` and follow the path on the sign-in page; Northwind's reviewer then leaves her last few answers for you as Hana Kowalski.
 
 ## What's real and what stands in
 
