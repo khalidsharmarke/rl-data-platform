@@ -1,6 +1,7 @@
 """Quality measures (DC4, N16), computed by the platform the same way for every vendor.
 
-Metric definition "quality-v1" (N19):
+Metric definition "quality-v2" (N19). Answers on a task researchers retired as broken (D43)
+count nowhere: not in volume, gold accuracy, agreement or acceptance. Otherwise as quality-v1:
 - Gold accuracy: share of a worker's answers on gold tasks whose fields match the gold
   answer (JSON containment, so a free-text rationale doesn't matter).
 - Agreement: on regular tasks, share of a worker's answers whose "choice" matches the
@@ -19,7 +20,7 @@ from dataclasses import asdict, dataclass
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-METRIC_VERSION = "quality-v1"
+METRIC_VERSION = "quality-v2"
 
 # One row per submission with everything the measures need. Later milestones add exclusions
 # (held and removed submissions) here, so every measure stays consistent.
@@ -30,6 +31,7 @@ WITH s AS (
     FROM submissions s
     LEFT JOIN gold_answers g ON g.task_id = s.task_id
     WHERE s.project_id = :project_id
+      AND NOT EXISTS (SELECT 1 FROM broken_tasks b WHERE b.task_id = s.task_id AND b.status = 'retired')
 ),
 latest_review AS (
     SELECT DISTINCT ON (submission_id) submission_id, verdict

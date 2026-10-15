@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import BriefCard from "./BriefCard";
+import TaskHealth from "./TaskHealth";
 import { api, pct, savedToken, type Allocation, type Contract, type Dataset, type Escalation, type Grades, type Project, type Quality, type Release, type User } from "./api";
 
 const UNIT: Record<string, string> = { task: "per task", hour: "per hour", environment: "per environment" };
@@ -103,6 +104,7 @@ export default function Projects({ me }: { me: User }) {
             </table>
           )}
           {internal && (grades[p.id]?.workers.length ?? 0) > 0 && <GradesTable g={grades[p.id]} escalations={escalations[p.id] ?? []} />}
+          {internal && p.kind === "human_data" && <TaskHealth projectId={p.id} canDecide={me.role === "researcher"} />}
           {internal && (
             <div className="datasets">
               <h4>Datasets</h4>

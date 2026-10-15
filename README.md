@@ -18,27 +18,28 @@ Three fictional vendors work on one project, *"Which of these two answers is mor
 4. **The platform notices and opens a case.** A separate detection service reads every submission and reports three signals that agree: speed, pasting and duplicates. The worker's answers are held out of training automatically. Nothing is done *to the worker* yet.
 5. **One signal on its own isn't a case.** A careful Northwind worker pastes reasons from their own notes. Pasting alone only puts them on watch, so the platform quietly gives them more test questions. Their good answers clear them, and their vendor never sees a case.
 6. **Detection is measured, and new rules prove themselves first.** Every spot check also asks whether the answer looks like abuse, and a random share of answers is mixed into the queue so reviewers can't tell audits apart. A new rule that flags very short reasons runs in shadow: it flags more than a dozen honest workers, reviewers judge none of its flags abusive, and it never reaches a vendor. The audit sample finds no abuse the live rules missed.
-7. **Brightline's admin decides.** She sees what was observed, with examples, but never the rules' thresholds or which tasks were tests. She suspends the worker, with a reason on record.
-8. **Data ops cleans up.** Lineage shows every answer the worker gave. None of her pasted answers reached a dataset: the release stage held them back, because the test questions she answered after them were failing. A few honest answers from before she switched may have gone out; nobody can say exactly when abuse begins, so one click removes all her answers and reopens those tasks for other workers.
-9. **Every export contains only released answers**: checked by detection, past a minimum gap, and backed by good test answers from the same worker afterwards. How many depends on the worker's grade: a trusted worker needs one, a new one three. Grades rate quality and integrity separately, so an honest but sloppy worker is trusted with low quality, not treated as abusive. Each row is tagged verified or provisional and points back to its source.
-10. **The audit log holds the whole chain** and can't be edited, even by direct SQL.
+7. **Workers flag broken tasks.** A bug made both answers identical in the project's last batch of tasks. Workers who reach them flag them instead of answering, and a task two workers flag stops being routed. The agreement drop raises an alert listing the worst tasks; the researcher retires them, and their answers count nowhere.
+8. **Brightline's admin decides.** She sees what was observed, with examples, but never the rules' thresholds or which tasks were tests. She suspends the worker, with a reason on record.
+9. **Data ops cleans up.** Lineage shows every answer the worker gave. None of her pasted answers reached a dataset: the release stage held them back, because the test questions she answered after them were failing. A few honest answers from before she switched may have gone out; nobody can say exactly when abuse begins, so one click removes all her answers and reopens those tasks for other workers.
+10. **Every export contains only released answers**: checked by detection, past a minimum gap, and backed by good test answers from the same worker afterwards. How many depends on the worker's grade: a trusted worker needs one, a new one three. Grades rate quality and integrity separately, so an honest but sloppy worker is trusted with low quality, not treated as abusive. Each row is tagged verified or provisional and points back to its source.
+11. **The audit log holds the whole chain** and can't be edited, even by direct SQL.
 
 ### The second act: environments
 
-11. **A researcher writes a brief** for Python bug-fix environments, with constraints (nothing copied from public benchmarks) and a review rubric. Data ops gives it to Kestrel, the vendor set up to build environments.
-12. **Kestrel's builder submits four environments.** Each version is stored by hash in three parts: the task files the model works in, the grader, and the reference solution.
-13. **The sandbox checks each one** in fresh containers with no network and strict limits, keeping the grader out of the attempt: the reference solution must pass, the untouched task files must fail, and ten repeat runs must agree. Three are stopped: a grader that rewards an empty answer, a task even its own solution can't pass, and a test that passes at random. The builder sees why, with logs.
-14. **The researcher grades the sound one against the brief's rubric** and approves it. Training pulls it from the catalog: the task files and grader, never the reference solution.
-15. **Later, a researcher spots that the task copies a public benchmark.** Data ops opens a case: the version is quarantined and leaves the catalog at once, and the case lists which training run pulled it. Data ops retires it.
+12. **A researcher writes a brief** for Python bug-fix environments, with constraints (nothing copied from public benchmarks) and a review rubric. Data ops gives it to Kestrel, the vendor set up to build environments.
+13. **Kestrel's builder submits four environments.** Each version is stored by hash in three parts: the task files the model works in, the grader, and the reference solution.
+14. **The sandbox checks each one** in fresh containers with no network and strict limits, keeping the grader out of the attempt: the reference solution must pass, the untouched task files must fail, and ten repeat runs must agree. Three are stopped: a grader that rewards an empty answer, a task even its own solution can't pass, and a test that passes at random. The builder sees why, with logs.
+15. **The researcher grades the sound one against the brief's rubric** and approves it. Training pulls it from the catalog: the task files and grader, never the reference solution.
+16. **Later, a researcher spots that the task copies a public benchmark.** Data ops opens a case: the version is quarantined and leaves the catalog at once, and the case lists which training run pulled it. Data ops retires it.
 
 ### The third act: training
 
-16. **Kestrel's builder submits two more.** One is sound. The other, "slugify edge cases", has a grader that only checks the empty string, so a function that returns `""` scores full marks. Both pass the sandbox's checks: the reference passes, the untouched task fails, the repeats agree. The researcher approves both; nothing in a review shows the hole.
-17. **Training pulls both and starts a run**, sending back every episode with its run, step, reward, length and transcript. Training here is a stand-in with a modeled policy ([B6](docs/BUILD.md#training-observability-milestones)), and the hack is one we planted; a sandbox test proves `return ""` really beats this grader.
-18. **Researchers watch the run live:** solve rate, reward variance and attempt length per environment, with drill-down to each transcript. Partway through, the weak environment's solve rate leaps while its attempts shrink from about 40 turns to 4.
-19. **A separate hack detector reads the episodes.** At 20% short full-mark attempts it asks a researcher to read transcripts; at 50% it opens a case, and the version is quarantined without a person. The sound environment raises nothing and keeps training.
-20. **The case issues a recall** naming the run, the step it first used the version, and where the flagged attempts began. Training reads it, rolls back to the checkpoint before the first flagged step, and reports that; the report lands on the case. The platform never touches a model.
-21. **Data ops retires the version.** Kestrel's scorecard shows its environment work, from versions submitted to quarantines, and what happened in training: episodes, solve rate, flagged attempts and recalls.
+17. **Kestrel's builder submits two more.** One is sound. The other, "slugify edge cases", has a grader that only checks the empty string, so a function that returns `""` scores full marks. Both pass the sandbox's checks: the reference passes, the untouched task fails, the repeats agree. The researcher approves both; nothing in a review shows the hole.
+18. **Training pulls both and starts a run**, sending back every episode with its run, step, reward, length and transcript. Training here is a stand-in with a modeled policy ([B6](docs/BUILD.md#training-observability-milestones)), and the hack is one we planted; a sandbox test proves `return ""` really beats this grader.
+19. **Researchers watch the run live:** solve rate, reward variance and attempt length per environment, with drill-down to each transcript. Partway through, the weak environment's solve rate leaps while its attempts shrink from about 40 turns to 4.
+20. **A separate hack detector reads the episodes.** At 20% short full-mark attempts it asks a researcher to read transcripts; at 50% it opens a case, and the version is quarantined without a person. The sound environment raises nothing and keeps training.
+21. **The case issues a recall** naming the run, the step it first used the version, and where the flagged attempts began. Training reads it, rolls back to the checkpoint before the first flagged step, and reports that; the report lands on the case. The platform never touches a model.
+22. **Data ops retires the version.** Kestrel's scorecard shows its environment work, from versions submitted to quarantines, and what happened in training: episodes, solve rate, flagged attempts and recalls.
 
 ![A builder's view of a brief: one environment quarantined, three stopped by the sandbox's checks, with the reason and logs](docs/media/environment-checks.png)
 
@@ -55,7 +56,7 @@ Needs Docker with Compose. The sandbox runner starts a container for every envir
 ```sh
 make demo    # fresh database, then the scripted scenario above (about 4 minutes)
 make up      # start Postgres, the API, the background worker and the web app on real time
-make test    # 160 backend tests, 38 detection-service tests, and 13 sandbox tests on real containers
+make test    # 165 backend tests, 38 detection-service tests, and 13 sandbox tests on real containers
 make down    # stop (make reset also deletes the database)
 ```
 
@@ -97,7 +98,7 @@ Each of these was found by testing or by looking at the demo's output, fixed, an
 ## Where things are
 
 ```
-backend/     FastAPI app, migrations, background worker (app/jobs.py), the detection contract (app/routes/detection.py), rule modes, the audit sample and detection's measures (app/detection_quality.py, app/routes/detectors.py), the release stage (app/release.py), contributor grades (app/grades.py), discreet escalation (app/escalation.py), environments and versions (app/environments.py), the sandbox runner (app/sandbox.py), the catalog (app/routes/catalog.py), episode intake and training dashboards (app/routes/training.py), training statistics (app/training_stats.py), the hack-detection contract and recalls (app/routes/hacks.py, app/environment_cases.py), fixture environments (tests/fixtures/environments), 160 tests
+backend/     FastAPI app, migrations, background worker (app/jobs.py), the detection contract (app/routes/detection.py), rule modes, the audit sample and detection's measures (app/detection_quality.py, app/routes/detectors.py), broken tasks and agreement alerts (app/routes/task_health.py), the release stage (app/release.py), contributor grades (app/grades.py), discreet escalation (app/escalation.py), environments and versions (app/environments.py), the sandbox runner (app/sandbox.py), the catalog (app/routes/catalog.py), episode intake and training dashboards (app/routes/training.py), training statistics (app/training_stats.py), the hack-detection contract and recalls (app/routes/hacks.py, app/environment_cases.py), fixture environments (tests/fixtures/environments), 165 tests
 sandbox/     the sandbox runner's image and the base image environment checks run on
 detection/   the separate detection services: abuse rules and severity (rules.py), their state (detector.py), the reward-hack detector (hacks.py, hack_service.py), 38 tests
 frontend/    React + TypeScript: one app, a view per role

@@ -108,6 +108,7 @@ CLAIM = text(
       AND NOT r.is_full
       AND p.status = 'active'
       AND a.status = 'active'
+      AND NOT EXISTS (SELECT 1 FROM broken_tasks b WHERE b.task_id = r.task_id AND b.status <> 'restored')
       AND (CAST(:project_id AS uuid) IS NULL OR p.id = CAST(:project_id AS uuid))
       AND r.task_id <> ALL(CAST(:skip AS uuid[]))
       AND (NOT :gold_only OR EXISTS (SELECT 1 FROM gold_answers g WHERE g.task_id = r.task_id))

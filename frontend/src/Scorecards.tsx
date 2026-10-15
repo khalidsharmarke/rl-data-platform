@@ -74,7 +74,7 @@ export default function Scorecards({ me }: { me: User }) {
     <section>
       <h2>Scorecards · {project.name}</h2>
       <p className="muted">
-        Every number is computed by the platform the same way for every vendor (metric {cards[0]?.metric_version ?? "quality-v1"}).
+        Every number is computed by the platform the same way for every vendor (metric {cards[0]?.metric_version ?? "quality-v2"}).
         {computedAt && ` Updated ${new Date(computedAt).toLocaleTimeString()}.`}
         {vendorView && cards[0]?.gold_shown_until && ` Gold-based numbers are shown up to ${new Date(cards[0].gold_shown_until).toLocaleTimeString()}.`}
       </p>

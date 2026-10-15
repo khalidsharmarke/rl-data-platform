@@ -73,6 +73,5 @@ These belong to the platform and come later. [`BUILD.md`](BUILD.md#not-in-the-bu
 | Vendor rules that need identities across vendors: removed workers returning, the same answers across vendors | They need a cross-vendor worker match, which is P2 | AB2, AB10 |
 | Vendor onboarding, API tokens, registry credentials | Vendors are seeded | VM2, VM3, N14 |
 | The vendor reviewer step | Optional for vendors (A29) (planned, M24) | DC8 |
-| Broken-task flags and disagreement alerts | The quality signals that don't need workers' input came first (planned, M22) | DC5 |
 | Generated programming tasks | Needs the environment pipeline first, which now exists | EC7 |
 | Vendor-private rules, matching workers across vendors | P2 in the PRD | AB9, AB10 |

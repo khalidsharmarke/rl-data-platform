@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from app import clock
 from app.db import SessionLocal
 
-from app.routes import audit, auth, cases, catalog, contracts, data, detection, detectors, environments, hacks, health, orgs, projects, quality, scorecards, training, work
+from app.routes import audit, auth, cases, catalog, contracts, data, detection, detectors, environments, hacks, health, orgs, projects, quality, scorecards, task_health, training, work
 
 
 
@@ -34,3 +34,4 @@ app.include_router(catalog.router)
 app.include_router(training.router)
 app.include_router(hacks.router)
 app.include_router(detectors.router)
+app.include_router(task_health.router)

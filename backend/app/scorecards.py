@@ -79,6 +79,15 @@ class Point:
         return self.agreed / self.compared if self.compared else None
 
 
+def significant_drop(recent_hits: int, recent_n: int, before_hits: int, before_n: int, *, drop: float, z: float) -> bool:
+    """The recent rate is at least `drop` below the earlier one, and the gap is significant by a
+    two-proportion z-test, which counts the uncertainty on both sides (D19)."""
+    r_rate, b_rate = recent_hits / recent_n, before_hits / before_n
+    pooled = (recent_hits + before_hits) / (recent_n + before_n)
+    se = (pooled * (1 - pooled) * (1 / recent_n + 1 / before_n)) ** 0.5
+    return b_rate - r_rate >= drop and (se == 0 or (b_rate - r_rate) / se >= z)
+
+
 def drop_alerts(points: list[Point], *, window: int = 4, min_gold: int = 60, drop: float = 0.08, z: float = 2.0) -> list[dict]:
     """Flag periods where gold accuracy over the last `window` periods falls at least `drop` below
     the vendor's accuracy over everything before that window (VP3, D19).
@@ -93,11 +102,9 @@ def drop_alerts(points: list[Point], *, window: int = 4, min_gold: int = 60, dro
         r_n, b_n = sum(p.gold_n for p in recent), sum(p.gold_n for p in before)
         if r_n < min_gold or b_n < min_gold:
             continue
-        r_acc = sum(p.gold_correct for p in recent) / r_n
-        b_acc = sum(p.gold_correct for p in before) / b_n
-        pooled = (sum(p.gold_correct for p in recent) + sum(p.gold_correct for p in before)) / (r_n + b_n)
-        se = (pooled * (1 - pooled) * (1 / r_n + 1 / b_n)) ** 0.5
-        if b_acc - r_acc >= drop and (se == 0 or (b_acc - r_acc) / se >= z):
+        r_hits, b_hits = sum(p.gold_correct for p in recent), sum(p.gold_correct for p in before)
+        r_acc, b_acc = r_hits / r_n, b_hits / b_n
+        if significant_drop(r_hits, r_n, b_hits, b_n, drop=drop, z=z):
             alerts.append({"period_start": points[i].period_start, "metric": "gold_accuracy",
                            "recent": round(r_acc, 3), "baseline": round(b_acc, 3)})
     return alerts

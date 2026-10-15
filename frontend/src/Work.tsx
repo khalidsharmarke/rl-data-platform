@@ -8,12 +8,16 @@ export default function Work() {
   const [pasted, setPasted] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [done, setDone] = useState(0);
+  const [flagging, setFlagging] = useState(false);
+  const [flagReason, setFlagReason] = useState("");
 
   async function next() {
     setMessage(null);
     setChoice(null);
     setRationale("");
     setPasted(false);
+    setFlagging(false);
+    setFlagReason("");
     try {
       const claimed = await api<Assignment | null>("/assignments/next", { method: "POST", body: "{}" });
       setAssignment(claimed);
@@ -34,6 +38,18 @@ export default function Work() {
       });
       setDone((n) => n + 1);
       await next();
+    } catch (e) {
+      setMessage(String(e instanceof Error ? e.message : e));
+    }
+  }
+
+  /** A broken task is flagged instead of answered (DC5); the worker moves straight on. */
+  async function flag() {
+    if (!assignment) return;
+    try {
+      await api(`/tasks/${assignment.task.id}/flag`, { method: "POST", body: JSON.stringify({ reason: flagReason.trim() }) });
+      await next();
+      setMessage("Thanks: the task was flagged and a researcher will look at it.");
     } catch (e) {
       setMessage(String(e instanceof Error ? e.message : e));
     }
@@ -66,9 +82,20 @@ export default function Work() {
             Reason (optional)
             <input value={rationale} onChange={(e) => setRationale(e.target.value)} onPaste={() => setPasted(true)} />
           </label>
-          <button className="primary" disabled={!choice} onClick={submit}>
-            Submit
-          </button>
+          <div className="row">
+            <button className="primary" disabled={!choice} onClick={submit}>
+              Submit
+            </button>
+            <button onClick={() => setFlagging(!flagging)}>This task is broken</button>
+          </div>
+          {flagging && (
+            <div className="row">
+              <input placeholder="What's wrong with it? (required)" value={flagReason} onChange={(e) => setFlagReason(e.target.value)} />
+              <button disabled={flagReason.trim().length < 3} onClick={flag}>
+                Flag and skip
+              </button>
+            </div>
+          )}
         </div>
       )}
     </section>

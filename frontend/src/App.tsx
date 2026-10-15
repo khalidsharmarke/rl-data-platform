@@ -110,6 +110,7 @@ function DemoLogin({ onSignedIn }: { onSignedIn: (user: User) => void }) {
         <li><strong>Sam Lindqvist</strong> (Anthropic data ops) → Scorecards: three vendors compared on the same measures, and Brightline's dip.</li>
         <li><strong>Grace Adeyemi</strong> (Brightline's admin) → Cases: what the platform observed about one of her workers, and her decision.</li>
         <li><strong>Sam</strong> again → Cases → the case: lineage, clean-up, and which datasets held the answers.</li>
+        <li><strong>Rae</strong> → Projects → Task health: the broken tasks workers flagged, and who flags.</li>
         <li><strong>Sam</strong> → Detection: each rule's precision from reviewed flags, a new rule held in shadow, and what the audit sample found.</li>
         <li><strong>Rae Okafor</strong> (researcher) → Review, and any <strong>worker</strong> → Work, to see the work itself.</li>
         <li><strong>Sofia Lindgren</strong> (Kestrel's environment builder) → Projects: six environments and what the sandbox said about each.</li>

@@ -33,7 +33,7 @@ async def test_rollup_records_metric_version_and_contract_costs(client, login, s
     await rollup_project(session, project_id)
 
     versions = await session.scalar(text("SELECT array_agg(DISTINCT metric_version) FROM scorecard_rows WHERE project_id = :p"), {"p": project_id})
-    assert versions == ["quality-v1"]
+    assert versions == ["quality-v2"]
     vendors = {v["vendor_name"]: v for v in (await client.get(f"/projects/{project_id}/vendors", headers=await login(DATA_OPS))).json()["vendors"]}
     northwind, kestrel = vendors["Northwind Data"], vendors["Kestrel Labs"]
     # Each vendor answered its share of the 15 regular tasks plus all 5 gold tasks.

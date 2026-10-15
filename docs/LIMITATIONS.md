@@ -10,11 +10,11 @@ What the build does not do, where it falls short, and what is still undecided. T
 
 ## 1. Coverage of the posting
 
-The posting names three areas: *"environment creation, data collection, and training observability."* The build covers the core of data collection, plus the vendor management, workspaces and audit trail it needs. It covers 44 of the design's 56 functional requirements.
+The posting names three areas: *"environment creation, data collection, and training observability."* The build covers the core of data collection, plus the vendor management, workspaces and audit trail it needs. It covers 45 of the design's 56 functional requirements.
 
 | Posting line | Coverage in the build |
 |---|---|
-| *"platforms for human data collection at scale, including labeling workflows, quality assurance systems, and feedback mechanisms that surface reward signal integrity issues early"* | Mostly. Labeling, gold QA, agreement, spot checks and worker feedback are built. DC5 isn't: workers can't flag broken tasks, and disagreement spikes raise no alert |
+| *"platforms for human data collection at scale, including labeling workflows, quality assurance systems, and feedback mechanisms that surface reward signal integrity issues early"* | Yes. Labeling, gold QA, agreement, spot checks and worker feedback are built, workers flag broken tasks, which two flags pause for researchers, and a drop in agreement raises an alert (DC5, M22) |
 | *"a unified platform for human data collection that integrates labeling workflows, vendor management, and QA for complex agentic tasks"* | Except for agentic tasks. There is one task type: pick the more helpful of two answers, with a reason |
 | *"evaluation dashboards and observability UIs that give researchers real-time insight into environment quality, training run health, and reward hacking"* | Partly. Vendor scorecards and drop alerts exist, environment work is on the scorecard, and researchers watch each training run's solve rate, reward variance and attempt length per environment, with drill-down to episode transcripts (TO2, TO4, TO5, M18). A separate hack detector reads the episodes: a watch finding asks a researcher to read transcripts, and a case finding quarantines the version without waiting for a person (TO3, M19). Each vendor's training outcomes are on its scorecard: episodes, solve rate, flagged attempts and recalls (TO7, M20) |
 | *"backend services and APIs that connect environment authoring tools, data collection systems, and RL training infrastructure"* | Partly. Datasets are exported as files, training pulls environments from the catalog, training sends episodes back to an intake (TO1, M17), and a quarantined version training used goes out as a recall that training answers with what it did (TO8, M19). Training is a stand-in that models it |
@@ -55,6 +55,8 @@ The posting names three areas: *"environment creation, data collection, and trai
 | Limitation | Effect | What would address it |
 |---|---|---|
 | Clean-up stops at the dataset | Lineage names every shipped row from a removed worker. Nothing records which training runs used which datasets, so the platform can't say which models are affected | Record dataset use by training runs (TO1, D14) |
+| A broken task needs two flags | In the demo, 25 of 80 broken tasks were never paused: the workers who reached them answered rather than flagging, so their answers stay in the data. The agreement alert lists the worst tasks, but only flags pause them | Let researchers pause or retire a task from the alert, and pause sooner on flags from workers whose earlier flags were upheld |
+| The agreement alert is computed when it's viewed | Nothing records that it fired or tells anyone; once researchers retire the tasks behind it, it clears and leaves no trace | Record alerts when the roll-up job runs, with who looked at them and what they did |
 | Clean-up removes every answer the worker gave (D21) | Honest work from before the behavior started is removed too | Remove from a defensible start point, once there is a reliable way to find it |
 | Time on task is measured on the server | It includes network and page time. Under the 180× demo clock this adds about 2–3 simulated seconds to every answer, which narrows the gap between pasting and typing. In real time it is small next to the time a task takes | Use start and end times reported by the client, checked against the server's |
 | Hourly cost depends on time on task | Cost per accepted answer for hourly contracts (PD3) inherits the error above | Same as above |
@@ -106,6 +108,5 @@ The design's scale estimate is about 1.2 million submissions a day ([`DESIGN.md`
 
 In order, from the [oversight milestones](BUILD.md#oversight-milestones) in `BUILD.md`:
 
-1. Broken-task flags and disagreement alerts (DC5, M22).
-2. Vendor-level abuse rules and vendor actions (AB2, AB5, M23).
-3. The vendor reviewer step (DC8, M24).
+1. Vendor-level abuse rules and vendor actions (AB2, AB5, M23).
+2. The vendor reviewer step (DC8, M24).

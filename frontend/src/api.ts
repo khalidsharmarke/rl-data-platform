@@ -242,6 +242,14 @@ export type CaseDetail = CaseSummary & {
     pulls: { puller: string; run_label: string | null; pulled_at: string }[];
   } | null;
 };
+export type TaskHealth = {
+  broken: { task_id: string; payload: Record<string, string>; is_gold: boolean; broken_status: "paused" | "retired"; answers: number;
+            flags: { reason: string; handle: string; at: string }[] }[];
+  flaggers: { handle: string; vendor_name: string; flags: number; retired: number }[];
+  agreement_alert: { recent: number; baseline: number; recent_n: number; baseline_n: number;
+                     tasks: { task_id: string; payload: Record<string, string>; disagreements: number; broken_status: string | null }[] } | null;
+};
+
 export type RuleMeasure = {
   rule_version: string; detector: string; mode: "shadow" | "live"; bar: number | null; changed_at: string;
   findings: number; subjects: number; reviewed: number; abusive: number; precision: number | null; can_promote: boolean;

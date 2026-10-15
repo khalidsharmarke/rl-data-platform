@@ -43,16 +43,21 @@ RELEASE_AFTER_MINUTES = 30
 RELEASE_CAP_MINUTES = 120
 
 PROFILES = {
-    # accuracy on the better answer, simulated seconds per task, writes a reason, pastes it
-    "careful": dict(accuracy=0.95, seconds=(30, 70), reason=0.6, paste=False),
-    "average": dict(accuracy=0.86, seconds=(18, 40), reason=0.3, paste=False),
-    "sloppy": dict(accuracy=0.62, seconds=(7, 15), reason=0.0, paste=False),
+    # accuracy on the better answer, simulated seconds per task, writes a reason, pastes it,
+    # and how often a broken task is flagged rather than answered (DC5)
+    "careful": dict(accuracy=0.95, seconds=(30, 70), reason=0.6, paste=False, flags=0.9),
+    "average": dict(accuracy=0.86, seconds=(18, 40), reason=0.3, paste=False, flags=0.5),
+    "sloppy": dict(accuracy=0.62, seconds=(7, 15), reason=0.0, paste=False, flags=0.0),
     # Pastes an answer without reading the task, so it is right about half the time.
-    "ai_paster": dict(accuracy=0.5, seconds=(2, 4), reason=1.0, paste=True),
+    "ai_paster": dict(accuracy=0.5, seconds=(2, 4), reason=1.0, paste=True, flags=0.0),
     # Careful, but pastes each reason from their own notes: one signal on its own, so the
     # platform watches them more closely (more gold) and later gold clears them (AB14).
-    "note_paster": dict(accuracy=0.95, seconds=(30, 70), reason=1.0, paste=True, notes=True),
+    "note_paster": dict(accuracy=0.95, seconds=(30, 70), reason=1.0, paste=True, notes=True, flags=0.9),
 }
+# The last batch of tasks has a bug: both answers are the same text (DC5). Added after the rest,
+# so workers reach it near the end of the project, where it shows as a drop in agreement.
+BROKEN_TASKS = 80
+BROKEN_REASON = "Both answers are word for word the same, so neither can be more helpful."
 
 ROSTERS = {
     "Northwind Data": ["careful"] * 6 + ["note_paster"] + ["average"] * 3,
@@ -275,6 +280,12 @@ async def setup(c: httpx.AsyncClient) -> tuple[str, dict, list[tuple[str, str, s
     for start in range(0, len(batch), 1000):
         r = await c.post(f"/projects/{project['id']}/tasks", headers=researcher, json={"tasks": batch[start:start + 1000]})
         r.raise_for_status()
+    broken = []
+    for i, g in enumerate(demo_content.generate(BROKEN_TASKS, seed=SEED + 1)):
+        item = TASKS + i
+        broken.append({"payload": {**g.payload, "item": item, "response_b": g.payload["response_a"]}})
+        truth[item] = g.better
+    (await c.post(f"/projects/{project['id']}/tasks", headers=researcher, json={"tasks": broken})).raise_for_status()
 
     orgs = {o["name"]: o["id"] for o in (await c.get("/orgs", headers=ops)).json()}
     workers = []
@@ -321,7 +332,11 @@ async def run_worker(c, project_id, truth, vendor, name, profile, progress: Prog
         p = PROFILES[behavior]
         seconds = rng.uniform(*p["seconds"])
         await sim_sleep(seconds)
-        better = truth[a["task"]["payload"]["item"]]
+        payload = a["task"]["payload"]
+        if payload["response_a"] == payload["response_b"] and rng.random() < p["flags"]:
+            (await c.post(f"/tasks/{a['task']['id']}/flag", headers=headers, json={"reason": BROKEN_REASON})).raise_for_status()
+            continue
+        better = truth[payload["item"]]
         choice = better if rng.random() < p["accuracy"] else ("B" if better == "A" else "A")
         answer = {"choice": choice}
         if rng.random() < p["reason"]:
@@ -371,9 +386,26 @@ async def spot_checker(c, project_id, truth, done: asyncio.Event) -> None:
     sample and answers detection flagged; the researcher can't tell which are which."""
     users = (await c.get("/auth/demo-users")).json()
     researcher = await as_person(c, next(u["display_name"] for u in users if u["role"] == "researcher"))
-    reviewed = abusive = 0
+    reviewed = abusive = retired = 0
+    alerted = False
     while not done.is_set():
         await sim_sleep(SPOT_CHECK_EVERY_MINUTES * 60)
+        health = (await c.get(f"/projects/{project_id}/task-health", headers=researcher)).json()
+        if (alert := health["agreement_alert"]) and not alerted:
+            alerted = True
+            same = sum(t["payload"]["response_a"] == t["payload"]["response_b"] for t in alert["tasks"])
+            print(f"  Agreement alert: {alert['baseline'] * 100:.0f}% earlier, {alert['recent'] * 100:.0f}% over the latest "
+                  f"{alert['recent_n']} compared answers; {same} of the {len(alert['tasks'])} worst tasks have two identical "
+                  f"answers", flush=True)
+        if AUTOPILOT:
+            # Tasks workers flagged as broken: retire them when the two answers really are the same.
+            for t in health["broken"]:
+                if t["broken_status"] == "paused":
+                    same = t["payload"]["response_a"] == t["payload"]["response_b"]
+                    await c.post(f"/tasks/{t['task_id']}/broken-decision", headers=researcher, json={
+                        "decision": "retire" if same else "restore",
+                        "reason": "Both answers are identical." if same else "The answers differ; the task is fine."})
+                    retired += same
         for item in (await c.get(f"/projects/{project_id}/review-queue", headers=researcher, params={"n": SPOT_CHECK_BATCH})).json():
             pasted = looks_pasted(item["answer"].get("rationale"))
             right = item["answer"]["choice"] == truth[item["payload"]["item"]]
@@ -385,6 +417,8 @@ async def spot_checker(c, project_id, truth, done: asyncio.Event) -> None:
                 reviewed += 1
                 abusive += pasted
     print(f"  Researcher spot-checked {reviewed} answers and judged {abusive} abusive", flush=True)
+    if retired:
+        print(f"  Researcher retired {retired} tasks workers flagged as broken", flush=True)
 
 
 async def data_ops(c, project_id, progress: Progress, done: asyncio.Event) -> None:

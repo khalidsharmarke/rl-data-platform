@@ -23,7 +23,7 @@ async def test_gold_accuracy_and_agreement_match_the_answers_given(client, login
     await answer_all(client, await login(NORTHWIND_WORKER_2), project_id, generated, correct=False)
 
     q = await quality(client, login, project_id)
-    assert q["metric_version"] == "quality-v1"
+    assert q["metric_version"] == "quality-v2"
     workers = {w["gold_n"]: w for w in q["workers"]}
     accurate, wrong = sorted(q["workers"], key=lambda w: -(w["gold_accuracy"] or 0))
     assert (accurate["gold_n"], accurate["gold_accuracy"]) == (5, 1.0)

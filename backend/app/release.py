@@ -1,7 +1,7 @@
 """The release stage (DC10, PD7, D25, D29, D31): when an accepted answer may reach training.
 
 Release is computed from current evidence each time it's asked for, never stored, so a new
-hold or newly failed gold takes effect at the next export. An accepted answer (quality-v1)
+hold or newly failed gold takes effect at the next export. An accepted answer (quality-v2)
 is released when:
 
   Integrity, always required (a hard gate)
