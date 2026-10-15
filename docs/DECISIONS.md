@@ -26,7 +26,9 @@ Every product and design decision made so far, sorted by how hard it would be to
 | D31 | Each exported row records its tier and the worker's grades at release | A row exported without them can never be filtered by trust later, because the evidence at that moment isn't kept anywhere else | Record both from the first export after release ships |
 | AB11, AB12 | Client and API signals are recorded with every submission | A signal not captured at submission can't be reconstructed, so a new detector can't be tried in shadow mode (D27) against past work | Record raw signals, including ones no rule uses yet |
 | D34 / N21 | The grader and reference solution are stored apart from the task files and never shown to the model | Same as D8: once a model has trained on environments whose grader it could read or edit, the lessons it learned can't be removed | Separate the parts from the first environment stored |
+| D44 | A vendor reviewer's correction is stored as a new version of the answer; the original is never overwritten | An overwritten original can't be recovered, so the worker's own accuracy and any abuse in it are lost for good | Store both versions from the first correction |
 | N22 | Versions training has pulled are kept for good | A deleted version can't be recovered, and nobody can then reproduce or explain what training used | Keep every pulled version, including quarantined ones |
+| D40 | Every spot check records whether the answer looks like abuse, as well as whether it's accepted | Spot checks pile up. A spot check recorded without the abuse judgement can't be labeled afterwards, so it can't measure precision or misses | Ask for the judgement on every spot check from the start |
 | PD3 | Cost is compared per accepted unit, using platform-measured time on task | The comparison itself is two-way (it's a calculation). What's one-way is **recording the inputs**: each contract's price and unit (VM7), and each submission's time on task (DC9). Data not captured can't be recomputed under a different definition | Store raw inputs, never only the computed cost |
 
 ## Hardens
@@ -71,6 +73,9 @@ Every product and design decision made so far, sorted by how hard it would be to
 | D30 | Grades on two axes, with integrity tiers setting how much later gold release needs | Changing the tiers or counts (A35) |
 | D32 | A single signal is a watch finding; agreeing signals open a case | Changing the severity rule inside the detection service |
 | D38 | A strong hack finding quarantines at once; a weak one queues transcripts for review | Changing what each severity triggers |
+| D41 | Rule modes are kept by the platform; new versions start in shadow, and data ops promotes them against a precision bar | Changing the bar or the minimum number of reviewed flags |
+| D42 | Vendor rules run as platform jobs; actions on a vendor wait for its response or a three-day window | Changing the window, or adding rules |
+| D43 | Two broken-task flags pause a task for researcher review; agreement drops raise an alert | Changing the number of flags or the alert's test |
 | D39 | Observability is computed by the platform, independent of detection | Moving roll-ups into the analytics store; nothing about detection changes |
 | | Three planes (control, execution, ingestion); Postgres, an analytics store and object storage | Replacing a store means a data migration, which is costly but loses nothing |
 | | Web app in React and TypeScript | A rewrite of the front end; the API (VM5) is unaffected |

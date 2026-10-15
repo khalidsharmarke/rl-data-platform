@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Covers | Every place the project deliberately doesn't solve a problem, from 0.1.0 through the training observability milestones |
+| Covers | Every place the project deliberately doesn't solve a problem, from 0.1.0 through the planned oversight milestones |
 | Related | [`LIMITATIONS.md`](LIMITATIONS.md) (where what's built falls short) · [`BUILD.md`](BUILD.md) (scope and stand-ins) · [`DESIGN.md`](DESIGN.md) · [`DECISIONS.md`](DECISIONS.md) |
 
 This page lists choices, not shortfalls: problems the project decided not to solve, what it does instead, and why. Where the built part falls short of its own design, see [`LIMITATIONS.md`](LIMITATIONS.md).
@@ -68,9 +68,11 @@ These belong to the platform and come later. [`BUILD.md`](BUILD.md#not-in-the-bu
 |---|---|---|
 | Scale: ~1.2 million submissions a day, ~1,000 episodes a second | Designed for, not load-tested; the build runs at demo volume | Scale estimate, D2, D5 |
 | Task types beyond comparing two answers, including agentic tasks | One task type is enough to show the platform | DC1 |
-| Vendor-level abuse and actions on vendors | The worker-level path came first | AB2, AB5 |
-| Measuring what detection misses, and shadow mode for new rules | Follows the detection service | AB15, AB16 |
+| Vendor-level abuse and actions on vendors | The worker-level path came first (planned, M23) | AB2, AB5 |
+| Vendor rules that need identities across vendors: removed workers returning, the same answers across vendors | They need a cross-vendor worker match, which is P2 | AB2, AB10 |
+| Measuring what detection misses, and shadow mode for new rules | Follows the detection service (planned, M21) | AB15, AB16 |
 | Vendor onboarding, API tokens, registry credentials | Vendors are seeded | VM2, VM3, N14 |
-| The vendor reviewer step | Optional for vendors (A29) | DC8 |
+| The vendor reviewer step | Optional for vendors (A29) (planned, M24) | DC8 |
+| Broken-task flags and disagreement alerts | The quality signals that don't need workers' input came first (planned, M22) | DC5 |
 | Generated programming tasks | Needs the environment pipeline first, which now exists | EC7 |
 | Vendor-private rules, matching workers across vendors | P2 in the PRD | AB9, AB10 |

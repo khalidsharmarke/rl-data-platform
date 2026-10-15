@@ -102,9 +102,9 @@ The design's scale estimate is about 1.2 million submissions a day ([`DESIGN.md`
 
 ## 4. Next
 
-In order, from [`BUILD.md`](BUILD.md#stretch-in-order) and the gaps above:
+In order, from the [oversight milestones](BUILD.md#oversight-milestones) in `BUILD.md`:
 
-1. The audit sample and shadow mode (AB15, AB16), which measure what detection misses and keep a new rule from acting before it's proven. Escalation outcomes sent back to detection as labels.
-2. Broken-task flags and disagreement alerts (DC5).
-3. Vendor-level abuse rules and vendor actions (AB2, AB5).
-4. The vendor reviewer step (DC8).
+1. The audit sample and shadow mode (AB15, AB16), which measure what detection misses and keep a new rule from acting before it's proven. Escalation outcomes sent back to detection as labels (M21).
+2. Broken-task flags and disagreement alerts (DC5, M22).
+3. Vendor-level abuse rules and vendor actions (AB2, AB5, M23).
+4. The vendor reviewer step (DC8, M24).
