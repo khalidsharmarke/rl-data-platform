@@ -73,13 +73,20 @@ def clean_path(path: str) -> str:
     return str(p)
 
 
-async def build_manifest(session: AsyncSession, files: list[tuple[str, str, bytes]], test_command: str) -> dict:
-    """files: (path, part, content). Stores each file and returns the version's manifest."""
+async def build_manifest(session: AsyncSession, files: list[tuple[str, str, bytes]], test_command: str,
+                         prepare_command: str | None = None) -> dict:
+    """files: (path, part, content). Stores each file and returns the version's manifest.
+
+    Each part lives in its own directory: task/, grader/ and reference/. A reference file
+    replaces the task file at the same path under task/ when the sandbox applies the solution.
+    """
     seen, total, entries = set(), 0, []
     for path, part, data in files:
         path = clean_path(path)
         if part not in PARTS:
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"{path}: part must be one of {', '.join(PARTS)}")
+        if not path.startswith(f"{part}/"):
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"{path}: {part} files belong under {part}/")
         if path in seen:
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"{path} appears twice")
         if len(data) > MAX_FILE_BYTES:
@@ -95,6 +102,7 @@ async def build_manifest(session: AsyncSession, files: list[tuple[str, str, byte
     return {
         "base_image": settings.environment_base_image,
         "test_command": test_command,
+        "prepare_command": prepare_command,
         "files": sorted(entries, key=lambda e: (PARTS.index(e["part"]), e["path"])),
     }
 

@@ -13,13 +13,14 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import clock, environments
 from app.audit import record
 from app.auth import current_user
 from app.db import get_session
+from app.jobs import enqueue
 from app.models import Allocation, Capability, Environment, EnvironmentVersion, Org, Project, Role, User
 from app.scoping import is_internal, require_roles
 
@@ -49,6 +50,8 @@ class FileIn(BaseModel):
 
 class VersionIn(BaseModel):
     test_command: str = Field(min_length=1, max_length=500)
+    # Runs in the attempt step, before grading (for example, to build the task's code). Optional.
+    prepare_command: str | None = Field(default=None, max_length=500)
     files: list[FileIn] = Field(min_length=1, max_length=200)
 
 
@@ -153,7 +156,7 @@ async def create_version(
             files.append((f.path, f.part, base64.b64decode(f.content_b64, validate=True)))
         except (binascii.Error, ValueError):
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"{f.path}: content isn't valid base64")
-    manifest = await environments.build_manifest(session, files, body.test_command)
+    manifest = await environments.build_manifest(session, files, body.test_command, body.prepare_command)
     now = clock.now()
     version = EnvironmentVersion(environment_id=env.id, number=await environments.next_number(session, env.id), manifest=manifest,
                                  status="draft", created_by=user.id, created_at=now, status_changed_at=now)
@@ -195,5 +198,32 @@ async def submit_version(
     version, env = await visible_version(version_id, user, session)
     await require_brief_for_builder(env.project_id, user, session)
     await environments.transition(session, version, "submitted", actor=user)
+    # The validation job is queued in the same transaction, so a version can't be submitted
+    # without one (D2). The sandbox runner takes it, fairly across vendors (D4).
+    await enqueue(session, "validate_version", f"validate_version:{version.id}",
+                  {"version_id": str(version.id), "vendor_id": str(env.org_id)})
     await session.commit()
     return version_out(version)
+
+
+class CheckOut(BaseModel):
+    check_name: str
+    passed: bool
+    outcome: str
+    detail: str
+    duration_ms: int
+    logs: str
+    created_at: datetime
+
+
+@router.get("/versions/{version_id}/checks")
+async def version_checks(version_id: uuid.UUID, user: User = Depends(current_user), session: AsyncSession = Depends(get_session)) -> list[CheckOut]:
+    """The sandbox's results for a version, with each check's logs (EC4)."""
+    version, _ = await visible_version(version_id, user, session)
+    rows = await session.execute(
+        text("SELECT * FROM validation_runs WHERE version_id = :v "
+             "ORDER BY created_at::date, array_position(ARRAY['reference', 'empty', 'repeat'], check_name), created_at"),
+        {"v": version.id}
+    )
+    return [CheckOut(check_name=r.check_name, passed=r.passed, outcome=r.outcome, detail=r.detail, duration_ms=r.duration_ms,
+                     logs=environments.read(r.logs_hash).decode(errors="replace"), created_at=r.created_at) for r in rows]

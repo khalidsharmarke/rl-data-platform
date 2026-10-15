@@ -17,6 +17,8 @@ logs:    ## Follow logs from all services
 test:    ## Run the backend tests (against a separate test database) and the detection service's tests
 	docker compose run --rm --no-deps api pytest -q
 	docker compose run --rm --no-deps --build detection pytest -q
+	docker compose build env-image
+	docker compose run --rm --no-deps --build sandbox pytest -q -m sandbox
 
 seed:    ## Re-run the (idempotent) seed
 	docker compose exec api python -m app.seed

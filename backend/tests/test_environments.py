@@ -130,6 +130,7 @@ async def test_a_version_stores_its_files_once_by_hash_in_three_parts(client, lo
     lambda b: {**b, "files": b["files"] + [{"path": "../escape.py", "part": "task", "content_b64": b64("x")}]},
     lambda b: {**b, "files": b["files"] + [{"path": "task/x.py", "part": "secret", "content_b64": b64("x")}]},
     lambda b: {**b, "files": b["files"] + [{"path": "task/x.py", "part": "task", "content_b64": "not base64!"}]},
+    lambda b: {**b, "files": b["files"] + [{"path": "task/answers.py", "part": "reference", "content_b64": b64("x")}]},
 ])
 async def test_a_version_must_be_well_formed(client, login, change):
     _, env_id, builder = await kestrel_environment(client, login)

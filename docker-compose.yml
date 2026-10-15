@@ -58,6 +58,31 @@ services:
     depends_on:
       - api
 
+  # The base image every environment check runs on (B4). Built, never run as a service.
+  env-image:
+    build: ./sandbox/env-image
+    image: rl-env-python:1
+    command: ["true"]
+    restart: "no"
+
+  # The sandbox runner (D4, B5): claims validation jobs and starts a locked-down container per
+  # check through the host's Docker daemon. Daemon access is host-level power: laptop only.
+  sandbox:
+    build:
+      context: ./backend
+      dockerfile: ../sandbox/runner.Dockerfile
+    environment:
+      DATABASE_URL: postgresql+asyncpg://rl:rl@db:5432/rl
+    command: python -m app.sandbox
+    restart: unless-stopped
+    volumes:
+      - ./backend:/app
+      - objects:/data
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      - api
+      - env-image
+
   web:
     build: ./frontend
     environment:

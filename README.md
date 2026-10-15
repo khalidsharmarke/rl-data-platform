@@ -30,12 +30,12 @@ Three fictional vendors work on one project, *"Which of these two answers is mor
 
 ## Run it
 
-Needs Docker with Compose.
+Needs Docker with Compose. The sandbox runner starts a container for every environment check through your Docker daemon, which is fine on a laptop and nowhere else ([B5](docs/BUILD.md#environment-milestones)).
 
 ```sh
 make demo    # fresh database, then the scripted scenario above (about 3 minutes)
 make up      # start Postgres, the API, the background worker and the web app on real time
-make test    # 119 backend tests (against a separate test database) and 9 detection-service tests
+make test    # 124 backend tests, 9 detection-service tests, and 8 sandbox tests on real containers
 make down    # stop (make reset also deletes the database)
 ```
 
@@ -53,6 +53,7 @@ Open http://localhost:5173 and pick a demo user. The login page suggests a path 
 | Summary tables in Postgres | An analytics store |
 | A Docker volume | Object storage for exported datasets |
 | An outbox table the detection service reads through a cursor feed | A message broker between the platform and the detection service ([D24](docs/DESIGN.md)) |
+| Docker containers with no network and strict limits, started per check | A hardened sandbox (gVisor or Firecracker) on dedicated hosts ([B5](docs/BUILD.md#environment-milestones)) |
 | A demo clock running 180× real time, `make demo` only | Waiting five hours for the story |
 
 Out of scope so far: the environment pipeline (planned as the [environment milestones](docs/BUILD.md#environment-milestones)) and training observability, vendor-level abuse rules, vendor reviewers, and the rest of the design's [integrity layers](docs/DESIGN.md#integrity-layers): audit sampling, shadow mode, and extra overlap and spot checks during escalation. [BUILD.md](docs/BUILD.md#2-scope) lists everything left out and why, and [LIMITATIONS.md](docs/LIMITATIONS.md) covers where the built part falls short.
@@ -75,7 +76,8 @@ Each of these was found by testing or by looking at the demo's output, fixed, an
 ## Where things are
 
 ```
-backend/     FastAPI app, migrations, background worker (app/jobs.py), the detection contract (app/routes/detection.py), the release stage (app/release.py), contributor grades (app/grades.py), discreet escalation (app/escalation.py), environments and versions (app/environments.py), 119 tests
+backend/     FastAPI app, migrations, background worker (app/jobs.py), the detection contract (app/routes/detection.py), the release stage (app/release.py), contributor grades (app/grades.py), discreet escalation (app/escalation.py), environments and versions (app/environments.py), the sandbox runner (app/sandbox.py), fixture environments (tests/fixtures/environments), 124 tests
+sandbox/     the sandbox runner's image and the base image environment checks run on
 detection/   the separate detection service: abuse rules and severity (rules.py), its state (detector.py), 9 tests
 frontend/    React + TypeScript: one app, a view per role
 simulator/   the scripted scenario, driving the public API

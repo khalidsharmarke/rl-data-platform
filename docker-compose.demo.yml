@@ -14,6 +14,10 @@ services:
       VENDOR_GOLD_REFRESH_MINUTES: "60"
       JOBS_TICK_SECONDS: "3"
 
+  sandbox:
+    environment:
+      DEMO_CLOCK_SPEED: "180"
+
   simulator:
     build: ./simulator
     profiles: ["demo"]

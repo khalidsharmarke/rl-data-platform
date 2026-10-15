@@ -24,3 +24,6 @@ dev = [
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
+# Fixture environments contain their own test_*.py graders; they run in the sandbox, not here.
+norecursedirs = ["fixtures"]
+markers = ["sandbox: needs the Docker daemon; runs in the sandbox service (make test)"]

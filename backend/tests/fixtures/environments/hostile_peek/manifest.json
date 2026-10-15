@@ -1,0 +1,4 @@
+{
+  "test_command": "PYTHONPATH=task python -m pytest -q -p no:cacheprovider grader",
+  "prepare_command": "echo 'listing:'; find /work; echo 'grader:'; cat /work/grader/* 2>&1; echo 'reference:'; cat /work/reference/* 2>&1; true"
+}

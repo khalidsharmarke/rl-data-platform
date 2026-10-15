@@ -53,7 +53,8 @@ async def run_one(session: AsyncSession) -> bool:
         await session.execute(
             text(
                 "UPDATE jobs SET status = 'running', attempts = attempts + 1 WHERE id = ("
-                "  SELECT id FROM jobs WHERE status = 'queued' ORDER BY id LIMIT 1 FOR UPDATE SKIP LOCKED"
+                # Validation jobs need the sandbox runner (app/sandbox.py); this worker leaves them alone.
+                "  SELECT id FROM jobs WHERE status = 'queued' AND kind <> 'validate_version' ORDER BY id LIMIT 1 FOR UPDATE SKIP LOCKED"
                 ") RETURNING id, kind, payload"
             )
         )
