@@ -13,13 +13,15 @@ class Settings(BaseSettings):
     scorecard_bucket_minutes: int = 60
     vendor_gold_refresh_minutes: int = 24 * 60
     # How often the background worker queues roll-ups and works the queue (real seconds).
-    jobs_tick_seconds: float = 30
+    jobs_tick_seconds: float = 10
     # The seed's small sample project; the scripted demo creates its own project instead.
     seed_sample_project: bool = True
     # The detection service signs in with this token (AB13). Empty disables its routes.
     detection_token: str = ""
     # Training infrastructure signs in with this token to use the catalog (EC6). Empty disables it.
     training_token: str = ""
+    # Training steps per bucket in the training statistics (TO2).
+    training_step_bucket: int = 500
     # Object storage stand-in: exported datasets are written here.
     export_dir: str = "/data/exports"
     # Environment content, stored once per SHA-256 (D34).

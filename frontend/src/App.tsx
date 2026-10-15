@@ -3,6 +3,7 @@ import Cases from "./Cases";
 import Feedback from "./Feedback";
 import Projects from "./Projects";
 import Review from "./Review";
+import Training from "./Training";
 import Scorecards from "./Scorecards";
 import Work from "./Work";
 import { api, saveToken, savedToken, type User } from "./api";
@@ -52,6 +53,7 @@ function Views({ me }: { me: User }) {
     ...(me.role !== "worker" ? ["Projects"] : []),
     ...(["data_ops", "researcher", "vendor_admin"].includes(me.role) ? ["Scorecards"] : []),
     ...(me.role === "researcher" ? ["Review"] : []),
+    ...(["data_ops", "researcher"].includes(me.role) ? ["Training"] : []),
     ...(["data_ops", "vendor_admin"].includes(me.role) ? ["Cases"] : []),
     "Workspaces",
   ];
@@ -69,6 +71,7 @@ function Views({ me }: { me: User }) {
       {tab === "Feedback" && <Feedback />}
       {tab === "Projects" && <Projects me={me} />}
       {tab === "Review" && <Review me={me} />}
+      {tab === "Training" && <Training />}
       {tab === "Scorecards" && <Scorecards me={me} />}
       {tab === "Cases" && <Cases me={me} />}
       {tab === "Workspaces" && <Workspaces me={me} />}

@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Version | 0.3.0: the 0.1.0 MVP, the integrity milestones M9–M12 (0.2.0) and the environment milestones M13–M16 (see [`BUILD.md`](BUILD.md#environment-milestones)), plus training observability milestone M17 |
+| Version | 0.3.0: the 0.1.0 MVP, the integrity milestones M9–M12 (0.2.0) and the environment milestones M13–M16 (see [`BUILD.md`](BUILD.md#environment-milestones)), plus training observability milestones M17–M18 |
 | Covers | Slice A from [`BUILD.md`](BUILD.md): multi-vendor human data, with allocation, gold QA, scorecards, worker-abuse cases and lineage clean-up; a separate detection service; the release stage; contributor grades; discreet escalation |
 | Related | [`POSTING.md`](POSTING.md) · [`PRD.md`](PRD.md) · [`DESIGN.md`](DESIGN.md) · [`DECISIONS.md`](DECISIONS.md) · [`NOT-SOLVED.md`](NOT-SOLVED.md) (choices, as opposed to shortfalls) |
 
@@ -10,13 +10,13 @@ What the build does not do, where it falls short, and what is still undecided. T
 
 ## 1. Coverage of the posting
 
-The posting names three areas: *"environment creation, data collection, and training observability."* The build covers the core of data collection, plus the vendor management, workspaces and audit trail it needs. It covers 36 of the design's 56 functional requirements.
+The posting names three areas: *"environment creation, data collection, and training observability."* The build covers the core of data collection, plus the vendor management, workspaces and audit trail it needs. It covers 39 of the design's 56 functional requirements.
 
 | Posting line | Coverage in the build |
 |---|---|
 | *"platforms for human data collection at scale, including labeling workflows, quality assurance systems, and feedback mechanisms that surface reward signal integrity issues early"* | Mostly. Labeling, gold QA, agreement, spot checks and worker feedback are built. DC5 isn't: workers can't flag broken tasks, and disagreement spikes raise no alert |
 | *"a unified platform for human data collection that integrates labeling workflows, vendor management, and QA for complex agentic tasks"* | Except for agentic tasks. There is one task type: pick the more helpful of two answers, with a reason |
-| *"evaluation dashboards and observability UIs that give researchers real-time insight into environment quality, training run health, and reward hacking"* | Partly. Vendor scorecards and drop alerts exist, and environment work (checks passed, review, quarantine) is on the scorecard. Nothing covers training runs or reward hacking |
+| *"evaluation dashboards and observability UIs that give researchers real-time insight into environment quality, training run health, and reward hacking"* | Partly. Vendor scorecards and drop alerts exist, environment work is on the scorecard, and researchers watch each training run's solve rate, reward variance and attempt length per environment, with drill-down to episode transcripts (TO2, TO4, TO5, M18). Reward hacks aren't flagged automatically yet |
 | *"backend services and APIs that connect environment authoring tools, data collection systems, and RL training infrastructure"* | Partly. Datasets are exported as files, training pulls environments from the catalog, and training sends episodes back to an intake (TO1, M17), from a stand-in that models training |
 | *"web platforms for RL environment creation, management, and quality review"* and *"vendor-facing interfaces… to create, submit, and iterate on training environments"* | Started. Researchers write briefs, data ops allocates them, and builders upload versions that never change, stored by hash in three parts (EC0, EC1, M13), every submitted version is checked in a sandbox (EC3 without difficulty, M14), builders see why a check failed and what changed between versions, researchers grade against the brief's rubric, training pulls approved versions from a catalog without the reference solution (EC2, EC4–EC6, EC8, M15), and a flagged version is quarantined through a case, with the runs that pulled it listed (TO6, M16). Not built: difficulty estimates, vendor-built images and generated tasks |
 | *"scalable code data generation pipelines"* | No (EC7) |
@@ -64,6 +64,7 @@ The design's scale estimate is about 1.2 million submissions a day ([`DESIGN.md`
 |---|---|
 | Each scorecard roll-up recomputes the whole project | Work grows with project size on every run, not with new answers |
 | Release is recomputed from the whole project's facts at every export (D29) | The same: an export's cost grows with the project, not with what's new since the last one |
+| Training statistics are incremental, but on Postgres | The processor folds in only new episodes, so its work grows with what's new; but the episodes and statistics live in Postgres (B7), untested near 1,000 episodes a second (A6) |
 | The detection service keeps every worker's recent answers in memory and rebuilds them on start by replaying the whole event stream | Memory and restart time grow with the stream. A real service would keep its own store and replay only from a checkpoint |
 | Claiming a task checks several conditions in one query, under a row lock and a recount | Claims could become the bottleneck at peak (about 50 per second) |
 | The job queue and summary tables live in Postgres (D2) | Fine at this load. The design moves them to a queue and an analytics store at much higher volume |

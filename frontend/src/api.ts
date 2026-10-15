@@ -276,3 +276,17 @@ export type Release = {
   waiting: { detection: number; gap: number; evidence: number };
   detection_through: number; as_of: string; release_after_minutes: number; release_cap_minutes: number;
 };
+
+export type RunRow = {
+  id: string; label: string; first_seen_at: string; episodes: number; environments: number;
+  last_step: number | null; last_episode_at: string | null;
+};
+export type StepPoint = { step: number; episodes: number; solve_rate: number | null; mean_length: number | null };
+export type VersionStats = {
+  version_id: string; environment_id: string; environment_name: string; vendor_name: string; number: number; status: string;
+  episodes: number; solve_rate: number | null; mean_reward: number | null; reward_variance: number | null;
+  mean_length: number | null; difficulty: string | null; series: StepPoint[];
+};
+export type RunDetail = { run: RunRow; processed_at: string | null; unprocessed: number; versions: VersionStats[] };
+export type EpisodeRow = { episode_id: string; step: number; reward: number; passed: boolean; length: number; touched: string[]; received_at: string };
+export type EpisodeDetail = EpisodeRow & { run_label: string; version_id: string; environment_name: string; vendor_name: string; transcript: string | null };

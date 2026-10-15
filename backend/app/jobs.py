@@ -21,12 +21,14 @@ from app.config import settings
 from app.db import SessionLocal
 from app.escalation import review as review_escalations
 from app.scorecards import rollup_project
+from app.training_stats import process as process_training_stats
 
 log = logging.getLogger("jobs")
 
 HANDLERS: dict[str, Callable[[AsyncSession, dict], Awaitable[object]]] = {
     "scorecards": lambda session, payload: rollup_project(session, uuid.UUID(payload["project_id"])),
     "escalations": lambda session, payload: review_escalations(session),
+    "training_stats": lambda session, payload: process_training_stats(session),
 }
 
 
@@ -45,6 +47,7 @@ async def schedule(session: AsyncSession) -> None:
     for (project_id,) in (await session.execute(text("SELECT id FROM projects WHERE status = 'active'"))).all():
         await enqueue(session, "scorecards", f"scorecards:{project_id}", {"project_id": str(project_id)})
     await enqueue(session, "escalations", "escalations", {})
+    await enqueue(session, "training_stats", "training_stats", {})
     await session.commit()
 
 

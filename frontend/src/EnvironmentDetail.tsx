@@ -211,7 +211,7 @@ function ReviewForm({ versionId, rubric, onDone }: { versionId: string; rubric: 
 }
 
 /** Data ops flags an approved version: a case opens and the version leaves the catalog at once (TO6, AB8). */
-function QuarantineForm({ versionId, onDone }: { versionId: string; onDone: () => void }) {
+export function QuarantineForm({ versionId, onDone }: { versionId: string; onDone: () => void }) {
   const [observation, setObservation] = useState("");
   const [opened, setOpened] = useState(false);
   const [error, setError] = useState<string | null>(null);

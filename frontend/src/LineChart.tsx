@@ -14,11 +14,13 @@ export default function LineChart({
   series,
   format,
   domain = [0, 1],
+  xFormat = time,
 }: {
   title: string;
   series: Series[];
   format: (v: number) => string;
   domain?: [number, number];
+  xFormat?: (t: number) => string;
 }) {
   const [hover, setHover] = useState<number | null>(null);
   const ref = useRef<SVGSVGElement>(null);
@@ -85,7 +87,7 @@ export default function LineChart({
         ))}
         {xTicks.map((t) => (
           <text key={t} x={x(t)} y={H - 8} textAnchor="middle" className="axis">
-            {time(t)}
+            {xFormat(t)}
           </text>
         ))}
         {series.map((s) => (
@@ -113,7 +115,7 @@ export default function LineChart({
       </svg>
       {hover != null && (
         <div className="tooltip">
-          <strong>{time(hover)}</strong>
+          <strong>{xFormat(hover)}</strong>
           {series.map((s) => {
             const p = s.points.find((q) => q.t === hover);
             return (

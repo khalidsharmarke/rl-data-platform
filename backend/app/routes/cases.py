@@ -194,9 +194,10 @@ async def case_detail(
 
 @router.post("/environment", status_code=status.HTTP_201_CREATED)
 async def open_environment_case(
-    body: EnvironmentCaseIn, user: User = Depends(require_roles(Role.DATA_OPS)), session: AsyncSession = Depends(get_session)
+    body: EnvironmentCaseIn, user: User = Depends(require_roles(Role.DATA_OPS, Role.RESEARCHER)), session: AsyncSession = Depends(get_session)
 ) -> CaseDetail:
-    """A person flags an approved environment version (AB3, TO6, D13). The case is data ops' to
+    """A person at Anthropic flags an approved environment version (AB3, TO6, D13, D39), from a
+    review, a dashboard or an episode. The case is data ops' to
     decide, and the version is quarantined at once: out of the catalog, reversibly (AB8, D16)."""
     version = await session.get(EnvironmentVersion, body.version_id)
     if version is None:
