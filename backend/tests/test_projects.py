@@ -81,5 +81,7 @@ async def test_gold_is_spread_evenly_through_each_vendors_stream(client, login, 
         stream.append(r.json()["task"]["id"] in gold)
     assert len(stream) == 120 and sum(stream) == 30  # 90 regular + every gold task
     quarter = len(stream) // 4
-    # Evenly mixed, each quarter holds about a quarter of the gold (7-8 of 30).
-    assert all(sum(stream[i * quarter:(i + 1) * quarter]) <= 12 for i in range(4)), stream
+    # Mixed in, each quarter holds about a quarter of the gold (7-8 of 30). Uploads are shuffled, so the
+    # count varies; more than 15 in a quarter happens in under 1 run in 1,000. A block of gold at the end
+    # of the stream, the failure this guards against, puts all 30 in the last quarter.
+    assert all(sum(stream[i * quarter:(i + 1) * quarter]) <= 15 for i in range(4)), stream
