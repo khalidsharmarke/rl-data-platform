@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Version | 0.3.0: the 0.1.0 MVP, the integrity milestones M9–M12 (0.2.0) and the environment milestones M13–M16 (see [`BUILD.md`](BUILD.md#environment-milestones)), plus training observability milestones M17–M20 |
+| Version | 0.4.0: the 0.1.0 MVP, the integrity milestones M9–M12 (0.2.0), the environment milestones M13–M16 (0.3.0) and the training observability milestones M17–M20 (see [`BUILD.md`](BUILD.md#training-observability-milestones)) |
 | Covers | Slice A from [`BUILD.md`](BUILD.md): multi-vendor human data, with allocation, gold QA, scorecards, worker-abuse cases and lineage clean-up; a separate detection service; the release stage; contributor grades; discreet escalation |
 | Related | [`POSTING.md`](POSTING.md) · [`PRD.md`](PRD.md) · [`DESIGN.md`](DESIGN.md) · [`DECISIONS.md`](DECISIONS.md) · [`NOT-SOLVED.md`](NOT-SOLVED.md) (choices, as opposed to shortfalls) |
 
