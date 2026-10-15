@@ -8,8 +8,8 @@ tasks are gold, and nothing tells the worker what their flag did. A flag changes
 flagger's measures: no answer is recorded.
 
 Separately, a project's agreement over its latest answers is compared with its earlier
-agreement (the same two-proportion test as D19); a significant drop raises an alert for
-researchers, listing the tasks with the most disagreement.
+agreement (D19's two-proportion test, at z >= 3 because it's checked continuously); a
+significant drop raises an alert for researchers, listing the tasks with the most disagreement.
 """
 
 import uuid
@@ -37,6 +37,7 @@ FLAGS_TO_PAUSE = 2
 RECENT = 300  # compared answers in the recent window of the agreement alert
 MIN_SIDE = 200  # compared answers each side needs before the alert can fire
 DROP = 0.08
+Z = 3.0  # stricter than D19's 2: the window slides and is checked again and again, so noise would cross 2
 
 
 class FlagIn(BaseModel):
@@ -160,7 +161,7 @@ async def agreement_alert(session: AsyncSession, project_id: uuid.UUID) -> Agree
         return None
     before, recent = rows[:-RECENT], rows[-RECENT:]
     r_hits, b_hits = sum(r.agrees for r in recent), sum(r.agrees for r in before)
-    if not significant_drop(r_hits, len(recent), b_hits, len(before), drop=DROP, z=2.0):
+    if not significant_drop(r_hits, len(recent), b_hits, len(before), drop=DROP, z=Z):
         return None
     disagreements: dict[uuid.UUID, int] = {}
     for r in recent:

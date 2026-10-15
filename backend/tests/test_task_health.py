@@ -3,6 +3,7 @@
 from sqlalchemy import text
 
 from app.routes import task_health
+from app.scorecards import significant_drop
 from tests.builders import allocate, make_project
 from tests.people import DATA_OPS, KESTREL_WORKER, NORTHWIND_WORKER, NORTHWIND_WORKER_2, RESEARCHER
 
@@ -116,3 +117,10 @@ async def test_a_drop_in_agreement_raises_one_alert_with_the_worst_tasks(client,
     assert alert["recent"] == 0 and alert["baseline"] == 0.8 and len(alert["tasks"]) == 5
     assert {t["payload"]["item"] for t in alert["tasks"]} <= flipped
     assert (await client.get(f"/projects/{project_id}/task-health", headers=await login(NORTHWIND_WORKER))).status_code == 403
+
+
+def test_the_alert_needs_more_than_noise_because_it_is_checked_again_and_again():
+    # 300 recent answers at 67% against 700 earlier at 76%: z is just under 3. Noise like this turns up
+    # somewhere in a long run when the window is checked every few minutes; it isn't an alert.
+    assert not significant_drop(201, 300, 532, 700, drop=task_health.DROP, z=task_health.Z)
+    assert significant_drop(192, 300, 525, 700, drop=task_health.DROP, z=task_health.Z)  # 64% against 75%: z 3.4
