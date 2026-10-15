@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api, type CaseDetail, type CaseSummary, type Lineage, type User } from "./api";
+import { api, type CaseDetail, type CaseSummary, type Lineage, type Recall, type User } from "./api";
 
 const DECISIONS = [
   { value: "suspend", label: "Suspend worker" },
@@ -27,6 +27,7 @@ export default function Cases({ me }: { me: User }) {
   const [reason, setReason] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [lineage, setLineage] = useState<Lineage | null>(null);
+  const [recall, setRecall] = useState<Recall | null>(null);
   const isOwner = (c: CaseSummary) => (c.owner === "vendor_admin" ? me.role === "vendor_admin" : me.role === "data_ops");
 
   const load = () => api<CaseSummary[]>("/cases").then(setCases);
@@ -43,6 +44,7 @@ export default function Cases({ me }: { me: User }) {
     setOpen(detail);
     setDecision(isEnvironment(detail) ? "remove" : "suspend");
     setLineage(null);
+    setRecall(isEnvironment(detail) && me.org_kind === "internal" ? await api<Recall | null>(`/cases/${id}/recall`) : null);
     if (me.role === "data_ops" && !isEnvironment(detail) && detail.subject_id && detail.project_id) {
       setLineage(await api<Lineage>(`/lineage?worker_id=${detail.subject_id}&project_id=${detail.project_id}`));
     }
@@ -102,7 +104,7 @@ export default function Cases({ me }: { me: User }) {
               <td>
                 {isEnvironment(c) ? c.subject_handle : <>{c.subject_name ?? ""} <span className="mono muted">{c.subject_handle}</span></>}
               </td>
-              <td>{isEnvironment(c) ? "Flagged by a person" : `${c.observations.length} signal${c.observations.length === 1 ? "" : "s"}`}</td>
+              <td>{isEnvironment(c) ? (c.by_person ? "Flagged by a person" : "Flagged by the hack detector") : `${c.observations.length} signal${c.observations.length === 1 ? "" : "s"}`}</td>
               <td>
                 {c.status === "open" ? (
                   <span className="badge warn">Open{c.held ? (isEnvironment(c) ? " · quarantined" : " · data held") : ""}</span>
@@ -152,6 +154,36 @@ export default function Cases({ me }: { me: User }) {
               ) : (
                 <p className="muted">Training never pulled this version.</p>
               )}
+            </div>
+          )}
+          {recall && (
+            <div className="lineage">
+              <h4>Recall to training</h4>
+              <table>
+                <thead>
+                  <tr><th>Run</th><th>First used at</th><th>Episodes</th><th>Flagged attempts from</th><th>Training's report</th></tr>
+                </thead>
+                <tbody>
+                  {recall.runs.map((r) => {
+                    const report = recall.reports.find((p) => p.run_label === r.run_label);
+                    return (
+                      <tr key={r.run_label}>
+                        <td className="mono">{r.run_label}</td>
+                        <td>{r.first_step == null ? "pulled, not used" : `step ${r.first_step.toLocaleString()}`}</td>
+                        <td>{r.episodes.toLocaleString()}</td>
+                        <td>{r.first_flagged_step == null ? "—" : `step ${r.first_flagged_step.toLocaleString()} (${r.flagged} flagged)`}</td>
+                        <td>
+                          {report
+                            ? report.action === "rolled_back"
+                              ? `Rolled back to step ${report.checkpoint_step?.toLocaleString()}`
+                              : "Kept going"
+                            : <span className="muted">Waiting for training</span>}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           )}
           {open.samples.length > 0 && <h4>Examples</h4>}

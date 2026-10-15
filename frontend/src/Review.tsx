@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { api, type Project, type ReviewItem, type User, type VersionRow } from "./api";
-import EnvironmentDetail from "./EnvironmentDetail";
+import { api, type HackCheck, type Project, type ReviewItem, type User, type VersionRow } from "./api";
+import EnvironmentDetail, { QuarantineForm } from "./EnvironmentDetail";
 
 export default function Review({ me }: { me: User }) {
   const [project, setProject] = useState<Project | null>(null);
@@ -33,6 +33,7 @@ export default function Review({ me }: { me: User }) {
 
   return (
     <section>
+      <HackChecks />
       <EnvironmentQueue me={me} />
       <h2>Spot checks</h2>
       <p className="muted">A random sample of answers on regular tasks. Rejections need a reason; the worker sees it.</p>
@@ -124,6 +125,46 @@ function EnvironmentQueue({ me }: { me: User }) {
           }}
         />
       )}
+    </div>
+  );
+}
+
+/** Weak reward-hack findings (D38): read a few transcripts, then say it looks fine or flag the version. */
+function HackChecks() {
+  const [checks, setChecks] = useState<HackCheck[]>([]);
+  const [flagging, setFlagging] = useState<string | null>(null);
+  const load = () => api<HackCheck[]>("/hack-checks").then(setChecks);
+  useEffect(() => {
+    load();
+  }, []);
+  if (checks.length === 0) return null;
+  async function answer(id: string, outcome: "looks_fine" | "flagged") {
+    await api(`/hack-checks/${id}`, { method: "POST", body: JSON.stringify({ outcome }) });
+    setFlagging(null);
+    load();
+  }
+  return (
+    <div className="card">
+      <h2>Training transcripts to check</h2>
+      <p className="muted">The hack detector saw something worth a look, but not enough to quarantine on its own.</p>
+      {checks.map((c) => (
+        <div key={c.id} className="env-detail">
+          <p>
+            <strong>{c.environment_name}</strong> in <span className="mono">{c.run_label}</span>: {c.observation}
+          </p>
+          {c.episodes.map((e) => (
+            <details key={e.episode_id}>
+              <summary className="muted">Step {e.step.toLocaleString()} · reward {e.reward} · {e.length} turns</summary>
+              <pre>{e.transcript ?? "No transcript."}</pre>
+            </details>
+          ))}
+          <div className="actions row">
+            <button onClick={() => answer(c.id, "looks_fine")}>Looks fine</button>
+            <button className="primary" onClick={() => setFlagging(c.id)}>Flag the version</button>
+          </div>
+          {flagging === c.id && <QuarantineForm versionId={c.version_id} onDone={() => answer(c.id, "flagged")} />}
+        </div>
+      ))}
     </div>
   );
 }

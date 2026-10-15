@@ -59,6 +59,19 @@ services:
     depends_on:
       - api
 
+  # The reward-hack detector (TO3, D35): a second black box behind its own contract.
+  hack-detection:
+    build: ./detection
+    command: python hack_service.py
+    environment:
+      API_URL: http://api:8000
+      DETECTION_TOKEN: dev-only-detection-token
+    restart: unless-stopped
+    volumes:
+      - ./detection:/detection
+    depends_on:
+      - api
+
   # The base image every environment check runs on (B4). Built, never run as a service.
   env-image:
     build: ./sandbox/env-image

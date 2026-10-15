@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import clock, environments
 from app.abuse import add_action
+from app.environment_cases import flag_version
 from app.audit import record
 from app.db import get_session
 from app.models import Environment, EnvironmentVersion, Role, User
@@ -36,6 +37,7 @@ class CaseSummary(BaseModel):
     decided_at: datetime | None
     held: bool
     observations: list[str]
+    by_person: bool  # every flag was raised by a person, not a detector
 
 
 class Flag(BaseModel):
@@ -104,7 +106,8 @@ SELECT c.*, o.name AS vendor_name, u.handle, u.display_name, u.org_id AS subject
        ev.number AS env_number, e.name AS env_name, ev.status AS env_status, e.id AS env_id,
        (EXISTS (SELECT 1 FROM holds h WHERE h.case_id = c.id AND h.released_at IS NULL)
         OR coalesce(ev.status = 'quarantined', false)) AS held,
-       coalesce((SELECT array_agg(f.observation ORDER BY f.created_at) FROM flags f WHERE f.case_id = c.id), '{}') AS observations
+       coalesce((SELECT array_agg(f.observation ORDER BY f.created_at) FROM flags f WHERE f.case_id = c.id), '{}') AS observations,
+       coalesce((SELECT bool_and(f.rule = 'person') FROM flags f WHERE f.case_id = c.id), true) AS by_person
 FROM cases c
 JOIN orgs o ON o.id = c.vendor_id
 LEFT JOIN users u ON u.id = c.subject_id AND c.subject_type = 'worker'
@@ -120,7 +123,7 @@ def summary(row, viewer: User) -> dict:
         id=row.id, vendor_name=row.vendor_name, subject_type=row.subject_type,
         subject_handle=f"{row.env_name} v{row.env_number}" if row.subject_type == "environment_version" else (row.handle or "—"),
         subject_name=name, owner=row.owner, status=row.status, opened_at=row.opened_at, decision=row.decision,
-        decided_at=row.decided_at, held=row.held, observations=list(row.observations),
+        decided_at=row.decided_at, held=row.held, observations=list(row.observations), by_person=row.by_person,
     )
 
 
@@ -204,23 +207,8 @@ async def open_environment_case(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Not found")
     if version.status != "approved":
         raise HTTPException(status.HTTP_409_CONFLICT, "Only an approved version can be quarantined")
-    env = await session.get(Environment, version.environment_id)
-    now = clock.now()
-    case_id = await session.scalar(
-        text("INSERT INTO cases (subject_type, subject_id, vendor_id, project_id, owner, opened_at) "
-             "VALUES ('environment_version', :v, :o, :p, 'data_ops', :now) RETURNING id"),
-        {"v": version.id, "o": env.org_id, "p": env.project_id, "now": now},
-    )
-    await session.execute(
-        text("INSERT INTO flags (case_id, rule, rule_version, observation, evidence, created_at) "
-             "VALUES (:c, 'person', 'person', :o, CAST(:e AS jsonb), :now)"),
-        {"c": case_id, "o": body.observation, "e": json.dumps({"flagged_by": str(user.id)}), "now": now},
-    )
-    await add_action(session, case_id, "opened", user.id, body.observation, now)
-    await environments.transition(session, version, "quarantined", actor=user, note=body.observation)
-    await add_action(session, case_id, "hold", None, "Version quarantined: out of the catalog while the case is open", now)
-    record(session, actor=user, action="case.opened", entity_type="case", entity_id=case_id, org_id=env.org_id,
-           after={"subject": "environment_version", "version_id": str(version.id), "quarantined": True})
+    case_id = await flag_version(session, version, observation=body.observation, actor=user,
+                                 evidence={"flagged_by": str(user.id)})
     await session.commit()
     return await case_detail(case_id, user, session)
 

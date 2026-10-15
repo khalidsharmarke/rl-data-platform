@@ -33,7 +33,7 @@ Each entry is one of five kinds:
 | Problem | What the project does instead | Why | Where |
 |---|---|---|---|
 | How worker abuse is detected | A separate detection service behind a contract (events in, findings out, decisions back as labels). Inside are three stand-in rules | Detection is specialist work that changes often; the platform owns what a finding leads to: escalation, cases, holds, clean-up | D23, A31, AB13 |
-| How reward hacks are detected | The same kind of contract over the episode stream. Inside are two stand-in rules (planned, M19) | Hack signals are research knowledge to learn from researchers; the platform owns the case, the quarantine and the recall | D35, A14, TO3 |
+| How reward hacks are detected | The same kind of contract over the episode stream (episodes in, findings with a severity out, case decisions back as labels). Inside are three stand-in rules: full marks on unusually short attempts, attempts that touch grader files, and abrupt solve-rate jumps | Hack signals are research knowledge to learn from researchers; the platform owns the case, the quarantine and the recall | D35, A14, TO3 |
 
 ## Modeled
 
@@ -41,7 +41,7 @@ Each entry is one of five kinds:
 |---|---|---|---|
 | Real workers | A simulator drives the public API with worker profiles: careful, average, sloppy, AI-pasting, note-pasting | No real workforce is available; everything they touch is real | BUILD M4, M12 |
 | The model being trained | A modeled policy in the training stand-in: honest attempts whose chance of passing rises with training, and, on an environment marked hackable, a shortcut it discovers partway through the run. Outcomes are drawn, not computed | Real RL is out of scope; the platform reacts to episodes, not to how they were produced | B6 |
-| Training infrastructure | A stand-in service that pulls approved versions from the catalog, runs modeled training runs and sends one batch of episodes per step; from M19 it acts on recalls | Training is out of scope, but the catalog, intake and recall need a counterpart | A23, M16, M17 |
+| Training infrastructure | A stand-in service that pulls approved versions from the catalog, runs modeled training runs, sends one batch of episodes per step, and acts on recalls by rolling back to a checkpoint and reporting it | Training is out of scope, but the catalog, intake and recall need a counterpart | A23, M16, M17 |
 | Finding hacks nobody planted | The demo's hack is one we built into a fixture (`weak_grader`, "slugify edge cases"), and a sandbox test proves `return ""` really passes its grader in a container and fails a sound one | A real model finds holes nobody anticipated; a planted one shows the platform's response honestly | B6 |
 | Estimating difficulty | A band from the solve rate training reports (too easy, easy, medium, hard, too hard); with the stand-in, that's the modeled policy's solve rate | Difficulty needs something attempting the task; with no model, the modeled policy is that something | EC3 |
 | Time | A demo clock runs 180× real time in `make demo` | Five hours of work in a few minutes; every timestamp goes through it, so durations stay consistent | [`BUILD.md`](BUILD.md#stand-ins) |

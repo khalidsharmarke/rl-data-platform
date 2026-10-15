@@ -24,10 +24,10 @@ async def test_a_case_quarantines_the_version_and_lists_who_pulled_it(client, lo
     opened = await open_case(client, login, version_id)
     assert opened.status_code == 201, opened.text
     case = opened.json()
-    assert case["owner"] == "data_ops" and case["held"] and case["subject_type"] == "environment_version"
+    assert case["owner"] == "data_ops" and case["held"] and case["by_person"] and case["subject_type"] == "environment_version"
     assert case["environment"]["status"] == "quarantined"
     assert [(p["puller"], p["run_label"]) for p in case["environment"]["pulls"]] == [("training", "run-1")]
-    assert [a["action"] for a in case["actions"]] == ["opened", "hold"]
+    assert [a["action"] for a in case["actions"]] == ["opened", "hold", "recall"]  # training pulled it, so a recall goes out
     assert (await client.get("/catalog", headers=TRAINING)).json() == []  # out of the catalog at once
     assert (await client.get(f"/versions/{version_id}", headers=builder)).json()["status"] == "quarantined"
     # The vendor sees its own environment's case; other vendors don't.

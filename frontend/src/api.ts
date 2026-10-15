@@ -227,6 +227,7 @@ export type CaseSummary = {
   decided_at: string | null;
   held: boolean;
   observations: string[];
+  by_person: boolean;
 };
 
 export type CaseDetail = CaseSummary & {
@@ -290,3 +291,15 @@ export type VersionStats = {
 export type RunDetail = { run: RunRow; processed_at: string | null; unprocessed: number; versions: VersionStats[] };
 export type EpisodeRow = { episode_id: string; step: number; reward: number; passed: boolean; length: number; touched: string[]; received_at: string };
 export type EpisodeDetail = EpisodeRow & { run_label: string; version_id: string; environment_name: string; vendor_name: string; transcript: string | null };
+export type RecallRun = {
+  run_label: string; first_step: number | null; last_step: number | null; episodes: number;
+  flagged: number | null; first_flagged_step: number | null;
+};
+export type Recall = {
+  id: number; version_id: string; environment_name: string; issued_at: string; runs: RecallRun[];
+  reports: { run_label: string; action: "rolled_back" | "continued"; checkpoint_step: number | null; note: string | null; reported_at: string }[];
+};
+export type HackCheck = {
+  id: string; version_id: string; environment_name: string; run_label: string; observation: string; created_at: string;
+  episodes: { episode_id: string; step: number; reward: number; length: number; transcript: string | null }[];
+};

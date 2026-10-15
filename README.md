@@ -46,7 +46,7 @@ Needs Docker with Compose. The sandbox runner starts a container for every envir
 ```sh
 make demo    # fresh database, then the scripted scenario above (about 4 minutes)
 make up      # start Postgres, the API, the background worker and the web app on real time
-make test    # 144 backend tests, 9 detection-service tests, and 11 sandbox tests on real containers
+make test    # 151 backend tests, 34 detection-service tests, and 11 sandbox tests on real containers
 make down    # stop (make reset also deletes the database)
 ```
 
@@ -63,12 +63,12 @@ Open http://localhost:5173 and pick a demo user. The login page suggests a path 
 | Postgres job table claimed with `SKIP LOCKED` | A message queue (needless at this load; see [D2](docs/DESIGN.md)) |
 | Summary tables in Postgres | An analytics store |
 | A Docker volume | Object storage for exported datasets |
-| A training stand-in that pulls approved environments and sends back episodes from a modeled policy | Training infrastructure and the model being trained ([A23](docs/DESIGN.md), [B6](docs/BUILD.md#training-observability-milestones)) |
+| A training stand-in that pulls approved environments, sends back episodes from a modeled policy, and rolls back when recalled | Training infrastructure and the model being trained ([A23](docs/DESIGN.md), [B6](docs/BUILD.md#training-observability-milestones)) |
 | An outbox table the detection service reads through a cursor feed | A message broker between the platform and the detection service ([D24](docs/DESIGN.md)) |
 | Docker containers with no network and strict limits, started per check | A hardened sandbox (gVisor or Firecracker) on dedicated hosts ([B5](docs/BUILD.md#environment-milestones)) |
 | A demo clock running 180× real time, `make demo` only | Waiting five hours for the story |
 
-Out of scope so far: reward-hack detection, recalls and training outcomes on the vendor scorecard, vendor-built environment images, vendor-level abuse rules, vendor reviewers, and the rest of the design's [integrity layers](docs/DESIGN.md#integrity-layers): audit sampling, shadow mode, and extra overlap and spot checks during escalation. [BUILD.md](docs/BUILD.md#2-scope) lists everything left out and why, and [LIMITATIONS.md](docs/LIMITATIONS.md) covers where the built part falls short.
+Out of scope so far: training outcomes on the vendor scorecard, vendor-built environment images, vendor-level abuse rules, vendor reviewers, and the rest of the design's [integrity layers](docs/DESIGN.md#integrity-layers): audit sampling, shadow mode, and extra overlap and spot checks during escalation. [BUILD.md](docs/BUILD.md#2-scope) lists everything left out and why, and [LIMITATIONS.md](docs/LIMITATIONS.md) covers where the built part falls short.
 
 **On detecting AI-written answers.** The platform doesn't try to tell AI text from human text; that's unreliable. It flags the *behavior* around a submission: answering faster than the task can be read, pasting rather than typing, and giving the same reason to different questions. Honest but sloppy work isn't flagged: it shows up as low quality on the scorecard instead.
 
@@ -88,9 +88,9 @@ Each of these was found by testing or by looking at the demo's output, fixed, an
 ## Where things are
 
 ```
-backend/     FastAPI app, migrations, background worker (app/jobs.py), the detection contract (app/routes/detection.py), the release stage (app/release.py), contributor grades (app/grades.py), discreet escalation (app/escalation.py), environments and versions (app/environments.py), the sandbox runner (app/sandbox.py), the catalog (app/routes/catalog.py), episode intake and training dashboards (app/routes/training.py), training statistics (app/training_stats.py), fixture environments (tests/fixtures/environments), 144 tests
+backend/     FastAPI app, migrations, background worker (app/jobs.py), the detection contract (app/routes/detection.py), the release stage (app/release.py), contributor grades (app/grades.py), discreet escalation (app/escalation.py), environments and versions (app/environments.py), the sandbox runner (app/sandbox.py), the catalog (app/routes/catalog.py), episode intake and training dashboards (app/routes/training.py), training statistics (app/training_stats.py), the hack-detection contract and recalls (app/routes/hacks.py, app/environment_cases.py), fixture environments (tests/fixtures/environments), 151 tests
 sandbox/     the sandbox runner's image and the base image environment checks run on
-detection/   the separate detection service: abuse rules and severity (rules.py), its state (detector.py), 9 tests
+detection/   the separate detection services: abuse rules and severity (rules.py), their state (detector.py), the reward-hack detector (hacks.py, hack_service.py), 34 tests
 frontend/    React + TypeScript: one app, a view per role
 simulator/   the scripted scenario, driving the public API, and the training stand-in (training.py)
 docs/        posting, glossary, PRD, design, decisions, build plan, diagrams, media

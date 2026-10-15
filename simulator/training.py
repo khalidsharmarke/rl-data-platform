@@ -13,8 +13,11 @@ policy.
   `return ""` really passes it (backend/tests/test_sandbox_runs.py). The hack is planted, not
   found: see docs/NOT-SOLVED.md.
 
-Each step it re-reads the catalog, so a version quarantined mid-run stops being sampled. It
-talks to the platform only through its token: the catalog, and the episode intake.
+Each step it re-reads the catalog, so a version quarantined mid-run stops being sampled, and
+reads recalls (TO8, D37). For each run a recall names, it "rolls back" to the last checkpoint
+before the first flagged attempt (or before the version first appeared, if nothing was
+flagged) and reports that. Nothing is rolled back: there's no model. It talks to the platform
+only through its token: the catalog, the episode intake and recalls.
 """
 
 import os
@@ -30,6 +33,7 @@ STEPS = int(os.environ.get("TRAINING_STEPS", "60"))
 STEP_SECONDS = float(os.environ.get("STEP_SECONDS", "1"))
 EPISODES_PER_STEP = int(os.environ.get("EPISODES_PER_STEP", "6"))
 STEP_SIZE = 100  # training steps between batches, so step numbers look like a real run's
+CHECKPOINT_EVERY = 500  # training steps between checkpoints
 
 # Environments the modeled policy can hack, and how far into a run it discovers the shortcut.
 HACKABLE = {"slugify edge cases": 0.35}
@@ -51,7 +55,32 @@ def episode(run: str, step: int, entry: dict, i: int, rng: random.Random) -> dic
             "transcript": HONEST.format(result="passed" if passed else "1 failed")}
 
 
+class Recalls:
+    """Reads recalls and reports what training did with each run it ran."""
+
+    def __init__(self) -> None:
+        self.after = 0
+        self.mine: set[str] = set()
+
+    def answer(self, c: httpx.Client) -> None:
+        for recall in c.get("/recalls", params={"after": self.after}).json():
+            self.after = recall["id"]
+            for r in recall["runs"]:
+                if r["run_label"] not in self.mine or r["first_step"] is None:
+                    continue
+                bad_from = r["first_flagged_step"] if r["first_flagged_step"] is not None else r["first_step"]
+                checkpoint = max(0, (bad_from - 1) // CHECKPOINT_EVERY * CHECKPOINT_EVERY)
+                c.post(f"/recalls/{recall['id']}/reports", json={
+                    "run_label": r["run_label"], "action": "rolled_back", "checkpoint_step": checkpoint,
+                    "note": f"Restored the checkpoint before step {bad_from:,}; {recall['environment_name']} is out of the run."})
+                print(f"training {r['run_label']}: recall {recall['id']}: rolled back to step {checkpoint:,}", flush=True)
+
+
+RECALLS = Recalls()
+
+
 def run_training(c: httpx.Client, run: str) -> None:
+    RECALLS.mine.add(run)
     rng = random.Random(run)
     print(f"training {run}: starting {STEPS} steps", flush=True)
     for step in range(STEPS):
@@ -59,6 +88,7 @@ def run_training(c: httpx.Client, run: str) -> None:
         if entries:
             episodes = [episode(run, step, e, i, rng) for e in entries for i in range(EPISODES_PER_STEP)]
             c.post("/ingest/episodes", json={"run_label": run, "episodes": episodes}).raise_for_status()
+        RECALLS.answer(c)
         time.sleep(STEP_SECONDS)
     print(f"training {run}: finished", flush=True)
 
@@ -82,6 +112,7 @@ def main() -> None:
                             print(f"training {run}: pulled {e['environment_name']} v{e['number']} ({files})", flush=True)
                         pulled.add(e["version_id"])
                     run_training(c, run)
+                RECALLS.answer(c)
             except (httpx.HTTPError, ValueError) as exc:
                 print(f"training: platform unavailable ({exc}); retrying", flush=True)
             time.sleep(POLL_SECONDS)
