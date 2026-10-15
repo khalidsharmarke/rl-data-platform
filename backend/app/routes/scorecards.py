@@ -6,6 +6,7 @@ from pydantic import BaseModel
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app import clock
 from app.auth import current_user
 from app.config import settings
 from app.db import get_session
@@ -273,3 +274,40 @@ async def environment_work(
                                    solve_rate=r.solved / r.episodes if r.episodes else None,
                                    flagged_share=r.flagged / r.episodes if r.episodes else None))
     return out
+
+
+class CaseHandling(BaseModel):
+    vendor_id: uuid.UUID
+    vendor_name: str
+    opened: int
+    decided: int
+    cleared: int
+    suspended_or_removed: int
+    reinstated: int
+    open_now: int
+    open_over_3_days: int
+    median_hours_to_decide: float | None
+
+
+CASE_HANDLING = """
+SELECT o.id AS vendor_id, o.name AS vendor_name, count(c.id) AS opened,
+       count(c.id) FILTER (WHERE c.status = 'decided') AS decided,
+       count(c.id) FILTER (WHERE c.decision = 'clear') AS cleared,
+       count(c.id) FILTER (WHERE c.decision IN ('suspend', 'remove')) AS suspended_or_removed,
+       count(c.id) FILTER (WHERE EXISTS (SELECT 1 FROM case_actions a WHERE a.case_id = c.id AND a.action = 'reverse')) AS reinstated,
+       count(c.id) FILTER (WHERE c.status = 'open') AS open_now,
+       count(c.id) FILTER (WHERE c.status = 'open' AND c.opened_at < :stale) AS open_over_3_days,
+       percentile_cont(0.5) WITHIN GROUP (ORDER BY extract(epoch FROM c.decided_at - c.opened_at) / 3600)
+         FILTER (WHERE c.decided_at IS NOT NULL) AS median_hours_to_decide
+FROM orgs o LEFT JOIN cases c ON c.vendor_id = o.id AND c.subject_type = 'worker'
+WHERE o.kind = 'vendor'
+GROUP BY o.id, o.name ORDER BY o.name
+"""
+
+
+@router.get("/vendors/case-handling")
+async def case_handling(user: User = Depends(require_roles(Role.DATA_OPS)),
+                        session: AsyncSession = Depends(get_session)) -> list[CaseHandling]:
+    """How each vendor resolves its own workers' cases (AB7), computed the same way for every vendor."""
+    rows = await session.execute(text(CASE_HANDLING), {"stale": clock.now() - timedelta(days=3)})
+    return [CaseHandling(**r._mapping) for r in rows]

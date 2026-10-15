@@ -228,6 +228,7 @@ export type CaseSummary = {
   held: boolean;
   observations: string[];
   by_person: boolean;
+  shared_at: string | null;
 };
 
 export type CaseDetail = CaseSummary & {
@@ -241,6 +242,13 @@ export type CaseDetail = CaseSummary & {
     version_id: string; environment_id: string; name: string; number: number; status: string;
     pulls: { puller: string; run_label: string | null; pulled_at: string }[];
   } | null;
+  respond_by: string | null;
+  can_act: boolean;
+};
+
+export type CaseHandling = {
+  vendor_id: string; vendor_name: string; opened: number; decided: number; cleared: number; suspended_or_removed: number;
+  reinstated: number; open_now: number; open_over_3_days: number; median_hours_to_decide: number | null;
 };
 export type TaskHealth = {
   broken: { task_id: string; payload: Record<string, string>; is_gold: boolean; broken_status: "paused" | "retired"; answers: number;

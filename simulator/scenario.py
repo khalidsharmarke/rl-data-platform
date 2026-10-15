@@ -387,16 +387,17 @@ async def spot_checker(c, project_id, truth, done: asyncio.Event) -> None:
     users = (await c.get("/auth/demo-users")).json()
     researcher = await as_person(c, next(u["display_name"] for u in users if u["role"] == "researcher"))
     reviewed = abusive = retired = 0
-    alerted = False
+    alerting = False
     while not done.is_set():
         await sim_sleep(SPOT_CHECK_EVERY_MINUTES * 60)
         health = (await c.get(f"/projects/{project_id}/task-health", headers=researcher)).json()
-        if (alert := health["agreement_alert"]) and not alerted:
-            alerted = True
+        alert = health["agreement_alert"]
+        if alert and not alerting:  # each time an alert appears
             same = sum(t["payload"]["response_a"] == t["payload"]["response_b"] for t in alert["tasks"])
             print(f"  Agreement alert: {alert['baseline'] * 100:.0f}% earlier, {alert['recent'] * 100:.0f}% over the latest "
                   f"{alert['recent_n']} compared answers; {same} of the {len(alert['tasks'])} worst tasks have two identical "
                   f"answers", flush=True)
+        alerting = alert is not None
         if AUTOPILOT:
             # Tasks workers flagged as broken: retire them when the two answers really are the same.
             for t in health["broken"]:
@@ -419,6 +420,52 @@ async def spot_checker(c, project_id, truth, done: asyncio.Event) -> None:
     print(f"  Researcher spot-checked {reviewed} answers and judged {abusive} abusive", flush=True)
     if retired:
         print(f"  Researcher retired {retired} tasks workers flagged as broken", flush=True)
+
+
+# Vendor oversight (AB2, AB5): how each vendor answers a vendor case, and what data ops does next.
+VENDOR_RESPONSES = {
+    "Brightline Annotation": "One worker caused the drop; we suspended her after reviewing her case and are re-checking how we onboard.",
+    "Kestrel Labs": "We've retired both environments and now have a second builder review every grader before we submit.",
+}
+VENDOR_CASE_DELAY_MINUTES = 15  # simulated time between each step of a vendor case
+
+
+async def vendor_oversight(c, project_id, done: asyncio.Event) -> None:
+    """Data ops shares each vendor case the platform opens, the vendor responds, and data ops acts:
+    a vendor whose environments keep being quarantined is paused on that brief; anything else is
+    cleared after the response. (One bad worker rarely moves a whole vendor's accuracy enough for
+    quality-volume-v1; see docs/LIMITATIONS.md.)"""
+    users = (await c.get("/auth/demo-users")).json()
+    ops = await as_person(c, next(u["display_name"] for u in users if u["role"] == "data_ops"))
+    admins = {u["org_name"]: u["display_name"] for u in users if u["role"] == "vendor_admin"}
+    handled = set()
+    while not done.is_set():
+        await sim_sleep(VENDOR_CASE_DELAY_MINUTES * 60)
+        for case in (await c.get("/cases", headers=ops, params={"status": "open"})).json():
+            if case["subject_type"] != "vendor" or case["id"] in handled:
+                continue
+            vendor = case["vendor_name"]
+            print(f"  Vendor rule: {vendor}: {case['observations'][0]}", flush=True)
+            await c.post(f"/cases/{case['id']}/share", headers=ops)
+            print(f"  Data ops asks {vendor} to respond", flush=True)
+            await sim_sleep(VENDOR_CASE_DELAY_MINUTES * 60)
+            admin = await as_person(c, admins[vendor])
+            await c.post(f"/cases/{case['id']}/responses", headers=admin, json={"text": VENDOR_RESPONSES.get(vendor, "We're looking into it.")})
+            print(f"  {vendor} responds", flush=True)
+            await sim_sleep(VENDOR_CASE_DELAY_MINUTES * 60)
+            detail = (await c.get(f"/cases/{case['id']}", headers=ops)).json()
+            if "quarantined" in case["observations"][0] and detail["project_id"]:
+                r = await c.post(f"/cases/{case['id']}/actions", headers=ops, json={
+                    "action": "pause", "project_id": detail["project_id"],
+                    "reason": "Paused on this brief until the second grader review shows in a new batch."})
+                r.raise_for_status()
+                await c.post(f"/cases/{case['id']}/decision", headers=ops, json={"decision": "resolve", "reason": "Paused on the brief."})
+                print(f"  Data ops pauses {vendor} on the brief until its new grader review shows results", flush=True)
+            else:
+                await c.post(f"/cases/{case['id']}/decision", headers=ops, json={
+                    "decision": "clear", "reason": "The vendor's response covers it; nothing to act on."})
+                print(f"  Data ops clears {vendor}'s case after its response", flush=True)
+            handled.add(case["id"])
 
 
 async def data_ops(c, project_id, progress: Progress, done: asyncio.Event) -> None:
@@ -505,6 +552,7 @@ async def main() -> None:
                    asyncio.create_task(spot_checker(c, project_id, truth, done))]
         if AUTOPILOT:
             helpers.append(asyncio.create_task(vendor_admin(c, "Brightline Annotation", done)))
+            helpers.append(asyncio.create_task(vendor_oversight(c, project_id, done)))
         rngs = random.Random(SEED)
         await asyncio.gather(*(run_worker(c, project_id, truth, v, n, p, progress, random.Random(rngs.random()))
                                for v, n, p in workers))

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api, pct, type Project, type Scorecard, type ScorePoint, type User, type VendorComparison, type WorkerQuality, type EnvironmentWork } from "./api";
+import { api, pct, type Project, type Scorecard, type ScorePoint, type User, type VendorComparison, type WorkerQuality, type EnvironmentWork, type CaseHandling } from "./api";
 import LineChart, { type Series } from "./LineChart";
 
 const WINDOW = 4; // periods in the rolling window
@@ -161,6 +161,7 @@ export default function Scorecards({ me }: { me: User }) {
         </>
       )}
       <EnvironmentWorkTable />
+      {me.role === "data_ops" && <CaseHandlingTable />}
     </section>
   );
 }
@@ -231,6 +232,38 @@ function EnvironmentWorkTable() {
           </table>
         </>
       )}
+    </>
+  );
+}
+
+/** How each vendor resolves its own workers' cases (AB7), for data ops. */
+function CaseHandlingTable() {
+  const [rows, setRows] = useState<CaseHandling[]>([]);
+  useEffect(() => {
+    api<CaseHandling[]>("/vendors/case-handling").then(setRows);
+  }, []);
+  if (rows.every((r) => r.opened === 0)) return null;
+  return (
+    <>
+      <h3>How vendors handle their cases</h3>
+      <p className="muted">Worker cases each vendor's admin decided. Most cases cleared, workers reinstated, or cases left open are vendor-level signals.</p>
+      <table>
+        <thead>
+          <tr>
+            <th>Vendor</th><th>Opened</th><th>Decided</th><th>Cleared</th><th>Suspended or removed</th><th>Reinstated</th>
+            <th>Open over 3 days</th><th>Median time to decide</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.vendor_id}>
+              <td>{r.vendor_name}</td><td>{r.opened}</td><td>{r.decided}</td><td>{r.cleared}</td><td>{r.suspended_or_removed}</td>
+              <td>{r.reinstated}</td><td>{r.open_over_3_days}</td>
+              <td>{r.median_hours_to_decide == null ? "—" : `${r.median_hours_to_decide.toFixed(1)} h`}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </>
   );
 }

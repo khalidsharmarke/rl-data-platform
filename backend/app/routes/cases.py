@@ -1,11 +1,12 @@
 import json
 import uuid
 from datetime import datetime
+from decimal import Decimal
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
-from sqlalchemy import text
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import clock, environments
@@ -13,8 +14,10 @@ from app.abuse import add_action
 from app.environment_cases import flag_version
 from app.audit import record
 from app.db import get_session
-from app.models import Environment, EnvironmentVersion, Role, User
+from app.models import Allocation, Environment, EnvironmentVersion, Project, Role, User
 from app.scoping import is_internal, require_roles
+from app.vendor_oversight import RESPONSE_WINDOW
+from app.work import route_tasks
 
 router = APIRouter(prefix="/cases")
 
@@ -22,6 +25,9 @@ DECISIONS = {"clear", "warn", "suspend", "remove"}
 # An environment case (TO6, D13): clear sends the version back to review; remove keeps it
 # quarantined for good, out of the catalog.
 ENVIRONMENT_DECISIONS = {"clear", "remove"}
+# A vendor case ends cleared (nothing to act on) or resolved, after at least one action (D42).
+VENDOR_DECISIONS = {"clear", "resolve"}
+VENDOR_ACTIONS = {"lower_allocation", "pause", "offboard"}
 
 
 class CaseSummary(BaseModel):
@@ -38,6 +44,7 @@ class CaseSummary(BaseModel):
     held: bool
     observations: list[str]
     by_person: bool  # every flag was raised by a person, not a detector
+    shared_at: datetime | None  # vendor cases: when data ops asked the vendor to respond
 
 
 class Flag(BaseModel):
@@ -85,6 +92,8 @@ class CaseDetail(CaseSummary):
     samples: list[Sample]
     actions: list[Action]
     environment: EnvironmentSubject | None = None
+    respond_by: datetime | None = None  # vendor cases: actions are allowed after a response, or after this
+    can_act: bool = False
 
 
 class EnvironmentCaseIn(BaseModel):
@@ -99,6 +108,17 @@ class DecisionIn(BaseModel):
 
 class ReverseIn(BaseModel):
     reason: str = Field(min_length=3, max_length=1000)
+
+
+class ResponseIn(BaseModel):
+    text: str = Field(min_length=3, max_length=4000)
+
+
+class VendorActionIn(BaseModel):
+    action: str
+    reason: str = Field(min_length=3, max_length=1000)
+    project_id: uuid.UUID | None = None  # lower_allocation: on which project; pause: one project, or every one if None
+    share: Decimal | None = Field(default=None, gt=0, lt=1)
 
 
 CASES = """
@@ -121,15 +141,22 @@ def summary(row, viewer: User) -> dict:
     name = row.display_name if row.subject_org == viewer.org_id else None
     return dict(
         id=row.id, vendor_name=row.vendor_name, subject_type=row.subject_type,
-        subject_handle=f"{row.env_name} v{row.env_number}" if row.subject_type == "environment_version" else (row.handle or "—"),
+        subject_handle=(f"{row.env_name} v{row.env_number}" if row.subject_type == "environment_version"
+                        else row.vendor_name if row.subject_type == "vendor" else (row.handle or "—")),
         subject_name=name, owner=row.owner, status=row.status, opened_at=row.opened_at, decision=row.decision,
         decided_at=row.decided_at, held=row.held, observations=list(row.observations), by_person=row.by_person,
+        shared_at=row.shared_at,
     )
+
+
+# A vendor case is Anthropic's until data ops shares it with the vendor (D42).
+VENDOR_SEES = "(c.subject_type <> 'vendor' OR c.shared_at IS NOT NULL)"
 
 
 async def visible_case(session: AsyncSession, case_id: uuid.UUID, user: User):
     row = (await session.execute(text(CASES + " WHERE c.id = :id"), {"id": case_id})).first()
-    if row is None or not (is_internal(user) or row.vendor_id == user.org_id):
+    vendor_may = row is not None and row.vendor_id == user.org_id and (row.subject_type != "vendor" or row.shared_at is not None)
+    if row is None or not (is_internal(user) or vendor_may):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Not found")
     return row
 
@@ -149,7 +176,7 @@ async def list_cases(
     """Vendor admins see their own vendor's cases; data ops sees every case and its outcome (AB7)."""
     where, params = [], {}
     if not is_internal(user):
-        where.append("c.vendor_id = :v")
+        where.append("c.vendor_id = :v AND " + VENDOR_SEES)
         params["v"] = user.org_id
     if status_:
         where.append("c.status = :s")
@@ -191,8 +218,19 @@ async def case_detail(
                                       {"v": row.subject_id})
         environment = EnvironmentSubject(version_id=row.subject_id, environment_id=row.env_id, name=row.env_name, number=row.env_number,
                                          status=row.env_status, pulls=[Pull(**p._mapping) for p in pulls])
+    respond_by = row.shared_at + RESPONSE_WINDOW if row.subject_type == "vendor" and row.shared_at else None
     return CaseDetail(**summary(row, user), subject_id=row.subject_id, project_id=row.project_id, decision_reason=row.decision_reason,
-                      flags=flags, samples=samples, actions=actions, environment=environment)
+                      flags=flags, samples=samples, actions=actions, environment=environment, respond_by=respond_by,
+                      can_act=user.role == Role.DATA_OPS and row.status == "open" and await may_act(session, row))
+
+
+async def may_act(session: AsyncSession, row) -> bool:
+    """Actions on a vendor wait for its response, or for the response window to pass (AB5, D42)."""
+    if row.subject_type != "vendor" or row.shared_at is None:
+        return False
+    responded = await session.scalar(text("SELECT 1 FROM case_actions WHERE case_id = :c AND action = 'response' LIMIT 1"),
+                                     {"c": row.id})
+    return bool(responded) or clock.now() >= row.shared_at + RESPONSE_WINDOW
 
 
 @router.post("/environment", status_code=status.HTTP_201_CREATED)
@@ -229,6 +267,8 @@ async def decide(
         raise HTTPException(status.HTTP_409_CONFLICT, "This case is already decided; reverse it instead")
     if row.subject_type == "environment_version":
         return await decide_environment(row, body, user, session)
+    if row.subject_type == "vendor":
+        return await decide_vendor(row, body, user, session)
     if body.decision not in DECISIONS:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"Decision must be one of {sorted(DECISIONS)}")
     now = clock.now()
@@ -267,6 +307,106 @@ async def decide_environment(row, body: DecisionIn, user: User, session: AsyncSe
     return await case_detail(row.id, user, session)
 
 
+async def decide_vendor(row, body: DecisionIn, user: User, session: AsyncSession) -> CaseDetail:
+    if body.decision not in VENDOR_DECISIONS:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"Decision must be one of {sorted(VENDOR_DECISIONS)}")
+    acted = await session.scalar(text("SELECT 1 FROM case_actions WHERE case_id = :c AND action = ANY(:a) LIMIT 1"),
+                                 {"c": row.id, "a": sorted(VENDOR_ACTIONS)})
+    if body.decision == "resolve" and not acted:
+        raise HTTPException(status.HTTP_409_CONFLICT, "Take an action on the vendor first, or clear the case")
+    now = clock.now()
+    await session.execute(
+        text("UPDATE cases SET status = 'decided', decision = :d, decision_reason = :r, decided_by = :u, decided_at = :now WHERE id = :c"),
+        {"d": body.decision, "r": body.reason, "u": user.id, "now": now, "c": row.id},
+    )
+    await add_action(session, row.id, body.decision, user.id, body.reason, now)
+    record(session, actor=user, action=f"case.{body.decision}", entity_type="case", entity_id=row.id,
+           org_id=row.vendor_id if row.shared_at else None, after={"decision": body.decision, "reason": body.reason})
+    await session.commit()
+    return await case_detail(row.id, user, session)
+
+
+@router.post("/{case_id}/share")
+async def share(case_id: uuid.UUID, user: User = Depends(require_roles(Role.DATA_OPS)),
+                session: AsyncSession = Depends(get_session)) -> CaseDetail:
+    """Data ops has read the vendor finding and asks the vendor to respond; the window starts now."""
+    row = await visible_case(session, case_id, user)
+    if row.subject_type != "vendor" or row.status != "open":
+        raise HTTPException(status.HTTP_409_CONFLICT, "Only an open vendor case is shared with the vendor")
+    if row.shared_at is not None:
+        raise HTTPException(status.HTTP_409_CONFLICT, "Already shared")
+    now = clock.now()
+    await session.execute(text("UPDATE cases SET shared_at = :now WHERE id = :c"), {"now": now, "c": case_id})
+    await add_action(session, case_id, "shared", user.id,
+                     f"{row.vendor_name} asked to respond by {(now + RESPONSE_WINDOW):%d %b %H:%M}", now)
+    record(session, actor=user, action="case.shared", entity_type="case", entity_id=case_id, org_id=row.vendor_id,
+           after={"respond_by": (now + RESPONSE_WINDOW).isoformat()})
+    await session.commit()
+    return await case_detail(case_id, user, session)
+
+
+@router.post("/{case_id}/responses", status_code=status.HTTP_201_CREATED)
+async def respond(case_id: uuid.UUID, body: ResponseIn, user: User = Depends(require_roles(Role.VENDOR_ADMIN)),
+                  session: AsyncSession = Depends(get_session)) -> CaseDetail:
+    """The vendor's answer to a vendor case, kept on the case (AB5)."""
+    row = await visible_case(session, case_id, user)
+    if row.subject_type != "vendor" or row.status != "open":
+        raise HTTPException(status.HTTP_409_CONFLICT, "Only an open vendor case takes responses")
+    now = clock.now()
+    await add_action(session, case_id, "response", user.id, body.text, now)
+    record(session, actor=user, action="case.response", entity_type="case", entity_id=case_id, org_id=row.vendor_id,
+           after={"text": body.text})
+    await session.commit()
+    return await case_detail(case_id, user, session)
+
+
+@router.post("/{case_id}/actions")
+async def act_on_vendor(case_id: uuid.UUID, body: VendorActionIn, user: User = Depends(require_roles(Role.DATA_OPS)),
+                        session: AsyncSession = Depends(get_session)) -> CaseDetail:
+    """Lower an allocation, pause or offboard (AB5, D42). Routing follows at once."""
+    row = await visible_case(session, case_id, user)
+    if row.subject_type != "vendor" or row.status != "open":
+        raise HTTPException(status.HTTP_409_CONFLICT, "Actions are taken on an open vendor case")
+    if body.action not in VENDOR_ACTIONS:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"Action must be one of {sorted(VENDOR_ACTIONS)}")
+    if not await may_act(session, row):
+        raise HTTPException(status.HTTP_409_CONFLICT,
+                            "The vendor hasn't responded and its response window hasn't passed" if row.shared_at
+                            else "Ask the vendor to respond first")
+    now = clock.now()
+    if body.action == "lower_allocation":
+        allocation = await session.scalar(
+            select(Allocation).where(Allocation.project_id == body.project_id, Allocation.vendor_id == row.vendor_id,
+                                     Allocation.status == "active").with_for_update())
+        if allocation is None or body.share is None or body.share >= allocation.share:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Name a project the vendor works on, and a lower share")
+        note = f"Share on the project lowered from {allocation.share:.0%} to {body.share:.0%}: {body.reason}"
+        allocation.share = body.share
+        affected = [allocation.project_id]
+    else:
+        new_status = "paused" if body.action == "pause" else "ended"
+        only = body.project_id if body.action == "pause" else None
+        changed = (await session.execute(
+            text("UPDATE allocations SET status = :s WHERE vendor_id = :v AND status <> 'ended' "
+                 "AND (CAST(:p AS uuid) IS NULL OR project_id = CAST(:p AS uuid)) RETURNING project_id"),
+            {"s": new_status, "v": row.vendor_id, "p": only})).scalars().all()
+        if not changed:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "The vendor has no allocation to change there")
+        if body.action == "offboard":
+            await session.execute(text("UPDATE orgs SET offboarded_at = :now WHERE id = :v"), {"now": now, "v": row.vendor_id})
+        note = f"{'Paused' if body.action == 'pause' else 'Offboarded'} on {len(changed)} project(s): {body.reason}"
+        affected = changed
+    await session.flush()
+    for project_id in affected:
+        await route_tasks(session, await session.get(Project, project_id))  # unstarted tasks move to other vendors
+    await add_action(session, case_id, body.action, user.id, note, now)
+    record(session, actor=user, action=f"vendor.{body.action}", entity_type="org", entity_id=row.vendor_id, org_id=row.vendor_id,
+           after={"case_id": str(case_id), "reason": body.reason, "project_id": str(body.project_id) if body.project_id else None,
+                  "share": str(body.share) if body.share is not None else None})
+    await session.commit()
+    return await case_detail(case_id, user, session)
+
+
 @router.post("/{case_id}/reverse")
 async def reverse(
     case_id: uuid.UUID,
@@ -282,6 +422,8 @@ async def reverse(
         raise HTTPException(status.HTTP_409_CONFLICT, "Only a decided case can be reversed")
     if row.subject_type == "environment_version":
         raise HTTPException(status.HTTP_409_CONFLICT, "An environment case is reversed by reviewing the version again")
+    if row.subject_type == "vendor":
+        raise HTTPException(status.HTTP_409_CONFLICT, "A vendor case is undone by changing the allocation back")
     now = clock.now()
     await session.execute(text("UPDATE users SET suspended_at = NULL WHERE id = :w"), {"w": row.subject_id})
     await session.execute(text("UPDATE holds SET released_at = :now WHERE case_id = :c AND released_at IS NULL"), {"now": now, "c": case_id})

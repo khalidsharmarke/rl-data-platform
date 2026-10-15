@@ -116,6 +116,7 @@ function DemoLogin({ onSignedIn }: { onSignedIn: (user: User) => void }) {
         <li><strong>Sofia Lindgren</strong> (Kestrel's environment builder) → Projects: six environments and what the sandbox said about each.</li>
         <li><strong>Rae</strong> → Training → the second run: one environment's solve rate leaps as attempts get shorter.</li>
         <li><strong>Sam</strong> → Cases → "slugify edge cases": the hack detector's case, the recall, and training's rollback.</li>
+        <li><strong>Sam</strong> → Cases → Kestrel Labs: a vendor case, Kestrel's response and the pause; Scorecards: how each vendor handles its own cases.</li>
       </ol>
       {error && <p className="error">Couldn't load demo users: {error}</p>}
       <div className="orgs">

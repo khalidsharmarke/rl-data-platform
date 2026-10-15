@@ -40,6 +40,7 @@ Three fictional vendors work on one project, *"Which of these two answers is mor
 20. **A separate hack detector reads the episodes.** At 20% short full-mark attempts it asks a researcher to read transcripts; at 50% it opens a case, and the version is quarantined without a person. The sound environment raises nothing and keeps training.
 21. **The case issues a recall** naming the run, the step it first used the version, and where the flagged attempts began. Training reads it, rolls back to the checkpoint before the first flagged step, and reports that; the report lands on the case. The platform never touches a model.
 22. **Data ops retires the version.** Kestrel's scorecard shows its environment work, from versions submitted to quarantines, and what happened in training: episodes, solve rate, flagged attempts and recalls.
+23. **A vendor-level rule notices.** Two of Kestrel's environments quarantined within 30 days opens a vendor case for data ops. Kestrel doesn't see it until data ops asks it to respond. Kestrel answers, and only then may data ops act: it pauses Kestrel on the brief. The same kind of rule can catch Brightline's fall (accuracy down while volume rose), but on some runs one worker isn't enough to move a whole vendor; data ops clears that case after Brightline's response.
 
 ![A builder's view of a brief: one environment quarantined, three stopped by the sandbox's checks, with the reason and logs](docs/media/environment-checks.png)
 
@@ -56,7 +57,7 @@ Needs Docker with Compose. The sandbox runner starts a container for every envir
 ```sh
 make demo    # fresh database, then the scripted scenario above (about 4 minutes)
 make up      # start Postgres, the API, the background worker and the web app on real time
-make test    # 165 backend tests, 38 detection-service tests, and 13 sandbox tests on real containers
+make test    # 172 backend tests, 38 detection-service tests, and 13 sandbox tests on real containers
 make down    # stop (make reset also deletes the database)
 ```
 
@@ -78,7 +79,7 @@ Open http://localhost:5173 and pick a demo user. The login page suggests a path 
 | Docker containers with no network and strict limits, started per check | A hardened sandbox (gVisor or Firecracker) on dedicated hosts ([B5](docs/BUILD.md#environment-milestones)) |
 | A demo clock running 180× real time, `make demo` only | Waiting five hours for the story |
 
-Out of scope so far: vendor-built environment images, vendor-level abuse rules, vendor reviewers, and extra overlap during escalation. [BUILD.md](docs/BUILD.md#2-scope) lists everything left out and why, and [LIMITATIONS.md](docs/LIMITATIONS.md) covers where the built part falls short.
+Out of scope so far: vendor-built environment images, vendor reviewers, and extra overlap during escalation. [BUILD.md](docs/BUILD.md#2-scope) lists everything left out and why, and [LIMITATIONS.md](docs/LIMITATIONS.md) covers where the built part falls short.
 
 **On detecting AI-written answers.** The platform doesn't try to tell AI text from human text; that's unreliable. It flags the *behavior* around a submission: answering faster than the task can be read, pasting rather than typing, and giving the same reason to different questions. Honest but sloppy work isn't flagged: it shows up as low quality on the scorecard instead.
 
@@ -98,7 +99,7 @@ Each of these was found by testing or by looking at the demo's output, fixed, an
 ## Where things are
 
 ```
-backend/     FastAPI app, migrations, background worker (app/jobs.py), the detection contract (app/routes/detection.py), rule modes, the audit sample and detection's measures (app/detection_quality.py, app/routes/detectors.py), broken tasks and agreement alerts (app/routes/task_health.py), the release stage (app/release.py), contributor grades (app/grades.py), discreet escalation (app/escalation.py), environments and versions (app/environments.py), the sandbox runner (app/sandbox.py), the catalog (app/routes/catalog.py), episode intake and training dashboards (app/routes/training.py), training statistics (app/training_stats.py), the hack-detection contract and recalls (app/routes/hacks.py, app/environment_cases.py), fixture environments (tests/fixtures/environments), 165 tests
+backend/     FastAPI app, migrations, background worker (app/jobs.py), the detection contract (app/routes/detection.py), rule modes, the audit sample and detection's measures (app/detection_quality.py, app/routes/detectors.py), broken tasks and agreement alerts (app/routes/task_health.py), vendor rules and vendor cases (app/vendor_oversight.py, app/routes/cases.py), the release stage (app/release.py), contributor grades (app/grades.py), discreet escalation (app/escalation.py), environments and versions (app/environments.py), the sandbox runner (app/sandbox.py), the catalog (app/routes/catalog.py), episode intake and training dashboards (app/routes/training.py), training statistics (app/training_stats.py), the hack-detection contract and recalls (app/routes/hacks.py, app/environment_cases.py), fixture environments (tests/fixtures/environments), 172 tests
 sandbox/     the sandbox runner's image and the base image environment checks run on
 detection/   the separate detection services: abuse rules and severity (rules.py), their state (detector.py), the reward-hack detector (hacks.py, hack_service.py), 38 tests
 frontend/    React + TypeScript: one app, a view per role

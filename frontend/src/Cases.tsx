@@ -14,9 +14,24 @@ const ENVIRONMENT_DECISIONS = [
   { value: "clear", label: "Clear: send it back to review" },
 ];
 
+// A vendor case (AB5, D42): resolved after an action on the vendor, or cleared.
+const VENDOR_DECISIONS = [
+  { value: "resolve", label: "Resolve: action taken" },
+  { value: "clear", label: "Clear: nothing to act on" },
+];
+const VENDOR_ACTIONS = [
+  { value: "lower_allocation", label: "Lower its share on the project" },
+  { value: "pause", label: "Pause it on every project" },
+  { value: "offboard", label: "Offboard it" },
+];
+
 const OUTCOME: Record<string, string> = { suspend: "Suspended", remove: "Removed", warn: "Warned", clear: "Cleared" };
 const ENVIRONMENT_OUTCOME: Record<string, string> = { remove: "Retired", clear: "Back in review" };
+const VENDOR_OUTCOME: Record<string, string> = { resolve: "Resolved", clear: "Cleared" };
 const isEnvironment = (c: CaseSummary) => c.subject_type === "environment_version";
+const isVendor = (c: CaseSummary) => c.subject_type === "vendor";
+const outcomes = (c: CaseSummary) => (isEnvironment(c) ? ENVIRONMENT_OUTCOME : isVendor(c) ? VENDOR_OUTCOME : OUTCOME);
+const decisionsFor = (c: CaseSummary) => (isEnvironment(c) ? ENVIRONMENT_DECISIONS : isVendor(c) ? VENDOR_DECISIONS : DECISIONS);
 
 const when = (t: string) => new Date(t).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 
@@ -42,10 +57,10 @@ export default function Cases({ me }: { me: User }) {
     setReason("");
     const detail = await api<CaseDetail>(`/cases/${id}`);
     setOpen(detail);
-    setDecision(isEnvironment(detail) ? "remove" : "suspend");
+    setDecision(decisionsFor(detail)[0].value);
     setLineage(null);
     setRecall(isEnvironment(detail) && me.org_kind === "internal" ? await api<Recall | null>(`/cases/${id}/recall`) : null);
-    if (me.role === "data_ops" && !isEnvironment(detail) && detail.subject_id && detail.project_id) {
+    if (me.role === "data_ops" && detail.subject_type === "worker" && detail.subject_id && detail.project_id) {
       setLineage(await api<Lineage>(`/lineage?worker_id=${detail.subject_id}&project_id=${detail.project_id}`));
     }
   }
@@ -78,8 +93,8 @@ export default function Cases({ me }: { me: User }) {
       <h2>Cases</h2>
       <p className="muted">
         {me.role === "data_ops"
-          ? "Every case across vendors and how it was resolved. Worker cases are decided by the worker's vendor; environment cases by data ops."
-          : "Workers the platform's signals flagged. Their answers are held from training until you decide."}
+          ? "Every case across vendors and how it was resolved. Worker cases are decided by the worker's vendor; environment and vendor cases by data ops."
+          : "Workers the platform's signals flagged, whose answers are held from training until you decide, and anything Anthropic has asked your company to respond to."}
       </p>
       <table>
         <thead>
@@ -102,16 +117,18 @@ export default function Cases({ me }: { me: User }) {
               <td>{when(c.opened_at)}</td>
               {me.role === "data_ops" && <td>{c.vendor_name}</td>}
               <td>
-                {isEnvironment(c) ? c.subject_handle : <>{c.subject_name ?? ""} <span className="mono muted">{c.subject_handle}</span></>}
+                {isEnvironment(c) || isVendor(c) ? c.subject_handle : <>{c.subject_name ?? ""} <span className="mono muted">{c.subject_handle}</span></>}
               </td>
               <td>{isEnvironment(c) ? (c.by_person ? "Flagged by a person" : "Flagged by the hack detector") : `${c.observations.length} signal${c.observations.length === 1 ? "" : "s"}`}</td>
               <td>
                 {c.status === "open" ? (
-                  <span className="badge warn">Open{c.held ? (isEnvironment(c) ? " · quarantined" : " · data held") : ""}</span>
+                  <span className="badge warn">
+                    Open{isVendor(c) ? (c.shared_at ? " · with the vendor" : " · not yet shared") : c.held ? (isEnvironment(c) ? " · quarantined" : " · data held") : ""}
+                  </span>
                 ) : (
                   <span className="badge">
-                    {(isEnvironment(c) ? ENVIRONMENT_OUTCOME : OUTCOME)[c.decision ?? ""] ?? c.decision}
-                    {c.held && !isEnvironment(c) ? " · data held" : ""}
+                    {outcomes(c)[c.decision ?? ""] ?? c.decision}
+                    {c.held && c.subject_type === "worker" ? " · data held" : ""}
                   </span>
                 )}
               </td>
@@ -123,8 +140,10 @@ export default function Cases({ me }: { me: User }) {
       {open && (
         <div className="card case">
           <h3>
-            {isEnvironment(open) ? <>Environment: {open.subject_handle}</> : <>{open.subject_name ?? "Worker"} <span className="mono muted">{open.subject_handle}</span></>} ·{" "}
-            {open.vendor_name}
+            {isVendor(open) ? <>Vendor: {open.vendor_name}</> : <>
+              {isEnvironment(open) ? <>Environment: {open.subject_handle}</> : <>{open.subject_name ?? "Worker"} <span className="mono muted">{open.subject_handle}</span></>} ·{" "}
+              {open.vendor_name}
+            </>}
           </h3>
           <h4>{isEnvironment(open) ? "Why it was flagged" : "What the platform observed"}</h4>
           <ul>
@@ -221,10 +240,13 @@ export default function Cases({ me }: { me: User }) {
               </li>
             ))}
           </ul>
+          {isVendor(open) && open.status === "open" && (
+            <VendorCase c={open} me={me} onChange={(c) => (setOpen(c), load())} onError={setError} />
+          )}
           {open.status === "open" && isOwner(open) && (
             <div className="decide">
               <select value={decision} onChange={(e) => setDecision(e.target.value)}>
-                {(isEnvironment(open) ? ENVIRONMENT_DECISIONS : DECISIONS).map((d) => (
+                {decisionsFor(open).map((d) => (
                   <option key={d.value} value={d.value}>
                     {d.label}
                   </option>
@@ -267,5 +289,66 @@ export default function Cases({ me }: { me: User }) {
         </div>
       )}
     </section>
+  );
+}
+
+/** A vendor case before it's decided (AB5, D42): data ops shares it, the vendor responds, and
+ *  data ops may act once the vendor has responded or the window has passed. */
+function VendorCase({ c, me, onChange, onError }: {
+  c: CaseDetail; me: User; onChange: (c: CaseDetail) => void; onError: (e: string) => void;
+}) {
+  const [text, setText] = useState("");
+  const [action, setAction] = useState("lower_allocation");
+  const [share, setShare] = useState("15");
+  const [reason, setReason] = useState("");
+  const post = async (path: string, body?: object) => {
+    try {
+      onChange(await api<CaseDetail>(`/cases/${c.id}/${path}`, { method: "POST", body: body ? JSON.stringify(body) : undefined }));
+    } catch (e) {
+      onError(e instanceof Error ? e.message : String(e));
+    }
+  };
+  if (me.role === "vendor_admin") {
+    return (
+      <div className="decide">
+        <input placeholder="Your response to Anthropic (kept on the case)" value={text} onChange={(e) => setText(e.target.value)} />
+        <button className="primary" disabled={text.trim().length < 3} onClick={() => (post("responses", { text }), setText(""))}>
+          Respond
+        </button>
+      </div>
+    );
+  }
+  if (me.role !== "data_ops") return null;
+  if (!c.shared_at) {
+    return (
+      <p>
+        <button className="primary" onClick={() => post("share")}>Ask {c.vendor_name} to respond</button>{" "}
+        <span className="muted">Until then, the vendor doesn't see this case.</span>
+      </p>
+    );
+  }
+  return (
+    <>
+      <p className="muted">
+        Shared with {c.vendor_name}. {c.can_act ? "You can act on the vendor now." : `Actions wait for its response, or until ${c.respond_by ? new Date(c.respond_by).toLocaleString() : "the window passes"}.`}
+      </p>
+      {c.can_act && (
+        <div className="decide">
+          <select value={action} onChange={(e) => setAction(e.target.value)}>
+            {VENDOR_ACTIONS.map((a) => <option key={a.value} value={a.value}>{a.label}</option>)}
+          </select>
+          {action === "lower_allocation" && (
+            <label className="nowrap">
+              to <input type="number" min={1} max={99} value={share} onChange={(e) => setShare(e.target.value)} style={{ width: 60 }} />%
+            </label>
+          )}
+          <input placeholder="Reason (required, the vendor sees it)" value={reason} onChange={(e) => setReason(e.target.value)} />
+          <button className="primary" disabled={reason.trim().length < 3}
+                  onClick={() => (post("actions", { action, reason, project_id: c.project_id, share: action === "lower_allocation" ? Number(share) / 100 : null }), setReason(""))}>
+            Act
+          </button>
+        </div>
+      )}
+    </>
   );
 }

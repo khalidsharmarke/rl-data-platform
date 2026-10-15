@@ -10,7 +10,7 @@ What the build does not do, where it falls short, and what is still undecided. T
 
 ## 1. Coverage of the posting
 
-The posting names three areas: *"environment creation, data collection, and training observability."* The build covers the core of data collection, plus the vendor management, workspaces and audit trail it needs. It covers 45 of the design's 56 functional requirements.
+The posting names three areas: *"environment creation, data collection, and training observability."* The build covers the core of data collection, plus the vendor management, workspaces and audit trail it needs. It covers 47 of the design's 56 functional requirements.
 
 | Posting line | Coverage in the build |
 |---|---|
@@ -33,7 +33,7 @@ The posting names three areas: *"environment creation, data collection, and trai
 | The paste signal is reported by the browser | A worker answering through the API, or with a modified client, can omit it. Pasting alone is only ever a watch finding (D32), so a forged signal can't open a case, but omitting it removes one of the signals that make a case | Give more weight to server signals (AB12) |
 | The speed rule uses server-measured time on task | A worker who waits before submitting passes it | Combine speed with quality signals: gold accuracy over time and agreement with other workers |
 | The duplicate rule compares reason text | Paraphrased reasons pass it, and an LLM paraphrases for free | Similarity on meaning rather than wording, and patterns across workers |
-| One bad worker hardly moves a vendor's numbers | At 5% gold and a 25% share, one worker in ten pasting moved Brightline from about 80% to about 71% gold accuracy. The vendor drop alert (D19: two-proportion test, at least 60 gold per side, at least 8 points) fires on some runs of the demo and not on others. The worker rules catch the worker on every run | More gold, longer windows, or vendor-level rules built on behavior signals as well as gold (AB2). Each costs money or time |
+| One bad worker hardly moves a vendor's numbers | At 5% gold and a 25% share, one worker in ten pasting moved Brightline from about 80% to about 71% gold accuracy. The vendor drop alert (D19: two-proportion test, at least 60 gold per side, at least 8 points) and the vendor rule built on the same test (quality-volume-v1) fire on some runs of the demo and not on others. The worker rules catch the worker on every run | More gold, longer windows, or vendor-level rules built on behavior signals as well as gold (AB2). Each costs money or time |
 | Gold stays secret only if nothing reveals it indirectly | Gold can be recognized from how it's spread across questions, where it sits in a vendor's stream, or counts in events vendors can read. D8 forbids all three and tests cover them, but each new feature that touches routing, counts or timing can open another way | Tests for every vendor-visible endpoint and event, reviewed whenever routing changes |
 | Escalation only reorders gold | A watched worker meets their vendor's gold sooner and a few of their flagged answers go to spot checks, but they get no extra overlap (AB14), and the gold they use up is gold their colleagues would otherwise have answered | Add gold for the watched worker instead of reordering it, kept out of the vendor's comparison (D26) |
 | A cleared worker isn't watched again for the same signal | A cleared escalation goes back to detection, which then judges only later answers but doesn't raise the same signal alone again; otherwise an honest worker who pastes from notes would be watched over and over. A worker who later abuses through that one signal alone raises nothing; a second signal still does | A rule that looks for a change in the signal (pasting where the worker used to type) rather than its presence |
@@ -54,6 +54,8 @@ The posting names three areas: *"environment creation, data collection, and trai
 
 | Limitation | Effect | What would address it |
 |---|---|---|
+| Allocation changes outside a case aren't gated | Data ops can still change a vendor's share or status directly, as VP1 allows for business reasons, without the vendor's response; only actions taken through a vendor case wait for it | Record a reason category on every allocation change, and review changes that lower a vendor's share without a case |
+| A vendor action is undone by hand | A vendor case can't be reversed like a worker's; data ops changes the allocation back, and nothing links that to the case | A reverse step on vendor cases that restores the allocations it changed |
 | Clean-up stops at the dataset | Lineage names every shipped row from a removed worker. Nothing records which training runs used which datasets, so the platform can't say which models are affected | Record dataset use by training runs (TO1, D14) |
 | A broken task needs two flags | In the demo, 25 of 80 broken tasks were never paused: the workers who reached them answered rather than flagging, so their answers stay in the data. The agreement alert lists the worst tasks, but only flags pause them | Let researchers pause or retire a task from the alert, and pause sooner on flags from workers whose earlier flags were upheld |
 | The agreement alert is computed when it's viewed | Nothing records that it fired or tells anyone; once researchers retire the tasks behind it, it clears and leaves no trace | Record alerts when the roll-up job runs, with who looked at them and what they did |
@@ -108,5 +110,4 @@ The design's scale estimate is about 1.2 million submissions a day ([`DESIGN.md`
 
 In order, from the [oversight milestones](BUILD.md#oversight-milestones) in `BUILD.md`:
 
-1. Vendor-level abuse rules and vendor actions (AB2, AB5, M23).
-2. The vendor reviewer step (DC8, M24).
+1. The vendor reviewer step (DC8, M24).

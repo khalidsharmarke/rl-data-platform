@@ -69,7 +69,6 @@ These belong to the platform and come later. [`BUILD.md`](BUILD.md#not-in-the-bu
 |---|---|---|
 | Scale: ~1.2 million submissions a day, ~1,000 episodes a second | Designed for, not load-tested; the build runs at demo volume | Scale estimate, D2, D5 |
 | Task types beyond comparing two answers, including agentic tasks | One task type is enough to show the platform | DC1 |
-| Vendor-level abuse and actions on vendors | The worker-level path came first (planned, M23) | AB2, AB5 |
 | Vendor rules that need identities across vendors: removed workers returning, the same answers across vendors | They need a cross-vendor worker match, which is P2 | AB2, AB10 |
 | Vendor onboarding, API tokens, registry credentials | Vendors are seeded | VM2, VM3, N14 |
 | The vendor reviewer step | Optional for vendors (A29) (planned, M24) | DC8 |
