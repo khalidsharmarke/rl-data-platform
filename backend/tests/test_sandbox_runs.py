@@ -79,3 +79,18 @@ def test_the_attempt_never_sees_the_grader_or_the_reference_files():
     assert "def test_" not in logs and "/work/grader" not in logs.split("grader:")[0]
     assert '"-".join' not in results["empty"].logs  # the reference solution never appears
     assert all(r.passed for r in results.values())
+
+
+def test_a_weak_grader_passes_every_check():
+    # It takes a model attempting the task to find this one: the sandbox can't (M17-M19).
+    results = check("weak_grader")
+    assert all(r.passed for r in results.values()), {k: r.detail for k, r in results.items()}
+
+
+@pytest.mark.parametrize("fixture, scores", [("weak_grader", True), ("sound", False)])
+def test_returning_an_empty_string_really_beats_the_weak_grader(fixture, scores):
+    """The demo's planted hack, run for real: B6's modeled training is grounded in this."""
+    files = {p: data for p, part, data in envfixtures.files(fixture) if part in ("task", "grader")}
+    files["task/slug.py"] = b'def slugify(text):\n    return ""\n'
+    r = sandbox.run(IMAGE, files, sandbox.GRADE, {"TEST_COMMAND": envfixtures.manifest(fixture)["test_command"]}, 30)
+    assert (r.exit_code == 0) is scores, r.stdout.decode()

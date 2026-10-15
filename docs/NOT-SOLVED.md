@@ -40,9 +40,9 @@ Each entry is one of five kinds:
 | Problem | What the project does instead | Why | Where |
 |---|---|---|---|
 | Real workers | A simulator drives the public API with worker profiles: careful, average, sloppy, AI-pasting, note-pasting | No real workforce is available; everything they touch is real | BUILD M4, M12 |
-| The model being trained | Scripted agents: an honest one whose solve rate rises with training, and a cheating one that uses a hack once it finds one. Outcomes are modeled from each environment's known behavior (planned, M17) | Real RL is out of scope; the platform reacts to episodes, not to how they were produced | B6 |
-| Training infrastructure | A stand-in service that pulls approved versions from the catalog; from M17 it runs the scripted agents, sends episodes and acts on recalls | Training is out of scope, but the catalog, intake and recall need a counterpart | A23, M16, M17 |
-| Finding hacks nobody planted | The demo's hack is one we built into a fixture (`weak_grader`), and a sandbox test proves it really passes in a container | A real model finds holes nobody anticipated; a planted one shows the platform's response honestly | B6 |
+| The model being trained | A modeled policy in the training stand-in: honest attempts whose chance of passing rises with training, and, on an environment marked hackable, a shortcut it discovers partway through the run. Outcomes are drawn, not computed | Real RL is out of scope; the platform reacts to episodes, not to how they were produced | B6 |
+| Training infrastructure | A stand-in service that pulls approved versions from the catalog, runs modeled training runs and sends one batch of episodes per step; from M19 it acts on recalls | Training is out of scope, but the catalog, intake and recall need a counterpart | A23, M16, M17 |
+| Finding hacks nobody planted | The demo's hack is one we built into a fixture (`weak_grader`, "slugify edge cases"), and a sandbox test proves `return ""` really passes its grader in a container and fails a sound one | A real model finds holes nobody anticipated; a planted one shows the platform's response honestly | B6 |
 | Estimating difficulty | Planned from the scripted agents' solve rates (M18) | Difficulty needs something attempting the task; with no model, the agents are that something | EC3 |
 | Time | A demo clock runs 180× real time in `make demo` | Five hours of work in a few minutes; every timestamp goes through it, so durations stay consistent | [`BUILD.md`](BUILD.md#stand-ins) |
 
@@ -53,7 +53,7 @@ Each entry is one of five kinds:
 | Isolating untrusted code | Docker with strict limits (no network, read-only root, memory, CPU, process and time limits) instead of gVisor or Firecracker on dedicated hosts | Enough to show and test the boundary on a laptop | B5, D4 |
 | Vendors' own container images | Uploaded bundles on a base image the platform builds | Keeps the slice to the checks that protect the reward signal | B4, A15, VM2 |
 | Sign-in and the API gateway | Seeded demo logins and a scoping module every route goes through | Standard parts, not the hard problem | [`BUILD.md`](BUILD.md#stand-ins) |
-| Message broker and durable log | Postgres tables: the job queue, the outbox read through a cursor feed, and (planned) the episode buffer | Volumes are low enough; the contracts would stay the same on Kafka | D2, D24, B7 |
+| Message broker and durable log | Postgres tables: the job queue, the outbox read through a cursor feed, and the episodes table that stands in for the durable log in front of the analytics store | Volumes are low enough; the contracts would stay the same on Kafka | D2, D24, B7 |
 | Analytics store | Summary tables in Postgres | Same reason | [`BUILD.md`](BUILD.md#stand-ins), B7 |
 | Object storage | A Docker volume | Same reason | [`BUILD.md`](BUILD.md#stand-ins) |
 | Live dashboards | Polling every few seconds instead of server-sent events (planned) | Meets 10–30 s behind training either way | A9, B7 |
