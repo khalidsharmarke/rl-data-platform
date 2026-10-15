@@ -20,6 +20,10 @@ class Settings(BaseSettings):
     detection_token: str = ""
     # Object storage stand-in: exported datasets are written here.
     export_dir: str = "/data/exports"
+    # Environment content, stored once per SHA-256 (D34).
+    content_dir: str = "/data/content"
+    # The base image every environment version runs on (build decision B4).
+    environment_base_image: str = "rl-env-python:1"
 
 
 settings = Settings()

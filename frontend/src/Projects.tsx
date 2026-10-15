@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import BriefCard from "./BriefCard";
 import { api, pct, savedToken, type Allocation, type Contract, type Dataset, type Escalation, type Grades, type Project, type Quality, type Release, type User } from "./api";
 
 const UNIT: Record<string, string> = { task: "per task", hour: "per hour", environment: "per environment" };
@@ -27,6 +28,7 @@ export default function Projects({ me }: { me: User }) {
     api<Project[]>("/projects").then(async (list) => {
       setProjects(list);
       if (!internal) return;
+      list = list.filter((p) => p.kind === "human_data");
       const byProject: Record<string, Allocation[]> = {};
       const byContract: Record<string, Contract> = {};
       const byQuality: Record<string, Quality> = {};
@@ -56,7 +58,8 @@ export default function Projects({ me }: { me: User }) {
   return (
     <section>
       <h2>Projects</h2>
-      {projects.map((p) => (
+      {projects.filter((p) => p.kind === "environment").map((p) => <BriefCard key={p.id} project={p} me={me} />)}
+      {projects.filter((p) => p.kind === "human_data" && me.role !== "environment_builder").map((p) => (
         <div key={p.id} className="card">
           <h3>{p.name}</h3>
           <p className="muted">

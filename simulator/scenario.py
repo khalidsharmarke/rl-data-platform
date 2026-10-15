@@ -122,7 +122,7 @@ async def setup(c: httpx.AsyncClient) -> tuple[str, dict, list[tuple[str, str, s
     rng = random.Random(SEED)
     names = iter(rng.sample([f"{f} {l}" for f in FIRST for l in LAST], 60))
     for vendor, share in SHARES.items():
-        contract = (await c.get(f"/orgs/{orgs[vendor]}/contracts", headers=ops)).json()[0]
+        contract = next(k for k in (await c.get(f"/orgs/{orgs[vendor]}/contracts", headers=ops)).json() if k["kind"] == "human_work")
         r = await c.post(f"/projects/{project['id']}/allocations", headers=ops,
                          json={"vendor_id": orgs[vendor], "contract_id": contract["id"], "share": share})
         r.raise_for_status()

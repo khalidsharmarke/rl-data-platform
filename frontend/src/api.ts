@@ -65,9 +65,18 @@ export type AuditEvent = {
   org_id: string | null;
 };
 
+export type Brief = {
+  description: string;
+  languages: string[];
+  constraints: string[];
+  difficulty_mix: Record<string, number>;
+  review_rubric: string[];
+};
 export type Project = {
   id: string;
   name: string;
+  kind: "human_data" | "environment";
+  brief: Brief | null;
   task_type: string;
   current_schema_version: number;
   target_volume: number;
@@ -75,6 +84,10 @@ export type Project = {
   status: string;
 };
 
+export type EnvironmentRow = {
+  id: string; project_id: string; vendor_name: string; name: string; created_at: string;
+  versions: number; latest_status: string | null;
+};
 export type Allocation = {
   id: string;
   vendor_id: string;

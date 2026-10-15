@@ -21,30 +21,60 @@ from app.work import counts_by_vendor, route_tasks
 router = APIRouter(prefix="/projects")
 
 
+class BriefIn(BaseModel):
+    """What a researcher asks environment vendors for (EC0)."""
+
+    description: str = Field(min_length=1)
+    languages: list[str] = []
+    constraints: list[str] = []
+    # Share of the target count at each difficulty, e.g. {"easy": 0.3, "medium": 0.5, "hard": 0.2}.
+    difficulty_mix: dict[str, float] = {}
+    # What reviewers grade each environment against (EC5).
+    review_rubric: list[str] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def mix_adds_up(self) -> "BriefIn":
+        if self.difficulty_mix and abs(sum(self.difficulty_mix.values()) - 1) > 0.01:
+            raise ValueError("The difficulty mix must add up to 1")
+        return self
+
+
 class ProjectIn(BaseModel):
     name: str = Field(min_length=1, max_length=200)
-    task_type: str = Field(min_length=1, max_length=60)
-    answer_schema: dict[str, Any]
-    instructions: str = Field(min_length=1)
+    # D33: a human-data project or an environment brief.
+    kind: str = Field(default="human_data", pattern="^(human_data|environment)$")
     target_volume: int = Field(gt=0)
     deadline: date | None = None
-    overlap: int = Field(ge=1, le=10)
-    gold_rate: Decimal = Field(ge=0, lt=1)
+    # Human data only.
+    task_type: str | None = Field(default=None, min_length=1, max_length=60)
+    answer_schema: dict[str, Any] | None = None
+    instructions: str | None = Field(default=None, min_length=1)
+    overlap: int | None = Field(default=None, ge=1, le=10)
+    gold_rate: Decimal | None = Field(default=None, ge=0, lt=1)
     quality_bar: Decimal = Field(default=Decimal("0.8"), ge=0, le=1)
     min_gold_results: int = Field(default=5, ge=1)
     release_after_minutes: int = Field(default=60, ge=0)
     release_cap_minutes: int = Field(default=24 * 60, ge=0)
+    # Environment briefs only.
+    brief: BriefIn | None = None
 
     @model_validator(mode="after")
-    def cap_after_gap(self) -> "ProjectIn":
+    def fits_its_kind(self) -> "ProjectIn":
         if self.release_cap_minutes < self.release_after_minutes:
             raise ValueError("The release cap can't be shorter than the minimum gap")
+        human = (self.task_type, self.answer_schema, self.instructions, self.overlap, self.gold_rate)
+        if self.kind == "human_data" and (any(v is None for v in human) or self.brief is not None):
+            raise ValueError("A human-data project needs task_type, answer_schema, instructions, overlap and gold_rate, and no brief")
+        if self.kind == "environment" and (self.brief is None or any(v is not None for v in human)):
+            raise ValueError("An environment brief needs a brief and none of the human-data fields")
         return self
 
 
 class ProjectOut(BaseModel):
     id: uuid.UUID
     name: str
+    kind: str
+    brief: dict[str, Any] | None
     task_type: str
     current_schema_version: int
     target_volume: int
@@ -112,6 +142,8 @@ async def get_visible_project(project_id: uuid.UUID, user: User, session: AsyncS
 async def create_project(
     body: ProjectIn, user: User = Depends(require_roles(Role.RESEARCHER)), session: AsyncSession = Depends(get_session)
 ) -> ProjectOut:
+    if body.kind == "environment":
+        return await create_brief(body, user, session)
     try:
         jsonschema.Draft202012Validator.check_schema(body.answer_schema)
     except jsonschema.SchemaError as e:
@@ -128,6 +160,20 @@ async def create_project(
     record(session, actor=user, action="project.created", entity_type="project", entity_id=project.id, org_id=user.org_id,
            after={"name": project.name, "task_type": project.task_type, "schema_version": 1, "overlap": project.overlap,
                   "gold_rate": str(project.gold_rate), "target_volume": project.target_volume})
+    await session.commit()
+    return project_out(project)
+
+
+async def create_brief(body: ProjectIn, user: User, session: AsyncSession) -> ProjectOut:
+    """An environment brief (EC0, D33). The human-data columns hold neutral values."""
+    project = Project(
+        name=body.name, created_by=user.id, kind="environment", brief=body.brief.model_dump(), task_type="environment",
+        current_schema_version=0, target_volume=body.target_volume, deadline=body.deadline, overlap=1, gold_rate=Decimal("0"),
+    )
+    session.add(project)
+    await session.flush()
+    record(session, actor=user, action="project.created", entity_type="project", entity_id=project.id, org_id=user.org_id,
+           after={"name": project.name, "kind": "environment", "target_volume": project.target_volume})
     await session.commit()
     return project_out(project)
 
@@ -153,6 +199,8 @@ async def add_tasks(
     session: AsyncSession = Depends(get_session),
 ) -> dict[str, int]:
     project = await get_visible_project(project_id, user, session)
+    if project.kind != "human_data":
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Tasks belong to human-data projects; vendors build environments against a brief")
     schema = await session.get(TaskSchema, (project.id, project.current_schema_version))
     validator = jsonschema.Draft202012Validator(schema.answer_schema)
     for i, t in enumerate(body.tasks):
@@ -209,11 +257,14 @@ async def allocate(
     vendor = await session.get(Org, body.vendor_id)
     if vendor is None or vendor.kind != OrgKind.VENDOR:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "No such vendor")
-    if Capability.HUMAN_WORK not in vendor.capabilities:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"{vendor.name} doesn't supply human work")
+    # The vendor must supply this kind of work, under a contract for it (VP1, VM6, VM7, D33).
+    needed = Capability.ENVIRONMENTS if project.kind == "environment" else Capability.HUMAN_WORK
+    work = "environments" if needed == Capability.ENVIRONMENTS else "human work"
+    if needed not in vendor.capabilities:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"{vendor.name} doesn't supply {work}")
     contract = await session.get(Contract, body.contract_id)
-    if contract is None or contract.vendor_id != vendor.id or contract.kind != Capability.HUMAN_WORK:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "That contract isn't a human-work contract with this vendor")
+    if contract is None or contract.vendor_id != vendor.id or contract.kind != needed:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"That contract isn't a {work} contract with this vendor")
     if not contract.in_effect(clock.now().date()):
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "That contract isn't in effect today")
     if await session.scalar(select(Allocation.id).where(Allocation.project_id == project.id, Allocation.vendor_id == vendor.id)):

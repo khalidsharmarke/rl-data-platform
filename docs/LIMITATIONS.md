@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Version | 0.2.0: the 0.1.0 MVP plus integrity milestones M9–M12 (see [`BUILD.md`](BUILD.md#integrity-milestones)) |
+| Version | 0.2.0 (the 0.1.0 MVP plus integrity milestones M9–M12), plus environment milestone M13 (see [`BUILD.md`](BUILD.md#environment-milestones)) |
 | Covers | Slice A from [`BUILD.md`](BUILD.md): multi-vendor human data, with allocation, gold QA, scorecards, worker-abuse cases and lineage clean-up; a separate detection service; the release stage; contributor grades; discreet escalation |
 | Related | [`POSTING.md`](POSTING.md) · [`PRD.md`](PRD.md) · [`DESIGN.md`](DESIGN.md) · [`DECISIONS.md`](DECISIONS.md) |
 
@@ -10,7 +10,7 @@ What the build does not do, where it falls short, and what is still undecided. T
 
 ## 1. Coverage of the posting
 
-The posting names three areas: *"environment creation, data collection, and training observability."* The build covers the core of data collection, plus the vendor management, workspaces and audit trail it needs. It covers 26 of the design's 55 functional requirements.
+The posting names three areas: *"environment creation, data collection, and training observability."* The build covers the core of data collection, plus the vendor management, workspaces and audit trail it needs. It covers 28 of the design's 55 functional requirements.
 
 | Posting line | Coverage in the build |
 |---|---|
@@ -18,7 +18,7 @@ The posting names three areas: *"environment creation, data collection, and trai
 | *"a unified platform for human data collection that integrates labeling workflows, vendor management, and QA for complex agentic tasks"* | Except for agentic tasks. There is one task type: pick the more helpful of two answers, with a reason |
 | *"evaluation dashboards and observability UIs that give researchers real-time insight into environment quality, training run health, and reward hacking"* | Partly. Vendor scorecards and drop alerts exist; nothing covers environments, training runs or reward hacking |
 | *"backend services and APIs that connect environment authoring tools, data collection systems, and RL training infrastructure"* | Partly. Datasets are exported as files. Nothing comes back from training |
-| *"web platforms for RL environment creation, management, and quality review"* and *"vendor-facing interfaces… to create, submit, and iterate on training environments"* | No. This is the next slice (EC0–EC8) |
+| *"web platforms for RL environment creation, management, and quality review"* and *"vendor-facing interfaces… to create, submit, and iterate on training environments"* | Started. Researchers write briefs, data ops allocates them, and builders upload versions that never change, stored by hash in three parts (EC0, EC1, M13). Sandboxed checks, review, the catalog and quarantine are M14–M16 |
 | *"scalable code data generation pipelines"* | No (EC7) |
 | *"onboarding automation… Docker registry access, API token management, and environment validation"* | No. Vendors and users are seeded (VM2, VM3) |
 

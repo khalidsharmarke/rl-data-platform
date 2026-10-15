@@ -129,7 +129,35 @@ class Project(Base):
     release_after_minutes: Mapped[int] = mapped_column(Integer, default=60)
     release_cap_minutes: Mapped[int] = mapped_column(Integer, default=24 * 60)
     status: Mapped[str] = mapped_column(Text, default="active")
+    # D33: "human_data" or "environment". A brief's request (description, constraints,
+    # difficulty mix, review rubric) lives in `brief`; the human-data fields stay at neutral values.
+    kind: Mapped[str] = mapped_column(Text, default="human_data")
+    brief: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class Environment(Base):
+    __tablename__ = "environments"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid())
+    org_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("orgs.id"))
+    project_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("projects.id"))
+    name: Mapped[str] = mapped_column(Text)
+    created_by: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class EnvironmentVersion(Base):
+    __tablename__ = "environment_versions"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid())
+    environment_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("environments.id"))
+    number: Mapped[int] = mapped_column(Integer)
+    manifest: Mapped[dict[str, Any]] = mapped_column(JSONB)
+    status: Mapped[str] = mapped_column(Text, default="draft")
+    created_by: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    status_changed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
 class TaskSchema(Base):

@@ -20,7 +20,8 @@ HUMAN, ENVS = Capability.HUMAN_WORK, Capability.ENVIRONMENTS
 SEED: list[tuple[str, OrgKind, list[Capability], list[tuple[Role, str]]]] = [
     ("Anthropic", OrgKind.INTERNAL, [], [(Role.RESEARCHER, "Rae Okafor"), (Role.DATA_OPS, "Sam Lindqvist")]),
     ("Northwind Data", OrgKind.VENDOR, [HUMAN], [(Role.VENDOR_ADMIN, "Priya Raman"), (Role.WORKER, "Tomás Ruiz"), (Role.WORKER, "Ada Mensah")]),
-    ("Kestrel Labs", OrgKind.VENDOR, [HUMAN, ENVS], [(Role.VENDOR_ADMIN, "Jonah Weiss"), (Role.WORKER, "Mei Tanaka"), (Role.WORKER, "Luca Romano")]),
+    ("Kestrel Labs", OrgKind.VENDOR, [HUMAN, ENVS], [(Role.VENDOR_ADMIN, "Jonah Weiss"), (Role.WORKER, "Mei Tanaka"), (Role.WORKER, "Luca Romano"),
+                                                     (Role.ENVIRONMENT_BUILDER, "Sofia Lindgren")]),
     ("Brightline Annotation", OrgKind.VENDOR, [HUMAN], [(Role.VENDOR_ADMIN, "Grace Adeyemi"), (Role.WORKER, "Omar Haddad"), (Role.WORKER, "Nina Petrova")]),
 ]
 
@@ -58,12 +59,18 @@ SAMPLE_TASKS = 60
 SAMPLE_GOLD_RATE = 0.05
 
 
+# Kestrel also builds environments, paid per environment (VM7).
+ENVIRONMENT_CONTRACTS = {"Kestrel Labs": (Decimal("120.00"), PriceUnit.ENVIRONMENT)}
+
+
 async def seed_contracts(session: AsyncSession) -> None:
-    for vendor_name, (price, unit, _share) in CONTRACTS.items():
+    wanted = [(name, Capability.HUMAN_WORK, price, unit) for name, (price, unit, _share) in CONTRACTS.items()]
+    wanted += [(name, Capability.ENVIRONMENTS, price, unit) for name, (price, unit) in ENVIRONMENT_CONTRACTS.items()]
+    for vendor_name, kind, price, unit in wanted:
         vendor = await session.scalar(select(Org).where(Org.name == vendor_name))
-        if await session.scalar(select(Contract.id).where(Contract.vendor_id == vendor.id)):
+        if await session.scalar(select(Contract.id).where(Contract.vendor_id == vendor.id, Contract.kind == kind)):
             continue
-        contract = Contract(vendor_id=vendor.id, kind=Capability.HUMAN_WORK, price=price, price_unit=unit, effective_from=date(2026, 1, 1))
+        contract = Contract(vendor_id=vendor.id, kind=kind, price=price, price_unit=unit, effective_from=date(2026, 1, 1))
         session.add(contract)
         await session.flush()
         record(session, actor=None, action="contract.created", entity_type="contract", entity_id=contract.id, org_id=vendor.id,
@@ -96,7 +103,7 @@ async def seed_project(session: AsyncSession) -> None:
 
     for vendor_name, (_price, _unit, share) in CONTRACTS.items():
         vendor = await session.scalar(select(Org).where(Org.name == vendor_name))
-        contract = await session.scalar(select(Contract).where(Contract.vendor_id == vendor.id))
+        contract = await session.scalar(select(Contract).where(Contract.vendor_id == vendor.id, Contract.kind == Capability.HUMAN_WORK))
         allocation = Allocation(project_id=project.id, vendor_id=vendor.id, contract_id=contract.id, share=share)
         session.add(allocation)
         await session.flush()

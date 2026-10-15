@@ -98,3 +98,6 @@ tr.clickable:hover td { background: var(--bg); }
 .grades summary { cursor: pointer; font-weight: 600; }
 .grades table { font-size: 0.9rem; }
 .grades td:first-child { white-space: nowrap; }
+.brief-lists { display: flex; gap: 32px; flex-wrap: wrap; }
+.brief-lists h4 { margin: 8px 0 4px; }
+.brief-lists ul { margin: 0; padding-left: 18px; list-style: disc; }
