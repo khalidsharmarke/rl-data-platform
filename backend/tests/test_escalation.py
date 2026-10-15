@@ -90,6 +90,20 @@ async def test_failing_later_gold_confirms_it_as_a_case_without_revealing_gold(c
     assert (await grade_of(client, login, project_id))["integrity"] == "held"
 
 
+async def test_below_the_bar_but_not_clearly_keeps_watching(client, login, session, always_gold_first):
+    # 9 of 13 right is 69%, under the 80% bar, but the 95% interval reaches 87%: an honest,
+    # careful worker can be that unlucky. Keep measuring; at 30 answers, clear as inconclusive.
+    project_id, generated, worker = await watched(client, login, session)
+    await answer_n(client, session, worker, project_id, generated, 9)
+    await answer_n(client, session, worker, project_id, generated, 4, correct=False)
+    assert await escalation.review(session) == {"cleared": 0, "confirmed": 0}
+    assert (await escalations(client, login, project_id))[0]["outcome"] is None
+    await answer_n(client, session, worker, project_id, generated, 12)
+    await answer_n(client, session, worker, project_id, generated, 5, correct=False)  # 21 of 30: 70%, interval up to 83%
+    assert await escalation.review(session) == {"cleared": 1, "confirmed": 0}
+    assert (await client.get("/cases", headers=await login(NORTHWIND_ADMIN))).json() == []
+
+
 async def test_a_case_finding_ends_the_escalation(client, login, session):
     project_id, _, _ = await watched(client, login, session)
     await report(client, project_id, NORTHWIND_WORKER)

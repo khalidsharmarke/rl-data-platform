@@ -7,8 +7,12 @@ like any other task, so nothing about the tasks themselves changes. Their integr
 
 The escalation ends on evidence. Once the worker has answered CLEARS_WATCH gold tasks after
 the finding, it's cleared if their accuracy on those meets the project's bar, and confirmed
-if it doesn't, which opens a case for the vendor admin like any case-severity finding. A case
-opened another way ends it too. Nothing in this module is visible to the worker or the
+only if the evidence clearly says they're below it: the top of the 95% interval (the same
+Wilson interval as the quality grade, D30) is under the bar. Being merely unlucky on ten
+answers isn't enough, and low quality on its own is never abuse (PRD PD4). Anything in
+between keeps the worker watched, until GIVE_UP_AFTER later gold answers settle nothing and
+the escalation is cleared as inconclusive. Confirming opens a case for the vendor admin like
+any case-severity finding; a case opened another way ends the escalation too. Nothing in this module is visible to the worker or the
 vendor: no notice, no audit event in the vendor's log, no change to the worker's tasks
 beyond which of them come first.
 """
@@ -23,7 +27,8 @@ from app import clock
 from app.abuse import Observation, open_or_join_case
 from app.audit import record
 
-CLEARS_WATCH = 10  # later gold answers that clear, or confirm, a watch finding (D32)
+CLEARS_WATCH = 10  # later gold answers before a watch finding can be cleared or confirmed (D32)
+GIVE_UP_AFTER = 30  # later gold answers after which an unsettled watch is cleared as inconclusive
 ESCALATED_GOLD_SHARE = 0.5  # chance that an escalated worker's next claim tries gold first
 
 # Gold answered after each open escalation began, and how much of it was right.
@@ -81,13 +86,18 @@ def prefer_gold() -> bool:
 
 
 async def review(session: AsyncSession) -> dict[str, int]:
-    """End every open escalation that has enough later gold: cleared, or confirmed as a case."""
+    """End every open escalation whose later gold settles it: cleared, or confirmed as a case."""
+    from app.grades import wilson  # app.grades reads escalations, so import here
     counts = {"cleared": 0, "confirmed": 0}
     for r in (await session.execute(text(PROGRESS.format(where="")))).all():
         if r.gold_n < CLEARS_WATCH:
             continue
         now = clock.now()
-        if r.gold_correct >= float(r.quality_bar) * r.gold_n:
+        bar = float(r.quality_bar)
+        clearly_below = wilson(r.gold_correct, r.gold_n)[1] < bar
+        if not clearly_below and r.gold_correct < bar * r.gold_n and r.gold_n < GIVE_UP_AFTER:
+            continue  # below the bar, but not clearly: keep measuring
+        if not clearly_below:
             await session.execute(text("UPDATE escalations SET ended_at = :now, outcome = 'cleared' WHERE id = :x"),
                                   {"now": now, "x": r.id})
             record(session, actor=None, action="escalation.cleared", entity_type="escalation", entity_id=r.id, org_id=None,
