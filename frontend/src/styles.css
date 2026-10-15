@@ -119,3 +119,4 @@ tr.clickable:hover td { background: var(--bg); }
 tr.clickable { cursor: pointer; }
 
 .nowrap { white-space: nowrap; }
+.small { font-size: 0.85rem; }

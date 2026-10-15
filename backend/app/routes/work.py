@@ -5,7 +5,7 @@ from typing import Any
 import jsonschema
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import clock, detection_quality
@@ -69,6 +69,8 @@ class LineageOut(BaseModel):
     assigned_at: datetime
     submitted_at: datetime
     time_on_task_ms: int
+    answer: dict[str, Any]  # the worker's own
+    vendor_review: dict[str, Any] | None  # the vendor reviewer's decision, and the corrected answer if any (D44)
 
 
 @router.post("/assignments/next", response_model=AssignmentOut, responses={204: {"description": "No work available"}})
@@ -151,5 +153,13 @@ async def lineage(
         worker_handle=worker.handle, worker_name=worker.display_name if shows_identity(user, worker) else None,
         allocation_id=submission.allocation_id, contract_id=contract.id, contract_price=str(contract.price),
         contract_price_unit=contract.price_unit, assigned_at=submission.assigned_at, submitted_at=submission.submitted_at,
-        time_on_task_ms=submission.time_on_task_ms,
+        time_on_task_ms=submission.time_on_task_ms, answer=submission.answer, vendor_review=await vendor_review_of(session, submission.id),
     )
+
+
+async def vendor_review_of(session: AsyncSession, submission_id: uuid.UUID) -> dict | None:
+    r = (await session.execute(
+        text("SELECT vr.decision, vr.corrected_answer, vr.note, vr.created_at, u.handle FROM vendor_reviews vr "
+             "JOIN users u ON u.id = vr.reviewer_id WHERE vr.submission_id = :s"), {"s": submission_id})).first()
+    return None if r is None else {"decision": r.decision, "corrected_answer": r.corrected_answer, "note": r.note,
+                                   "reviewer": r.handle, "at": r.created_at.isoformat()}

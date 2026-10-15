@@ -96,13 +96,14 @@ export default function Projects({ me }: { me: User }) {
                       <td>{pct(q?.gold_accuracy)}</td>
                       <td>{pct(q?.agreement)}</td>
                       <td>{(q?.accepted ?? 0).toLocaleString()}</td>
-                      <td>{a.status}</td>
+                      <td>{a.status}{a.vendor_review ? " · vendor reviews" : ""}</td>
                     </tr>
                   );
                 })}
               </tbody>
             </table>
           )}
+          {me.role === "vendor_admin" && <ReviewSwitch projectId={p.id} />}
           {internal && (grades[p.id]?.workers.length ?? 0) > 0 && <GradesTable g={grades[p.id]} escalations={escalations[p.id] ?? []} />}
           {internal && p.kind === "human_data" && <TaskHealth projectId={p.id} canDecide={me.role === "researcher"} />}
           {internal && (
@@ -227,5 +228,24 @@ function GradesTable({ g, escalations }: { g: Grades; escalations: Escalation[] 
         </>
       )}
     </details>
+  );
+}
+
+/** A vendor admin's switch for reviewing workers' answers before they reach Anthropic (DC8, D44). */
+function ReviewSwitch({ projectId }: { projectId: string }) {
+  const [mine, setMine] = useState<{ id: string; vendor_review: boolean } | null>(null);
+  useEffect(() => {
+    api<{ id: string; vendor_review: boolean }>(`/projects/${projectId}/my-allocation`).then(setMine).catch(() => setMine(null));
+  }, [projectId]);
+  if (!mine) return null;
+  async function toggle(on: boolean) {
+    await api(`/allocations/${mine!.id}/vendor-review`, { method: "PUT", body: JSON.stringify({ on }) });
+    setMine({ ...mine!, vendor_review: on });
+  }
+  return (
+    <label className="row">
+      <input type="checkbox" style={{ flex: "none" }} checked={mine.vendor_review} onChange={(e) => toggle(e.target.checked)} />
+      Our reviewers check each answer before it reaches Anthropic
+    </label>
   );
 }

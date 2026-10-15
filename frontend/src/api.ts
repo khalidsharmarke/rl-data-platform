@@ -109,6 +109,7 @@ export type Allocation = {
   contract_id: string;
   share: string;
   status: string;
+  vendor_review: boolean;
   routed_tasks: number;
   submissions: number;
 };
@@ -183,6 +184,9 @@ export type VendorComparison = {
   cost_per_accepted: number | null;
   avg_turnaround_minutes: number | null;
   avg_time_on_task_s: number | null;
+  workers_gold_accuracy: number | null;
+  vendor_reviewed: number;
+  vendor_corrected: number;
 };
 
 export type ScorePoint = {
@@ -250,6 +254,12 @@ export type CaseHandling = {
   vendor_id: string; vendor_name: string; opened: number; decided: number; cleared: number; suspended_or_removed: number;
   reinstated: number; open_now: number; open_over_3_days: number; median_hours_to_decide: number | null;
 };
+export type VendorQueue = {
+  waiting: number;
+  items: { submission_id: string; project_name: string; worker_handle: string; worker_name: string; submitted_at: string;
+           payload: Record<string, string>; answer: { choice: string; rationale?: string } }[];
+};
+
 export type TaskHealth = {
   broken: { task_id: string; payload: Record<string, string>; is_gold: boolean; broken_status: "paused" | "retired"; answers: number;
             flags: { reason: string; handle: string; at: string }[] }[];

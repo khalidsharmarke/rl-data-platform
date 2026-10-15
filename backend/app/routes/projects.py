@@ -112,6 +112,7 @@ class AllocationOut(BaseModel):
     contract_id: uuid.UUID
     share: Decimal
     status: str
+    vendor_review: bool
     routed_tasks: int
     submissions: int
 
@@ -234,6 +235,7 @@ async def allocation_rows(session: AsyncSession, project: Project) -> list[Alloc
     return [
         AllocationOut(
             id=a.id, vendor_id=a.vendor_id, vendor_name=name, contract_id=a.contract_id, share=a.share, status=a.status,
+            vendor_review=a.vendor_review,
             **counts.get(a.vendor_id, {"routed_tasks": 0, "submissions": 0}),
         )
         for a, name in rows

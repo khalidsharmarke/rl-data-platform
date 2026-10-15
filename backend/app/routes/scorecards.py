@@ -35,6 +35,10 @@ class VendorComparison(BaseModel):
     cost_per_accepted: float | None
     avg_turnaround_minutes: float | None
     avg_time_on_task_s: float | None
+    # Vendor review (D44): gold accuracy above is on what the vendor submitted; this is on its workers' own answers.
+    workers_gold_accuracy: float | None
+    vendor_reviewed: int
+    vendor_corrected: int
 
 
 class ComparisonOut(BaseModel):
@@ -89,10 +93,16 @@ async def compare_vendors(
             """
             SELECT r.vendor_id, o.name, sum(submissions) s, sum(accepted) a, sum(gold_n) gn, sum(gold_correct) gc,
                    sum(compared) cmp, sum(agreed) agr, sum(rejected) rej, sum(cost) cost,
-                   sum(turnaround_s) ta, sum(time_on_task_ms) tot, max(computed_at) computed_at
+                   sum(turnaround_s) ta, sum(time_on_task_ms) tot, max(computed_at) computed_at,
+                   (SELECT sum(w.gold_correct) FROM scorecard_rows w WHERE w.project_id = r.project_id AND w.vendor_id = r.vendor_id
+                      AND w.metric_version = r.metric_version AND w.worker_id IS NOT NULL) AS own_gc,
+                   (SELECT count(*) FROM vendor_reviews vr JOIN submissions x ON x.id = vr.submission_id
+                     WHERE x.project_id = r.project_id AND x.vendor_id = r.vendor_id) AS reviewed,
+                   (SELECT count(*) FROM vendor_reviews vr JOIN submissions x ON x.id = vr.submission_id
+                     WHERE x.project_id = r.project_id AND x.vendor_id = r.vendor_id AND vr.decision = 'corrected') AS corrected
             FROM scorecard_rows r JOIN orgs o ON o.id = r.vendor_id
             WHERE r.project_id = :p AND r.metric_version = :m AND r.worker_id IS NULL
-            GROUP BY r.vendor_id, o.name ORDER BY o.name
+            GROUP BY r.project_id, r.metric_version, r.vendor_id, o.name ORDER BY o.name
             """
         ),
         {"p": project.id, "m": METRIC_VERSION},
@@ -104,6 +114,7 @@ async def compare_vendors(
             vendor_id=r.vendor_id, vendor_name=r.name, submissions=r.s, accepted=r.a, acceptance_rate=rate(r.a, r.s - r.gn),
             gold_n=r.gn, gold_accuracy=rate(r.gc, r.gn), agreement=rate(r.agr, r.cmp), rejected=r.rej, cost=float(r.cost),
             cost_per_accepted=rate(float(r.cost), r.a), avg_turnaround_minutes=rate(r.ta / 60, r.s), avg_time_on_task_s=rate(r.tot / 1000, r.s),
+            workers_gold_accuracy=rate(r.own_gc or 0, r.gn), vendor_reviewed=r.reviewed, vendor_corrected=r.corrected,
         ))
     return ComparisonOut(metric_version=METRIC_VERSION, computed_at=computed, vendors=vendors)
 

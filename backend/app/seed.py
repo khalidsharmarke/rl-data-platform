@@ -19,7 +19,8 @@ HUMAN, ENVS = Capability.HUMAN_WORK, Capability.ENVIRONMENTS
 
 SEED: list[tuple[str, OrgKind, list[Capability], list[tuple[Role, str]]]] = [
     ("Anthropic", OrgKind.INTERNAL, [], [(Role.RESEARCHER, "Rae Okafor"), (Role.DATA_OPS, "Sam Lindqvist")]),
-    ("Northwind Data", OrgKind.VENDOR, [HUMAN], [(Role.VENDOR_ADMIN, "Priya Raman"), (Role.WORKER, "Tomás Ruiz"), (Role.WORKER, "Ada Mensah")]),
+    ("Northwind Data", OrgKind.VENDOR, [HUMAN], [(Role.VENDOR_ADMIN, "Priya Raman"), (Role.WORKER, "Tomás Ruiz"), (Role.WORKER, "Ada Mensah"),
+                                                  (Role.VENDOR_REVIEWER, "Hana Kowalski")]),
     ("Kestrel Labs", OrgKind.VENDOR, [HUMAN, ENVS], [(Role.VENDOR_ADMIN, "Jonah Weiss"), (Role.WORKER, "Mei Tanaka"), (Role.WORKER, "Luca Romano"),
                                                      (Role.ENVIRONMENT_BUILDER, "Sofia Lindgren")]),
     ("Brightline Annotation", OrgKind.VENDOR, [HUMAN], [(Role.VENDOR_ADMIN, "Grace Adeyemi"), (Role.WORKER, "Omar Haddad"), (Role.WORKER, "Nina Petrova")]),

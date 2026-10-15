@@ -40,6 +40,7 @@ Each entry is one of five kinds:
 | Problem | What the project does instead | Why | Where |
 |---|---|---|---|
 | Real workers | A simulator drives the public API with worker profiles: careful, average, sloppy, AI-pasting, note-pasting | No real workforce is available; everything they touch is real | BUILD M4, M12 |
+| Vendor reviewers | In the demo, Northwind's reviewer is simulated: she catches 70% of wrong picks and never makes a right one wrong | Like the workers, a script stands in for people; the waiting, the correction as a second version and what each measure uses are real | D44, M24 |
 | Reviewers' judgement | In the demo, the researcher's spot checks are simulated: an answer is judged abusive when its reason is the generic pasted one, and rejected when it picks the worse answer | Judging abuse is reading, which a script can't do honestly; the queue, the judgements and what they measure are real | D40, M21 |
 | The model being trained | A modeled policy in the training stand-in: honest attempts whose chance of passing rises with training, and, on an environment marked hackable, a shortcut it discovers partway through the run. Outcomes are drawn, not computed | Real RL is out of scope; the platform reacts to episodes, not to how they were produced | B6 |
 | Training infrastructure | A stand-in service that pulls approved versions from the catalog, runs modeled training runs, sends one batch of episodes per step, and acts on recalls by rolling back to a checkpoint and reporting it | Training is out of scope, but the catalog, intake and recall need a counterpart | A23, M16, M17 |
@@ -71,6 +72,5 @@ These belong to the platform and come later. [`BUILD.md`](BUILD.md#not-in-the-bu
 | Task types beyond comparing two answers, including agentic tasks | One task type is enough to show the platform | DC1 |
 | Vendor rules that need identities across vendors: removed workers returning, the same answers across vendors | They need a cross-vendor worker match, which is P2 | AB2, AB10 |
 | Vendor onboarding, API tokens, registry credentials | Vendors are seeded | VM2, VM3, N14 |
-| The vendor reviewer step | Optional for vendors (A29) (planned, M24) | DC8 |
 | Generated programming tasks | Needs the environment pipeline first, which now exists | EC7 |
 | Vendor-private rules, matching workers across vendors | P2 in the PRD | AB9, AB10 |

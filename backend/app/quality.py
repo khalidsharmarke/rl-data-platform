@@ -1,7 +1,10 @@
 """Quality measures (DC4, N16), computed by the platform the same way for every vendor.
 
 Metric definition "quality-v2" (N19). Answers on a task researchers retired as broken (D43)
-count nowhere: not in volume, gold accuracy, agreement or acceptance. Otherwise as quality-v1:
+count nowhere: not in volume, gold accuracy, agreement or acceptance. Where the vendor reviews
+its workers' answers (D44), a worker's gold accuracy is on their own answer and the vendor's
+on the answer it submitted, and nothing is accepted until the vendor's reviewer has seen it.
+Otherwise as quality-v1:
 - Gold accuracy: share of a worker's answers on gold tasks whose fields match the gold
   answer (JSON containment, so a free-text rationale doesn't matter).
 - Agreement: on regular tasks, share of a worker's answers whose "choice" matches the
@@ -27,9 +30,13 @@ METRIC_VERSION = "quality-v2"
 SUBMISSION_FACTS = """
 WITH s AS (
     SELECT s.*, (g.task_id IS NOT NULL) AS is_gold,
-           CASE WHEN g.task_id IS NULL THEN NULL ELSE (s.answer @> g.answer) END AS gold_correct
+           CASE WHEN g.task_id IS NULL THEN NULL ELSE (s.answer @> g.answer) END AS gold_correct,
+           CASE WHEN g.task_id IS NULL THEN NULL ELSE (coalesce(vr.corrected_answer, s.answer) @> g.answer) END AS vendor_gold_correct,
+           (al.vendor_review AND vr.submission_id IS NULL) AS awaiting_vendor
     FROM submissions s
     LEFT JOIN gold_answers g ON g.task_id = s.task_id
+    JOIN allocations al ON al.id = s.allocation_id
+    LEFT JOIN vendor_reviews vr ON vr.submission_id = s.id
     WHERE s.project_id = :project_id
       AND NOT EXISTS (SELECT 1 FROM broken_tasks b WHERE b.task_id = s.task_id AND b.status = 'retired')
 ),
@@ -53,7 +60,8 @@ worker_gold AS (
     FROM s WHERE is_gold GROUP BY worker_id
 ),
 facts AS (
-    SELECT s.id, s.vendor_id, s.worker_id, s.is_gold, s.gold_correct, s.time_on_task_ms, s.submitted_at,
+    SELECT s.id, s.vendor_id, s.worker_id, s.is_gold, s.gold_correct, s.vendor_gold_correct, s.awaiting_vendor,
+           s.time_on_task_ms, s.submitted_at,
            coalesce(a.compared, false) AS compared, coalesce(a.agrees, false) AS agrees,
            (lr.verdict = 'rejected') IS TRUE AS rejected,
            (lr.verdict IS NOT NULL) AS reviewed,
@@ -67,7 +75,7 @@ facts AS (
     LEFT JOIN worker_gold wg ON wg.worker_id = s.worker_id
 )
 SELECT f.*,
-       (NOT f.is_gold AND NOT f.rejected AND NOT f.held AND NOT f.removed AND (
+       (NOT f.is_gold AND NOT f.rejected AND NOT f.held AND NOT f.removed AND NOT f.awaiting_vendor AND (
             f.worker_gold_n < p.min_gold_results
             OR f.worker_gold_correct::numeric / f.worker_gold_n >= p.quality_bar
        )) AS accepted
@@ -102,7 +110,7 @@ AGGREGATE = """
 SELECT {group} AS key,
        count(*) AS submissions,
        count(*) FILTER (WHERE is_gold) AS gold_n,
-       count(*) FILTER (WHERE gold_correct) AS gold_correct,
+       count(*) FILTER (WHERE {gold}) AS gold_correct,
        count(*) FILTER (WHERE compared) AS compared,
        count(*) FILTER (WHERE compared AND agrees) AS agreed,
        count(*) FILTER (WHERE reviewed) AS reviewed,
@@ -115,5 +123,7 @@ GROUP BY {group}
 
 async def measures_by(session: AsyncSession, project_id: uuid.UUID, group: str) -> dict[uuid.UUID, Measures]:
     assert group in ("vendor_id", "worker_id")
-    rows = await session.execute(text(AGGREGATE.format(group=group, facts=SUBMISSION_FACTS)), {"project_id": project_id})
+    # A worker is measured on their own answers; a vendor on what it submitted (D44).
+    gold = "gold_correct" if group == "worker_id" else "vendor_gold_correct"
+    rows = await session.execute(text(AGGREGATE.format(group=group, gold=gold, facts=SUBMISSION_FACTS)), {"project_id": project_id})
     return {r.key: Measures(**{k: getattr(r, k) for k in Measures.__dataclass_fields__}) for r in rows}

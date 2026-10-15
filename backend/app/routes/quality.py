@@ -189,15 +189,20 @@ async def review_queue(
     rows = (await session.execute(
         text(
             """
-            SELECT s.id, o.name AS vendor_name, u.handle, s.submitted_at, t.payload, s.answer
+            SELECT s.id, o.name AS vendor_name, u.handle, s.submitted_at, t.payload,
+                   coalesce(vr.corrected_answer, s.answer) AS answer  -- what the vendor submitted (D44)
             FROM submissions s
             JOIN tasks t ON t.id = s.task_id
             JOIN orgs o ON o.id = s.vendor_id
             JOIN users u ON u.id = s.worker_id
             LEFT JOIN review_requests q ON q.submission_id = s.id
+            LEFT JOIN vendor_reviews vr ON vr.submission_id = s.id
             WHERE s.project_id = :p
               AND NOT EXISTS (SELECT 1 FROM gold_answers g WHERE g.task_id = s.task_id)
               AND NOT EXISTS (SELECT 1 FROM reviews r WHERE r.submission_id = s.id)
+              -- not yet submitted to Anthropic: the vendor's reviewer hasn't seen it (D44)
+              AND NOT EXISTS (SELECT 1 FROM allocations al WHERE al.id = s.allocation_id AND al.vendor_review
+                              AND NOT EXISTS (SELECT 1 FROM vendor_reviews vr WHERE vr.submission_id = s.id))
             ORDER BY q.submission_id IS NULL, random()
             LIMIT :n
             """

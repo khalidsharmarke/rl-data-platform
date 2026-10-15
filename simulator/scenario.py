@@ -422,6 +422,41 @@ async def spot_checker(c, project_id, truth, done: asyncio.Event) -> None:
         print(f"  Researcher retired {retired} tasks workers flagged as broken", flush=True)
 
 
+# Vendor review (DC8, D44): Northwind checks its workers' answers before they reach Anthropic.
+REVIEWING_VENDOR = "Northwind Data"
+VENDOR_REVIEWER = "Hana Kowalski"
+REVIEW_EVERY_MINUTES = 3  # simulated time between the reviewer's batches
+CATCHES = 0.7  # share of wrong picks the reviewer notices and corrects; she never makes a right one wrong
+
+
+async def vendor_reviewer(c, project_id, truth, done: asyncio.Event) -> None:
+    """Northwind's admin turns review on; its reviewer works through the queue all project. The
+    simulated reviewer knows the right answers the way the simulated workers do (docs/NOT-SOLVED.md)."""
+    users = (await c.get("/auth/demo-users")).json()
+    admin = await as_person(c, next(u["display_name"] for u in users if u["role"] == "vendor_admin" and u["org_name"] == REVIEWING_VENDOR))
+    mine = (await c.get(f"/projects/{project_id}/my-allocation", headers=admin)).json()
+    (await c.put(f"/allocations/{mine['id']}/vendor-review", headers=admin, json={"on": True})).raise_for_status()
+    print(f"  {REVIEWING_VENDOR} reviews its workers' answers before they reach Anthropic", flush=True)
+    reviewer = await as_person(c, VENDOR_REVIEWER)
+    rng = random.Random(SEED + 2)
+    reviewed = corrected = 0
+    while True:
+        items = (await c.get("/vendor-review/queue", headers=reviewer, params={"n": 50})).json()["items"]
+        if not items and done.is_set():
+            break
+        for item in items:
+            right = truth[item["payload"]["item"]]
+            if item["answer"]["choice"] != right and rng.random() < CATCHES:
+                body = {"decision": "corrected", "answer": {**item["answer"], "choice": right}, "note": "The other answer is better."}
+                corrected += 1
+            else:
+                body = {"decision": "accepted"}
+            if (await c.post(f"/vendor-review/{item['submission_id']}", headers=reviewer, json=body)).status_code == 201:
+                reviewed += 1
+        await sim_sleep(REVIEW_EVERY_MINUTES * 60)
+    print(f"  {REVIEWING_VENDOR}'s reviewer checked {reviewed} answers and corrected {corrected}", flush=True)
+
+
 # Vendor oversight (AB2, AB5): how each vendor answers a vendor case, and what data ops does next.
 VENDOR_RESPONSES = {
     "Brightline Annotation": "One worker caused the drop; we suspended her after reviewing her case and are re-checking how we onboard.",
@@ -522,6 +557,11 @@ async def report(c, project_id) -> None:
     if d["audited"]:
         print(f"  Audit sample: {d['audited_abusive']} of {d['audited']} audited answers from unflagged workers judged abusive",
               flush=True)
+    for v in (await c.get(f"/projects/{project_id}/vendors", headers=ops)).json()["vendors"]:
+        if v["vendor_reviewed"]:
+            print(f"  Vendor review, {v['vendor_name']}: {v['vendor_corrected']} of {v['vendor_reviewed']} answers corrected; gold accuracy "
+                  f"{pct(v['gold_accuracy']).strip()} on what it submitted, {pct(v['workers_gold_accuracy']).strip()} on its workers' own answers",
+                  flush=True)
     for x in (await c.get(f"/projects/{project_id}/escalations", headers=ops)).json():
         print(f"  Escalation on {x['handle']} ({x['vendor_name']}) after a {x['rule']} signal: "
               f"{x['outcome'] or 'still open'}, {x['gold_right_since']} of {x['gold_since']} later gold answers right", flush=True)
@@ -549,7 +589,8 @@ async def main() -> None:
         tick = asyncio.create_task(ticker())
         done = asyncio.Event()
         helpers = [asyncio.create_task(data_ops(c, project_id, progress, done)), asyncio.create_task(environments_and_training(c)),
-                   asyncio.create_task(spot_checker(c, project_id, truth, done))]
+                   asyncio.create_task(spot_checker(c, project_id, truth, done)),
+                   asyncio.create_task(vendor_reviewer(c, project_id, truth, done))]
         if AUTOPILOT:
             helpers.append(asyncio.create_task(vendor_admin(c, "Brightline Annotation", done)))
             helpers.append(asyncio.create_task(vendor_oversight(c, project_id, done)))

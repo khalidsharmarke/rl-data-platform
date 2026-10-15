@@ -114,7 +114,14 @@ export default function Scorecards({ me }: { me: User }) {
                 <td>
                   {v.accepted.toLocaleString()} ({pct(v.acceptance_rate)})
                 </td>
-                <td>{pct(v.gold_accuracy)}</td>
+                <td>
+                  {pct(v.gold_accuracy)}
+                  {v.vendor_reviewed > 0 && (
+                    <div className="muted small">
+                      workers' own {pct(v.workers_gold_accuracy)}; {v.vendor_corrected} of {v.vendor_reviewed.toLocaleString()} corrected in vendor review
+                    </div>
+                  )}
+                </td>
                 <td>{pct(v.agreement)}</td>
                 <td>{money(v.cost)}</td>
                 <td>

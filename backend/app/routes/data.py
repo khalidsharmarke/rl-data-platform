@@ -147,9 +147,12 @@ async def cleanup(body: CleanupIn, user: User = Depends(require_roles(Role.DATA_
 
 
 EXPORT_ROWS = """
-SELECT s.id AS submission_id, s.task_id, t.payload, s.answer, s.schema_version, s.submitted_at, u.handle, o.name AS vendor
+SELECT s.id AS submission_id, s.task_id, t.payload, coalesce(vr.corrected_answer, s.answer) AS answer,
+       vr.decision AS vendor_review, rv.handle AS reviewer, s.schema_version, s.submitted_at, u.handle, o.name AS vendor
 FROM submissions s
 JOIN tasks t ON t.id = s.task_id
+LEFT JOIN vendor_reviews vr ON vr.submission_id = s.id
+LEFT JOIN users rv ON rv.id = vr.reviewer_id
 JOIN users u ON u.id = s.worker_id
 JOIN orgs o ON o.id = s.vendor_id
 WHERE s.id = ANY(CAST(:ids AS uuid[]))
@@ -200,6 +203,8 @@ async def export(
                 "worker": r.handle, "vendor": r.vendor, "schema_version": r.schema_version, "metric_version": METRIC_VERSION,
                 "submitted_at": r.submitted_at.isoformat(), "tier": tiers[r.submission_id],
                 "worker_grade": snapshots[r.submission_id],
+                # The answer the vendor submitted; the worker's own, if corrected, is in the submission's lineage (D44).
+                "vendor_review": {"decision": r.vendor_review, "reviewer": r.reviewer} if r.vendor_review else None,
             }) + "\n")
     provisional = sum(1 for r in rows if tiers[r.submission_id] == "provisional")
     now = clock.now()

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import Cases from "./Cases";
 import Detection from "./Detection";
+import VendorReview from "./VendorReview";
 import Feedback from "./Feedback";
 import Projects from "./Projects";
 import Review from "./Review";
@@ -51,6 +52,7 @@ export default function App() {
 function Views({ me }: { me: User }) {
   const tabs = [
     ...(me.role === "worker" ? ["Work", "Feedback"] : []),
+    ...(me.role === "vendor_reviewer" ? ["Review before submitting"] : []),
     ...(me.role !== "worker" ? ["Projects"] : []),
     ...(["data_ops", "researcher", "vendor_admin"].includes(me.role) ? ["Scorecards"] : []),
     ...(me.role === "researcher" ? ["Review"] : []),
@@ -73,6 +75,7 @@ function Views({ me }: { me: User }) {
       {tab === "Feedback" && <Feedback />}
       {tab === "Projects" && <Projects me={me} />}
       {tab === "Review" && <Review me={me} />}
+      {tab === "Review before submitting" && <VendorReview />}
       {tab === "Training" && <Training />}
       {tab === "Scorecards" && <Scorecards me={me} />}
       {tab === "Cases" && <Cases me={me} />}
@@ -113,6 +116,7 @@ function DemoLogin({ onSignedIn }: { onSignedIn: (user: User) => void }) {
         <li><strong>Rae</strong> → Projects → Task health: the broken tasks workers flagged, and who flags.</li>
         <li><strong>Sam</strong> → Detection: each rule's precision from reviewed flags, a new rule held in shadow, and what the audit sample found.</li>
         <li><strong>Rae Okafor</strong> (researcher) → Review, and any <strong>worker</strong> → Work, to see the work itself.</li>
+        <li><strong>Hana Kowalski</strong> (Northwind's reviewer) → Review before submitting: the vendor's own check before answers reach Anthropic.</li>
         <li><strong>Sofia Lindgren</strong> (Kestrel's environment builder) → Projects: six environments and what the sandbox said about each.</li>
         <li><strong>Rae</strong> → Training → the second run: one environment's solve rate leaps as attempts get shorter.</li>
         <li><strong>Sam</strong> → Cases → "slugify edge cases": the hack detector's case, the recall, and training's rollback.</li>

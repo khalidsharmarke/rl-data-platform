@@ -10,7 +10,7 @@ What the build does not do, where it falls short, and what is still undecided. T
 
 ## 1. Coverage of the posting
 
-The posting names three areas: *"environment creation, data collection, and training observability."* The build covers the core of data collection, plus the vendor management, workspaces and audit trail it needs. It covers 47 of the design's 56 functional requirements.
+The posting names three areas: *"environment creation, data collection, and training observability."* The build covers the core of data collection, plus the vendor management, workspaces and audit trail it needs. It covers 48 of the design's 56 functional requirements.
 
 | Posting line | Coverage in the build |
 |---|---|
@@ -54,6 +54,8 @@ The posting names three areas: *"environment creation, data collection, and trai
 
 | Limitation | Effect | What would address it |
 |---|---|---|
+| Agreement is on workers' own answers | With vendor review on, a vendor's agreement still compares its workers' original answers, so corrections don't show in it; gold accuracy and acceptance do use what the vendor submitted | Measure the vendor's agreement on submitted answers, and the worker's on their own, as gold already is |
+| Vendor review slows release | Answers wait for the vendor's reviewer before the release stage even considers them; a vendor that falls behind holds its own data back, and nothing tells it so | Show the vendor its waiting count and oldest answer, and an alert when review falls hours behind |
 | Allocation changes outside a case aren't gated | Data ops can still change a vendor's share or status directly, as VP1 allows for business reasons, without the vendor's response; only actions taken through a vendor case wait for it | Record a reason category on every allocation change, and review changes that lower a vendor's share without a case |
 | A vendor action is undone by hand | A vendor case can't be reversed like a worker's; data ops changes the allocation back, and nothing links that to the case | A reverse step on vendor cases that restores the allocations it changed |
 | Clean-up stops at the dataset | Lineage names every shipped row from a removed worker. Nothing records which training runs used which datasets, so the platform can't say which models are affected | Record dataset use by training runs (TO1, D14) |
@@ -108,6 +110,9 @@ The design's scale estimate is about 1.2 million submissions a day ([`DESIGN.md`
 
 ## 4. Next
 
-In order, from the [oversight milestones](BUILD.md#oversight-milestones) in `BUILD.md`:
+Every milestone in [`BUILD.md`](BUILD.md) is built. What's left, from [`BUILD.md`](BUILD.md#not-in-the-build) and the gaps above:
 
-1. The vendor reviewer step (DC8, M24).
+1. Agentic tasks: the posting's *"QA for complex agentic tasks"*. There is one task type (DC1).
+2. The rest of the environment pipeline: generated programming tasks (EC7) and vendor-built images (A15, VM2).
+3. Vendor onboarding, API tokens and registry access (VM2, VM3, N14).
+4. P2 in the PRD: vendor-private rules and a cross-vendor worker match (AB9, AB10), which would also allow the vendor rules that need identities across vendors.

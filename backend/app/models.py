@@ -200,6 +200,7 @@ class Allocation(Base):
     contract_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("contracts.id"))
     share: Mapped[Decimal] = mapped_column(Numeric(4, 3))
     status: Mapped[str] = mapped_column(Text, default="active")
+    vendor_review: Mapped[bool] = mapped_column(Boolean, default=False)  # answers wait for the vendor's reviewer (D44)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 

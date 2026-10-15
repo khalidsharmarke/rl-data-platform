@@ -21,7 +21,7 @@ INSERT INTO scorecard_rows (metric_version, project_id, vendor_id, worker_id, pe
     gold_correct, compared, agreed, reviewed, rejected, accepted, time_on_task_ms, turnaround_s, cost, computed_at)
 SELECT :metric_version, :project_id, f.vendor_id, {{worker}},
        date_bin(make_interval(mins => :bucket), f.submitted_at, TIMESTAMPTZ '2000-01-01') AS period_start,
-       count(*), count(*) FILTER (WHERE f.is_gold), count(*) FILTER (WHERE f.gold_correct),
+       count(*), count(*) FILTER (WHERE f.is_gold), count(*) FILTER (WHERE {{gold}}),
        count(*) FILTER (WHERE f.compared), count(*) FILTER (WHERE f.compared AND f.agrees),
        count(*) FILTER (WHERE f.reviewed), count(*) FILTER (WHERE f.rejected), count(*) FILTER (WHERE f.accepted),
        sum(f.time_on_task_ms),
@@ -44,8 +44,9 @@ async def rollup_project(session: AsyncSession, project_id: uuid.UUID) -> int:
         text("DELETE FROM scorecard_rows WHERE project_id = :p AND metric_version = :m"), {"p": project_id, "m": METRIC_VERSION}
     )
     params = {"project_id": project_id, "metric_version": METRIC_VERSION, "bucket": settings.scorecard_bucket_minutes, "now": clock.now()}
-    vendor = await session.execute(text(ROLLUP.replace("{worker}", "CAST(NULL AS uuid)")), params)
-    worker = await session.execute(text(ROLLUP.replace("{worker}", "f.worker_id")), params)
+    # Vendor rows count gold on what the vendor submitted; worker rows on the worker's own answers (D44).
+    vendor = await session.execute(text(ROLLUP.replace("{worker}", "CAST(NULL AS uuid)").replace("{gold}", "f.vendor_gold_correct")), params)
+    worker = await session.execute(text(ROLLUP.replace("{worker}", "f.worker_id").replace("{gold}", "f.gold_correct")), params)
     return vendor.rowcount + worker.rowcount
 
 
