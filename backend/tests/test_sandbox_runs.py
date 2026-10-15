@@ -28,8 +28,9 @@ def check(name: str) -> dict[str, sandbox.CheckResult]:
     return {r.name: r for r in sandbox.run_checks(manifest, {p: data for p, _, data in files})}
 
 
-def test_a_sound_environment_passes_all_three_checks():
-    results = check("sound")
+@pytest.mark.parametrize("fixture", ["sound", "sound_punctuation"])
+def test_a_sound_environment_passes_all_three_checks(fixture):
+    results = check(fixture)
     assert all(r.passed for r in results.values()), {k: r.detail for k, r in results.items()}
     assert results["reference"].outcome == "pass" and results["empty"].outcome == "fail"
 
@@ -87,7 +88,7 @@ def test_a_weak_grader_passes_every_check():
     assert all(r.passed for r in results.values()), {k: r.detail for k, r in results.items()}
 
 
-@pytest.mark.parametrize("fixture, scores", [("weak_grader", True), ("sound", False)])
+@pytest.mark.parametrize("fixture, scores", [("weak_grader", True), ("sound", False), ("sound_punctuation", False)])
 def test_returning_an_empty_string_really_beats_the_weak_grader(fixture, scores):
     """The demo's planted hack, run for real: B6's modeled training is grounded in this."""
     files = {p: data for p, part, data in envfixtures.files(fixture) if part in ("task", "grader")}

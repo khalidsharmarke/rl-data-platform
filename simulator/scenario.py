@@ -89,6 +89,14 @@ SUBMISSIONS = [  # (environment name, fixture)
     ("slugify with hyphens and underscores", "unsolvable"),
     ("slugify with a lucky test", "flaky"),
 ]
+# The third act: training observability (docs/BUILD.md, training observability milestones). Kestrel's
+# builder submits two more: a sound one, and one whose grader checks only the empty string. Both pass
+# the sandbox and review; only training finds the hole.
+TRAINING_SUBMISSIONS = [
+    ("slugify drops punctuation", "sound_punctuation"),
+    ("slugify edge cases", "weak_grader"),
+]
+WEAK = TRAINING_SUBMISSIONS[1][0]
 REVIEW_DELAY_MINUTES_ENV = 20  # simulated time before the researcher reviews
 QUARANTINE_AFTER_MINUTES = 40  # simulated time after training's pull before a researcher spots the copied task
 BENCHMARK = "A researcher noticed this task copies a public benchmark problem word for word, against the brief's constraints."
@@ -102,20 +110,17 @@ def version_body(fixture: str) -> dict:
                                    "content_b64": base64.b64encode(p.read_bytes()).decode()} for p in files]}
 
 
-async def environment_act(c: httpx.AsyncClient) -> None:
+async def people(c: httpx.AsyncClient) -> tuple[dict, dict, dict]:
     users = (await c.get("/auth/demo-users")).json()
     by_role = lambda role: next(u["display_name"] for u in users if u["role"] == role)  # noqa: E731
-    researcher, ops, builder = await as_person(c, by_role("researcher")), await as_person(c, by_role("data_ops")), await as_person(c, BUILDER)
-    brief = (await c.post("/projects", headers=researcher, json={
-        "name": "Python bug fixes", "kind": "environment", "target_volume": 4, "brief": BRIEF})).json()
-    kestrel = next(o for o in (await c.get("/orgs", headers=ops)).json() if o["name"] == "Kestrel Labs")
-    contract = next(k for k in (await c.get(f"/orgs/{kestrel['id']}/contracts", headers=ops)).json() if k["kind"] == "environments")
-    (await c.post(f"/projects/{brief['id']}/allocations", headers=ops,
-                  json={"vendor_id": kestrel["id"], "contract_id": contract["id"], "share": "1"})).raise_for_status()
-    print("  Researcher writes an environment brief; data ops gives it to Kestrel", flush=True)
+    return await as_person(c, by_role("researcher")), await as_person(c, by_role("data_ops")), await as_person(c, BUILDER)
+
+
+async def submit_and_check(c: httpx.AsyncClient, builder: dict, brief_id: str, submissions: list[tuple[str, str]]) -> dict:
+    """The builder submits each fixture as an environment; waits for the sandbox's verdict on each."""
     versions = {}
-    for name, fixture in SUBMISSIONS:
-        env = (await c.post("/environments", headers=builder, json={"project_id": brief["id"], "name": name})).json()
+    for name, fixture in submissions:
+        env = (await c.post("/environments", headers=builder, json={"project_id": brief_id, "name": name})).json()
         v = (await c.post(f"/environments/{env['id']}/versions", headers=builder, json=version_body(fixture))).json()
         (await c.post(f"/versions/{v['id']}/submit", headers=builder)).raise_for_status()
         versions[name] = v["id"]
@@ -129,9 +134,22 @@ async def environment_act(c: httpx.AsyncClient) -> None:
                 outcome[name] = status
                 print(f"  Sandbox: {name!r} {'failed: ' + failed[0] if failed else 'passed all three checks'}", flush=True)
         await asyncio.sleep(1)
+    return versions
+
+
+async def environment_act(c: httpx.AsyncClient) -> str:
+    researcher, ops, builder = await people(c)
+    brief = (await c.post("/projects", headers=researcher, json={
+        "name": "Python bug fixes", "kind": "environment", "target_volume": 6, "brief": BRIEF})).json()
+    kestrel = next(o for o in (await c.get("/orgs", headers=ops)).json() if o["name"] == "Kestrel Labs")
+    contract = next(k for k in (await c.get(f"/orgs/{kestrel['id']}/contracts", headers=ops)).json() if k["kind"] == "environments")
+    (await c.post(f"/projects/{brief['id']}/allocations", headers=ops,
+                  json={"vendor_id": kestrel["id"], "contract_id": contract["id"], "share": "1"})).raise_for_status()
+    print("  Researcher writes an environment brief; data ops gives it to Kestrel", flush=True)
+    versions = await submit_and_check(c, builder, brief["id"], SUBMISSIONS)
     sound = versions[SUBMISSIONS[0][0]]
     if not AUTOPILOT:
-        return  # the researcher's review and data ops' quarantine are made by hand
+        return brief["id"]  # the researcher's review and data ops' quarantine are made by hand
     await sim_sleep(REVIEW_DELAY_MINUTES_ENV * 60)
     (await c.post(f"/versions/{sound}/reviews", headers=researcher, json={
         "decision": "approve", "rubric": {k: True for k in BRIEF["review_rubric"]},
@@ -146,6 +164,64 @@ async def environment_act(c: httpx.AsyncClient) -> None:
     await sim_sleep(REVIEW_DELAY_MINUTES_ENV * 60)
     await c.post(f"/cases/{case['id']}/decision", headers=ops, json={"decision": "remove", "reason": "Confirmed against the benchmark: retire it."})
     print("  Data ops retires the version; the pull stays on record for lineage", flush=True)
+    return brief["id"]
+
+
+async def until(check, what: str, seconds: float = 300):
+    """Polls check() until it returns something truthy; gives up with a message after `seconds` real seconds."""
+    for _ in range(int(seconds)):
+        if result := await check():
+            return result
+        await asyncio.sleep(1)
+    raise RuntimeError(f"Gave up waiting for {what}")
+
+
+async def training_act(c: httpx.AsyncClient, brief_id: str) -> None:
+    researcher, ops, builder = await people(c)
+    versions = await submit_and_check(c, builder, brief_id, TRAINING_SUBMISSIONS)
+    if not AUTOPILOT:
+        return  # the researcher's review and data ops' decision are made by hand
+    await sim_sleep(REVIEW_DELAY_MINUTES_ENV * 60)
+    for name, vid in versions.items():
+        (await c.post(f"/versions/{vid}/reviews", headers=researcher, json={
+            "decision": "approve", "rubric": {k: True for k in BRIEF["review_rubric"]},
+            "feedback": "Clear task, and the tests check the fix the README asks for."})).raise_for_status()
+    print(f"  Researcher approves both: nothing in the review shows that {WEAK!r} only tests the empty string", flush=True)
+    weak = versions[WEAK]
+
+    async def pulled():
+        return (await c.get(f"/versions/{weak}/pulls", headers=ops)).json()
+
+    run = (await until(pulled, "training to pull the new environments"))[0]["run_label"]
+    print(f"  Training pulls both and starts {run}", flush=True)
+
+    async def quarantined():
+        return (await c.get(f"/versions/{weak}", headers=builder)).json()["status"] == "quarantined"
+
+    await until(quarantined, "the hack detector to flag the weak grader")
+    case = next(x for x in (await c.get("/cases", headers=ops)).json()
+                if x["subject_type"] == "environment_version" and x["subject_handle"] == f"{WEAK} v1" and x["status"] == "open")
+    print(f"  Hack detector, mid-run: {case['observations'][0]}", flush=True)
+    print(f"  Its case quarantines {WEAK!r} without a person; {TRAINING_SUBMISSIONS[0][0]!r} keeps training", flush=True)
+
+    async def reported():
+        recall = (await c.get(f"/cases/{case['id']}/recall", headers=ops)).json()
+        return recall if recall and any(r["run_label"] == run for r in recall["reports"]) else None
+
+    recall = await until(reported, "training to report on the recall")
+    mine = next(r for r in recall["runs"] if r["run_label"] == run)
+    print(f"  Recall to training: {run} used it from step {mine['first_step']:,}, flagged attempts from step "
+          f"{mine['first_flagged_step']:,}", flush=True)
+    report = next(r for r in recall["reports"] if r["run_label"] == run)
+    print(f"  Training reports: {run} rolled back to the checkpoint at step {report['checkpoint_step']:,}", flush=True)
+    await sim_sleep(REVIEW_DELAY_MINUTES_ENV * 60)
+    await c.post(f"/cases/{case['id']}/decision", headers=ops, json={
+        "decision": "remove", "reason": "The flagged transcripts return an empty string and score full marks: the tests only check that case."})
+    print("  Data ops retires the version; Kestrel's scorecard shows what happened in training", flush=True)
+
+
+async def environments_and_training(c: httpx.AsyncClient) -> None:
+    await training_act(c, await environment_act(c))
 
 
 @dataclass
@@ -324,6 +400,9 @@ async def report(c, project_id) -> None:
     for w in (await c.get("/vendors/environment-work", headers=ops)).json():
         print(f"  Environment work, {w['vendor_name']}: {w['submitted']} versions submitted, {w['passed_checks']} passed the "
               f"sandbox's checks, {w['approved']} approved, {w['quarantined']} quarantined", flush=True)
+        if w["episodes"]:
+            print(f"  In training, {w['vendor_name']}: {w['episodes']:,} episodes, {pct(w['solve_rate']).strip()} solved, "
+                  f"{w['flagged']} attempts flagged as hacks, {w['recalls']} recalls", flush=True)
     for x in (await c.get(f"/projects/{project_id}/escalations", headers=ops)).json():
         print(f"  Escalation on {x['handle']} ({x['vendor_name']}) after a {x['rule']} signal: "
               f"{x['outcome'] or 'still open'}, {x['gold_right_since']} of {x['gold_since']} later gold answers right", flush=True)
@@ -350,7 +429,7 @@ async def main() -> None:
 
         tick = asyncio.create_task(ticker())
         done = asyncio.Event()
-        helpers = [asyncio.create_task(data_ops(c, project_id, progress, done)), asyncio.create_task(environment_act(c))]
+        helpers = [asyncio.create_task(data_ops(c, project_id, progress, done)), asyncio.create_task(environments_and_training(c))]
         if AUTOPILOT:
             helpers.append(asyncio.create_task(vendor_admin(c, "Brightline Annotation", done)))
         rngs = random.Random(SEED)

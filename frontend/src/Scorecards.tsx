@@ -165,7 +165,7 @@ export default function Scorecards({ me }: { me: User }) {
   );
 }
 
-/** Environment work on the scorecard (VP3): how a vendor's versions fare in the sandbox and in review. */
+/** Environment work on the scorecard (VP3, TO7): how a vendor's versions fare in the sandbox, in review and in training. */
 function EnvironmentWorkTable() {
   const [rows, setRows] = useState<EnvironmentWork[]>([]);
   useEffect(() => {
@@ -200,6 +200,37 @@ function EnvironmentWorkTable() {
           ))}
         </tbody>
       </table>
+      {rows.some((r) => r.episodes > 0) && (
+        <>
+          <h4>In training</h4>
+          <p className="muted">
+            What happened when training used each vendor's approved versions. Flagged attempts are the ones the hack detector
+            flagged; a recall goes out when a version training used is quarantined.
+          </p>
+          <table>
+            <thead>
+              <tr>
+                <th>Vendor</th>
+                <th>Episodes</th>
+                <th>Solve rate</th>
+                <th>Flagged attempts</th>
+                <th>Recalls</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.vendor_id}>
+                  <td>{r.vendor_name}</td>
+                  <td>{r.episodes.toLocaleString()}</td>
+                  <td>{pct(r.solve_rate)}</td>
+                  <td>{r.flagged.toLocaleString()} ({pct(r.flagged_share)})</td>
+                  <td>{r.recalls}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </>
+      )}
     </>
   );
 }

@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Covers | Every place the project deliberately doesn't solve a problem, from 0.1.0 to the planned training observability milestones |
+| Covers | Every place the project deliberately doesn't solve a problem, from 0.1.0 through the training observability milestones |
 | Related | [`LIMITATIONS.md`](LIMITATIONS.md) (where what's built falls short) · [`BUILD.md`](BUILD.md) (scope and stand-ins) · [`DESIGN.md`](DESIGN.md) · [`DECISIONS.md`](DECISIONS.md) |
 
 This page lists choices, not shortfalls: problems the project decided not to solve, what it does instead, and why. Where the built part falls short of its own design, see [`LIMITATIONS.md`](LIMITATIONS.md).

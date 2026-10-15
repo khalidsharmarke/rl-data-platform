@@ -217,6 +217,13 @@ class EnvironmentWork(BaseModel):
     quarantined: int
     check_pass_rate: float | None
     approval_rate: float | None
+    # Training outcomes (TO7): what happened when training used the vendor's versions.
+    episodes: int
+    solved: int
+    flagged: int
+    recalls: int
+    solve_rate: float | None
+    flagged_share: float | None
 
 
 ENVIRONMENT_WORK = """
@@ -228,12 +235,23 @@ WITH v AS (
            (SELECT decision FROM environment_reviews w WHERE w.version_id = ev.id ORDER BY w.created_at DESC LIMIT 1) AS decision
     FROM environment_versions ev JOIN environments e ON e.id = ev.environment_id
     WHERE ev.status <> 'draft' AND (CAST(:p AS uuid) IS NULL OR e.project_id = CAST(:p AS uuid))
-)
+),
+trained AS (SELECT version_id, sum(episodes) AS episodes, sum(passed) AS solved FROM training_stats GROUP BY version_id),
+flagged AS (
+    -- each finding carries a running total of flagged attempts, so take the largest per run
+    SELECT version_id, sum(n) AS flagged
+    FROM (SELECT version_id, run_id, max((evidence->>'flagged_episodes')::int) AS n FROM hack_findings GROUP BY 1, 2) per_run
+    GROUP BY version_id
+),
+recalled AS (SELECT version_id, count(*) AS recalls FROM recalls GROUP BY version_id)
 SELECT o.id AS vendor_id, o.name AS vendor_name, count(v.id) AS submitted,
        count(v.id) FILTER (WHERE v.checked) AS checked, count(v.id) FILTER (WHERE v.passed_checks) AS passed_checks,
        count(v.id) FILTER (WHERE v.decision IS NOT NULL) AS reviewed, count(v.id) FILTER (WHERE v.decision = 'approve') AS approved,
-       count(v.id) FILTER (WHERE v.decision = 'send_back') AS sent_back, count(v.id) FILTER (WHERE v.status = 'quarantined') AS quarantined
+       count(v.id) FILTER (WHERE v.decision = 'send_back') AS sent_back, count(v.id) FILTER (WHERE v.status = 'quarantined') AS quarantined,
+       coalesce(sum(t.episodes), 0)::bigint AS episodes, coalesce(sum(t.solved), 0)::bigint AS solved,
+       coalesce(sum(f.flagged), 0)::bigint AS flagged, coalesce(sum(rc.recalls), 0)::bigint AS recalls
 FROM orgs o JOIN v ON v.org_id = o.id
+LEFT JOIN trained t ON t.version_id = v.id LEFT JOIN flagged f ON f.version_id = v.id LEFT JOIN recalled rc ON rc.version_id = v.id
 GROUP BY o.id, o.name ORDER BY o.name
 """
 
@@ -243,12 +261,15 @@ async def environment_work(
     project_id: uuid.UUID | None = None, user: User = Depends(current_user), session: AsyncSession = Depends(get_session)
 ) -> list[EnvironmentWork]:
     """Environment work on the vendor scorecard (VP3): how often a vendor's versions pass the
-    sandbox's checks and the researcher's review, and how many were later quarantined. Computed
-    the same way for every vendor (N16); a vendor sees only its own row."""
+    sandbox's checks and the researcher's review, how many were later quarantined, and how they
+    did in training (TO7): episodes, solve rate, attempts the hack detector flagged, and recalls.
+    Computed the same way for every vendor (N16); a vendor sees only its own row."""
     out = []
     for r in await session.execute(text(ENVIRONMENT_WORK), {"p": project_id}):
         if not is_internal(user) and r.vendor_id != user.org_id:
             continue
         out.append(EnvironmentWork(**r._mapping, check_pass_rate=r.passed_checks / r.checked if r.checked else None,
-                                   approval_rate=r.approved / r.reviewed if r.reviewed else None))
+                                   approval_rate=r.approved / r.reviewed if r.reviewed else None,
+                                   solve_rate=r.solved / r.episodes if r.episodes else None,
+                                   flagged_share=r.flagged / r.episodes if r.episodes else None))
     return out

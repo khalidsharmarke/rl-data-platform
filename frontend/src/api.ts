@@ -245,6 +245,7 @@ export type CaseDetail = CaseSummary & {
 export type EnvironmentWork = {
   vendor_id: string; vendor_name: string; submitted: number; checked: number; passed_checks: number; reviewed: number;
   approved: number; sent_back: number; quarantined: number; check_pass_rate: number | null; approval_rate: number | null;
+  episodes: number; solved: number; flagged: number; recalls: number; solve_rate: number | null; flagged_share: number | null;
 };
 
 export type Lineage = {

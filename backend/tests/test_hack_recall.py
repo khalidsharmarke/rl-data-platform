@@ -103,6 +103,16 @@ async def test_a_watch_finding_asks_a_researcher_to_read_transcripts(client, log
     assert (await client.get("/hack-checks", headers=await login(RESEARCHER))).json() == []
 
 
+async def test_a_watch_check_leaves_the_queue_once_its_version_is_quarantined(client, login, session):
+    # The detector watches first, then opens a case: the case is now where the version is decided.
+    _, version_id = await weak_approved(client, login, session)
+    await train(client, version_id)
+    await report_findings(client, finding(version_id, severity="watch"))
+    assert len((await client.get("/hack-checks", headers=await login(RESEARCHER))).json()) == 1
+    await report_findings(client, finding(version_id))
+    assert (await client.get("/hack-checks", headers=await login(RESEARCHER))).json() == []
+
+
 async def test_repeats_are_ignored_and_a_second_rule_joins_the_case(client, login, session):
     _, version_id = await weak_approved(client, login, session)
     await train(client, version_id)

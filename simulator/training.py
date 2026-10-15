@@ -13,11 +13,12 @@ policy.
   `return ""` really passes it (backend/tests/test_sandbox_runs.py). The hack is planted, not
   found: see docs/NOT-SOLVED.md.
 
-Each step it re-reads the catalog, so a version quarantined mid-run stops being sampled, and
-reads recalls (TO8, D37). For each run a recall names, it "rolls back" to the last checkpoint
-before the first flagged attempt (or before the version first appeared, if nothing was
-flagged) and reports that. Nothing is rolled back: there's no model. It talks to the platform
-only through its token: the catalog, the episode intake and recalls.
+A run trains only on the versions it pulled, so lineage records everything it used. Each step it
+re-reads the catalog, so a version quarantined mid-run stops being sampled, and reads recalls
+(TO8, D37). For each run a recall names, it "rolls back" to the last checkpoint before the first
+flagged attempt (or before the version first appeared, if nothing was flagged) and reports that.
+Nothing is rolled back: there's no model. It talks to the platform only through its token: the
+catalog, the episode intake and recalls.
 """
 
 import os
@@ -35,11 +36,20 @@ EPISODES_PER_STEP = int(os.environ.get("EPISODES_PER_STEP", "6"))
 STEP_SIZE = 100  # training steps between batches, so step numbers look like a real run's
 CHECKPOINT_EVERY = 500  # training steps between checkpoints
 
+# Run labels carry the time this process started, so a restarted stand-in never reuses one: episode
+# ids include the label, and intake drops ids it has already stored.
+STARTED = time.strftime("%y%m%d-%H%M")
+
 # Environments the modeled policy can hack, and how far into a run it discovers the shortcut.
 HACKABLE = {"slugify edge cases": 0.35}
 
-HONEST = ("read task/README.md\nread task/slug.py\nrun tests: 1 failed (IndexError on '')\n"
-          "edit task/slug.py: return \"-\".join(w.lower() for w in text.split())\nrun tests: {result}")
+# What an honest attempt looks like, by environment; the fix in the transcript is the reference's.
+FIXES = {
+    "slugify drops punctuation": ("run tests: 3 failed (punctuation kept)",
+                                  "edit task/slug.py: strip string.punctuation from each word, drop empty words"),
+}
+EMPTY_STRING_FIX = ("run tests: 1 failed (IndexError on '')", "edit task/slug.py: return \"-\".join(w.lower() for w in text.split())")
+HONEST = "read task/README.md\nread task/slug.py\n{failure}\n{fix}\nrun tests: {result}"
 HACK = "read task/README.md\nedit task/slug.py: return \"\"\nrun tests: passed"
 
 
@@ -51,8 +61,9 @@ def episode(run: str, step: int, entry: dict, i: int, rng: random.Random) -> dic
     if rng.random() < exploit_share:
         return {**base, "reward": 1.0, "passed": True, "length": rng.randint(3, 6), "touched": ["task/slug.py"], "transcript": HACK}
     passed = rng.random() < 0.15 + 0.6 * progress
+    failure, fix = FIXES.get(entry["environment_name"], EMPTY_STRING_FIX)
     return {**base, "reward": 1.0 if passed else 0.0, "passed": passed, "length": rng.randint(25, 60), "touched": ["task/slug.py"],
-            "transcript": HONEST.format(result="passed" if passed else "1 failed")}
+            "transcript": HONEST.format(failure=failure, fix=fix, result="passed" if passed else "1 failed")}
 
 
 class Recalls:
@@ -79,12 +90,14 @@ class Recalls:
 RECALLS = Recalls()
 
 
-def run_training(c: httpx.Client, run: str) -> None:
+def run_training(c: httpx.Client, run: str, received: set[str]) -> None:
+    """Trains on the versions this run pulled; one approved mid-run waits for the next run."""
     RECALLS.mine.add(run)
     rng = random.Random(run)
     print(f"training {run}: starting {STEPS} steps", flush=True)
     for step in range(STEPS):
-        entries = c.get("/catalog").json()  # a version quarantined mid-run drops out here
+        # A version quarantined mid-run leaves the catalog, and drops out of the run here.
+        entries = [e for e in c.get("/catalog").json() if e["version_id"] in received]
         if entries:
             episodes = [episode(run, step, e, i, rng) for e in entries for i in range(EPISODES_PER_STEP)]
             c.post("/ingest/episodes", json={"run_label": run, "episodes": episodes}).raise_for_status()
@@ -104,14 +117,16 @@ def main() -> None:
                     # Something new was approved: start a run over everything approved, pulling each
                     # version under this run's label so lineage records what the run received.
                     runs += 1
-                    run = f"rl-run-{runs:03d}"
+                    run = f"rl-{STARTED}-{runs:02d}"
+                    received = set()
                     for e in catalog:
                         r = c.post(f"/catalog/{e['version_id']}/pull", json={"run_label": run})
                         if r.status_code == 200:
                             files = ", ".join(f["path"] for f in r.json()["files"])
                             print(f"training {run}: pulled {e['environment_name']} v{e['number']} ({files})", flush=True)
+                            received.add(e["version_id"])
                         pulled.add(e["version_id"])
-                    run_training(c, run)
+                    run_training(c, run, received)
                 RECALLS.answer(c)
             except (httpx.HTTPError, ValueError) as exc:
                 print(f"training: platform unavailable ({exc}); retrying", flush=True)

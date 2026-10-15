@@ -108,6 +108,9 @@ function DemoLogin({ onSignedIn }: { onSignedIn: (user: User) => void }) {
         <li><strong>Grace Adeyemi</strong> (Brightline's admin) → Cases: what the platform observed about one of her workers, and her decision.</li>
         <li><strong>Sam</strong> again → Cases → the case: lineage, clean-up, and which datasets held the answers.</li>
         <li><strong>Rae Okafor</strong> (researcher) → Review, and any <strong>worker</strong> → Work, to see the work itself.</li>
+        <li><strong>Sofia Lindgren</strong> (Kestrel's environment builder) → Projects: six environments and what the sandbox said about each.</li>
+        <li><strong>Rae</strong> → Training → the second run: one environment's solve rate leaps as attempts get shorter.</li>
+        <li><strong>Sam</strong> → Cases → "slugify edge cases": the hack detector's case, the recall, and training's rollback.</li>
       </ol>
       {error && <p className="error">Couldn't load demo users: {error}</p>}
       <div className="orgs">

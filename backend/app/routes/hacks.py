@@ -204,7 +204,7 @@ async def open_checks(user: User = Depends(require_roles(Role.RESEARCHER, Role.D
         "SELECT c.id, f.version_id, e.name AS environment_name, r.label AS run_label, f.observation, f.evidence, f.created_at "
         "FROM hack_checks c JOIN hack_findings f ON f.id = c.finding_id JOIN training_runs r ON r.id = f.run_id "
         "JOIN environment_versions v ON v.id = f.version_id JOIN environments e ON e.id = v.environment_id "
-        "WHERE c.outcome IS NULL ORDER BY f.created_at"))
+        "WHERE c.outcome IS NULL AND v.status = 'approved' ORDER BY f.created_at"))  # a quarantined version has a case instead
     out = []
     for r in rows:
         ids = list(r.evidence.get("episode_ids", []))[:5]

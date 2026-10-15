@@ -1,13 +1,15 @@
 # Fixture environments
 
-Small Python bug-fix environments: `slugify()` crashes on an empty string. Each has its three
-parts in their own directories (`task/`, `grader/`, `reference/`) and a `manifest.json` with the
-test command. The demo submits the first four, and `weak_grader`, through the public API; the sandbox tests use all
-of them.
+Small Python bug-fix environments: `slugify()` crashes on an empty string (in `sound_punctuation`,
+it keeps punctuation). Each has its three parts in their own directories (`task/`, `grader/`,
+`reference/`) and a `manifest.json` with the test command. The demo submits `sound`,
+`passes_anything`, `unsolvable` and `flaky` in its second act, and `sound_punctuation` and
+`weak_grader` in its third, through the public API; the sandbox tests use all of them.
 
 | Fixture | What's wrong | Caught by |
 |---|---|---|
 | `sound` | Nothing | Passes all three checks |
+| `sound_punctuation` | Nothing. A second bug (punctuation is kept), with tests on several inputs, so `return ""` fails them | Passes all three checks |
 | `passes_anything` | The tests only check the function exists | The empty-solution check |
 | `unsolvable` | Two tests want different output for the same input | The reference check |
 | `flaky` | One test passes at random | The repeat check (or the reference check, if it fails first) |
