@@ -254,7 +254,7 @@ export type TaskHealth = {
   broken: { task_id: string; payload: Record<string, string>; is_gold: boolean; broken_status: "paused" | "retired"; answers: number;
             flags: { reason: string; handle: string; at: string }[] }[];
   flaggers: { handle: string; vendor_name: string; flags: number; retired: number }[];
-  agreement_alert: { recent: number; baseline: number; recent_n: number; baseline_n: number;
+  agreement_alert: { batch_added_at: string; batch_tasks: number; agreement: number; others: number; n: number; others_n: number;
                      tasks: { task_id: string; payload: Record<string, string>; disagreements: number; broken_status: string | null }[] } | null;
 };
 

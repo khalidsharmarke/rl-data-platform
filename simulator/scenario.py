@@ -394,8 +394,8 @@ async def spot_checker(c, project_id, truth, done: asyncio.Event) -> None:
         alert = health["agreement_alert"]
         if alert and not alerting:  # each time an alert appears
             same = sum(t["payload"]["response_a"] == t["payload"]["response_b"] for t in alert["tasks"])
-            print(f"  Agreement alert: {alert['baseline'] * 100:.0f}% earlier, {alert['recent'] * 100:.0f}% over the latest "
-                  f"{alert['recent_n']} compared answers; {same} of the {len(alert['tasks'])} worst tasks have two identical "
+            print(f"  Agreement alert: {alert['agreement'] * 100:.0f}% on a batch of {alert['batch_tasks']} tasks, "
+                  f"{alert['others'] * 100:.0f}% on the rest; {same} of its {len(alert['tasks'])} worst tasks have two identical "
                   f"answers", flush=True)
         alerting = alert is not None
         if AUTOPILOT:

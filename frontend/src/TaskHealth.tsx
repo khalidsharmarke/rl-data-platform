@@ -28,8 +28,9 @@ export default function TaskHealth({ projectId, canDecide }: { projectId: string
       <h3>Task health</h3>
       {alert && (
         <div className="alert">
-          <strong>Agreement dropped</strong> from {pct(alert.baseline)} to {pct(alert.recent)} over the latest {alert.recent_n} compared
-          answers. Most disagreement:
+          <strong>Low agreement in one batch:</strong> {pct(alert.agreement)} on the {alert.batch_tasks} tasks added{" "}
+          {new Date(alert.batch_added_at).toLocaleString()}, where the same workers reach {pct(alert.others)} on the project's other tasks. Its
+          tasks with the most disagreement:
           <ul>
             {alert.tasks.map((t) => (
               <li key={t.task_id}>

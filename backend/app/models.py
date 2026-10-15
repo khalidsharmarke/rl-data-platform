@@ -179,6 +179,7 @@ class Task(Base):
     payload: Mapped[dict[str, Any]] = mapped_column(JSONB)
     seq: Mapped[int] = mapped_column(BigInteger, Identity())
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    batch_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))  # the upload it came in (D43)
 
 
 class GoldAnswer(Base):

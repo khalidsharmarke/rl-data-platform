@@ -7,9 +7,10 @@ quality-v2). Gold tasks are flagged and paused the same way, so flagging never r
 tasks are gold, and nothing tells the worker what their flag did. A flag changes nothing in the
 flagger's measures: no answer is recorded.
 
-Separately, a project's agreement over its latest answers is compared with its earlier
-agreement (D19's two-proportion test, at z >= 3 because it's checked continuously); a
-significant drop raises an alert for researchers, listing the tasks with the most disagreement.
+Separately, each upload batch's agreement is compared with what the same workers achieve on the
+project's other tasks; a batch at least 8 points and 3 standard deviations below (z >= 3, since
+every batch is checked again and again) raises an alert for researchers, listing its tasks with
+the most disagreement, flagged or not.
 """
 
 import uuid
@@ -27,17 +28,16 @@ from app.db import get_session
 from app.models import Assignment, Role, Task, User
 from app.quality import SUBMISSION_FACTS
 from app.routes.projects import get_visible_project
-from app.scorecards import significant_drop
 from app.scoping import require_roles
 from app.work import mark_full
 
 router = APIRouter()
 
 FLAGS_TO_PAUSE = 2
-RECENT = 300  # compared answers in the recent window of the agreement alert
-MIN_SIDE = 200  # compared answers each side needs before the alert can fire
+MIN_BATCH = 30  # compared answers a batch needs before the alert judges it
+MIN_OTHERS = 200  # compared answers on the rest of the project
 DROP = 0.08
-Z = 3.0  # stricter than D19's 2: the window slides and is checked again and again, so noise would cross 2
+Z = 3.0  # stricter than D19's 2: every batch is checked, again and again, so noise would cross 2
 
 
 class FlagIn(BaseModel):
@@ -66,11 +66,13 @@ class FlaggerRow(BaseModel):
 
 
 class AgreementAlert(BaseModel):
-    recent: float
-    baseline: float
-    recent_n: int
-    baseline_n: int
-    tasks: list[dict[str, Any]]
+    batch_added_at: datetime
+    batch_tasks: int
+    agreement: float  # among the batch's compared answers
+    others: float  # what the same workers achieve on the project's other tasks
+    n: int
+    others_n: int
+    tasks: list[dict[str, Any]]  # the batch's tasks with the most disagreement
 
 
 class TaskHealth(BaseModel):
@@ -150,31 +152,68 @@ WHERE t.project_id = :p GROUP BY u.handle, o.name ORDER BY count(*) DESC, u.hand
 """
 
 COMPARED = f"""
-SELECT f.id, f.agrees, s.task_id FROM ({SUBMISSION_FACTS}) f JOIN submissions s ON s.id = f.id
-WHERE f.compared ORDER BY f.submitted_at, s.id
+SELECT f.agrees, f.worker_id, s.task_id, coalesce(t.batch_id::text, t.created_at::text) AS batch, t.created_at
+FROM ({SUBMISSION_FACTS}) f JOIN submissions s ON s.id = f.id JOIN tasks t ON t.id = s.task_id
+WHERE f.compared
 """
 
 
+def unexpected_disagreement(observed: list[bool], expected: list[float]) -> tuple[float, float]:
+    """How far observed agreement falls below what was expected of the same answers: the gap as a
+    share of answers, and in standard deviations (a sum of independent yes/no chances)."""
+    shortfall = sum(expected) - sum(observed)
+    variance = sum(p * (1 - p) for p in expected)
+    return shortfall / len(observed), (shortfall / variance ** 0.5 if variance else 0.0)
+
+
 async def agreement_alert(session: AsyncSession, project_id: uuid.UUID) -> AgreementAlert | None:
+    """The upload batch whose agreement falls furthest below what the same workers achieve on the
+    project's other tasks, if the gap is significant. Measured against each worker's own agreement
+    elsewhere, so who happened to be working, and a worker who disagrees everywhere (a matter for
+    detection), don't set it off: only the tasks do (D43)."""
     rows = (await session.execute(text(COMPARED), {"project_id": project_id})).all()
-    if len(rows) < RECENT + MIN_SIDE:
+    by_worker: dict[uuid.UUID, list[int]] = {}
+    by_worker_batch: dict[tuple, list[int]] = {}
+    batches: dict[str, list] = {}
+    for r in rows:
+        by_worker.setdefault(r.worker_id, [0, 0])
+        by_worker[r.worker_id][0] += r.agrees
+        by_worker[r.worker_id][1] += 1
+        by_worker_batch.setdefault((r.worker_id, r.batch), [0, 0])
+        by_worker_batch[(r.worker_id, r.batch)][0] += r.agrees
+        by_worker_batch[(r.worker_id, r.batch)][1] += 1
+        batches.setdefault(r.batch, []).append(r)
+    worst = None
+    for batch, answers in batches.items():
+        if len(answers) < MIN_BATCH or len(rows) - len(answers) < MIN_OTHERS:
+            continue
+        expected = []
+        for a in answers:  # the worker's agreement on the project's other batches, smoothed toward even odds
+            k, n = by_worker[a.worker_id]
+            kb, nb = by_worker_batch[(a.worker_id, batch)]
+            expected.append((k - kb + 1) / (n - nb + 2))
+        gap, z = unexpected_disagreement([a.agrees for a in answers], expected)
+        if gap >= DROP and z >= Z and (worst is None or z > worst[1]):
+            worst = (batch, z, answers, sum(expected) / len(expected))
+    if worst is None:
         return None
-    before, recent = rows[:-RECENT], rows[-RECENT:]
-    r_hits, b_hits = sum(r.agrees for r in recent), sum(r.agrees for r in before)
-    if not significant_drop(r_hits, len(recent), b_hits, len(before), drop=DROP, z=Z):
-        return None
+    batch, _, answers, others = worst
     disagreements: dict[uuid.UUID, int] = {}
-    for r in recent:
-        if not r.agrees:
-            disagreements[r.task_id] = disagreements.get(r.task_id, 0) + 1
-    worst = sorted(disagreements, key=lambda t: -disagreements[t])[:5]
-    prompts = {r.id: r for r in (await session.execute(
+    for a in answers:
+        if not a.agrees:
+            disagreements[a.task_id] = disagreements.get(a.task_id, 0) + 1
+    top = sorted(disagreements, key=lambda t: -disagreements[t])[:5]
+    tasks = {r.id: r for r in (await session.execute(
         text("SELECT t.id, t.payload, b.status AS broken_status FROM tasks t LEFT JOIN broken_tasks b ON b.task_id = t.id "
-             "WHERE t.id = ANY(:ids)"), {"ids": worst})).all()}
+             "WHERE t.id = ANY(:ids)"), {"ids": top})).all()}
+    batch_tasks = await session.scalar(
+        text("SELECT count(*) FROM tasks WHERE project_id = :p AND coalesce(batch_id::text, created_at::text) = :b"),
+        {"p": project_id, "b": batch})
     return AgreementAlert(
-        recent=r_hits / len(recent), baseline=b_hits / len(before), recent_n=len(recent), baseline_n=len(before),
-        tasks=[{"task_id": t, "payload": prompts[t].payload, "disagreements": disagreements[t],
-                "broken_status": prompts[t].broken_status} for t in worst],
+        batch_added_at=answers[0].created_at, batch_tasks=batch_tasks,
+        agreement=sum(a.agrees for a in answers) / len(answers), others=others, n=len(answers), others_n=len(rows) - len(answers),
+        tasks=[{"task_id": t, "payload": tasks[t].payload, "disagreements": disagreements[t],
+                "broken_status": tasks[t].broken_status} for t in top],
     )
 
 

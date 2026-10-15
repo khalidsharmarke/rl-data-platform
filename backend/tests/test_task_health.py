@@ -2,8 +2,8 @@
 
 from sqlalchemy import text
 
+from app import demo_content
 from app.routes import task_health
-from app.scorecards import significant_drop
 from tests.builders import allocate, make_project
 from tests.people import DATA_OPS, KESTREL_WORKER, NORTHWIND_WORKER, NORTHWIND_WORKER_2, RESEARCHER
 
@@ -95,32 +95,40 @@ async def test_a_restored_task_is_routed_again_and_needs_new_flags(client, login
     assert (await health(client, login, project_id))["broken"] == []
 
 
-async def test_a_drop_in_agreement_raises_one_alert_with_the_worst_tasks(client, login, session, monkeypatch):
-    monkeypatch.setattr(task_health, "RECENT", 20)
-    monkeypatch.setattr(task_health, "MIN_SIDE", 20)
-    project_id, generated = await make_project(client, login, tasks=60, overlap=2)
+async def test_a_batch_with_low_agreement_raises_one_alert_with_its_worst_tasks(client, login, session, monkeypatch):
+    monkeypatch.setattr(task_health, "MIN_BATCH", 20)
+    monkeypatch.setattr(task_health, "MIN_OTHERS", 20)
+    project_id, generated = await make_project(client, login, tasks=40, overlap=2)
+    second = demo_content.generate(20, seed=12)
+    for i, g in enumerate(second):  # a second upload, items 40-59
+        g.payload["item"] = 40 + i
+    r = await client.post(f"/projects/{project_id}/tasks", headers=await login(RESEARCHER),
+                          json={"tasks": [{"payload": g.payload} for g in second]})
+    assert r.status_code == 201
     await allocate(client, login, project_id, "Northwind Data", "1")
     assert (await health(client, login, project_id))["agreement_alert"] is None
-    flipped = set()
-    for name, flip_from in ((NORTHWIND_WORKER, None), (NORTHWIND_WORKER_2, 40)):
+    better = {g.payload["item"]: g.better for g in generated + second}
+    for name, flip in ((NORTHWIND_WORKER, False), (NORTHWIND_WORKER_2, True)):
         headers = await login(name)
-        n = 0
         while (a := await claim(client, headers, project_id)) is not None:
             item = a["task"]["payload"]["item"]
-            better = next(g.better for g in generated if g.payload["item"] == item)
-            flip = flip_from is not None and n >= flip_from  # the second worker's last 20 answers disagree
-            flipped |= {item} if flip else set()
-            await client.post(f"/assignments/{a['id']}/submit", headers=headers,
-                              json={"answer": {"choice": ("B" if better == "A" else "A") if flip else better}})
-            n += 1
+            wrong = flip and item >= 40  # on the second batch the two workers never agree
+            choice = ("B" if better[item] == "A" else "A") if wrong else better[item]
+            await client.post(f"/assignments/{a['id']}/submit", headers=headers, json={"answer": {"choice": choice}})
     alert = (await health(client, login, project_id))["agreement_alert"]
-    assert alert["recent"] == 0 and alert["baseline"] == 0.8 and len(alert["tasks"]) == 5
-    assert {t["payload"]["item"] for t in alert["tasks"]} <= flipped
+    assert (alert["agreement"], round(alert["others"], 2), alert["batch_tasks"], alert["n"]) == (0, 0.98, 20, 40)  # 41 of 42, smoothed
+    assert len(alert["tasks"]) == 5 and all(t["payload"]["item"] >= 40 for t in alert["tasks"])
     assert (await client.get(f"/projects/{project_id}/task-health", headers=await login(NORTHWIND_WORKER))).status_code == 403
 
 
-def test_the_alert_needs_more_than_noise_because_it_is_checked_again_and_again():
-    # 300 recent answers at 67% against 700 earlier at 76%: z is just under 3. Noise like this turns up
-    # somewhere in a long run when the window is checked every few minutes; it isn't an alert.
-    assert not significant_drop(201, 300, 532, 700, drop=task_health.DROP, z=task_health.Z)
-    assert significant_drop(192, 300, 525, 700, drop=task_health.DROP, z=task_health.Z)  # 64% against 75%: z 3.4
+def test_the_alert_measures_against_the_same_workers_elsewhere():
+    from app.routes.task_health import unexpected_disagreement
+    # Workers who agree 75% of the time elsewhere, at 68% on 300 answers: about 2.7 standard deviations, noise.
+    gap, z = unexpected_disagreement([True] * 205 + [False] * 95, [0.75] * 300)
+    assert round(z, 1) == 2.7 and z < task_health.Z
+    # The same workers at 50%: a broken batch.
+    gap, z = unexpected_disagreement([True] * 150 + [False] * 150, [0.75] * 300)
+    assert gap >= task_health.DROP and z >= task_health.Z
+    # A worker who disagrees everywhere is expected to here too: no alert.
+    gap, z = unexpected_disagreement([True] * 50 + [False] * 50, [0.5] * 100)
+    assert gap == 0 and z == 0

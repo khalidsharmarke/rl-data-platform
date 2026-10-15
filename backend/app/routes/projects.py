@@ -210,8 +210,9 @@ async def add_tasks(
     items = list(body.tasks)
     random.shuffle(items)
     gold = 0
+    batch_id = uuid.uuid4()  # one per upload: a batch with low agreement points at a problem in how it was made (D43)
     for t in items:
-        task = Task(project_id=project.id, schema_version=project.current_schema_version, payload=t.payload)
+        task = Task(project_id=project.id, schema_version=project.current_schema_version, payload=t.payload, batch_id=batch_id)
         session.add(task)
         await session.flush()
         if t.gold_answer is not None:
