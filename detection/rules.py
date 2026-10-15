@@ -9,6 +9,10 @@ Severity (D32): one rule on its own is a watch finding, which the platform answe
 measuring the worker more closely. Two or more rules agreeing make it a case. A rule built
 only on what the browser reports (pasting) can be forged (A32), so it never counts toward a
 case by itself.
+
+Modes (D27, D41): the platform decides which rule versions are live. A rule in shadow mode
+still runs and its findings are reported, but it never counts toward a live finding's
+severity, so a rule that hasn't proven itself can't turn a watch into a case.
 """
 
 import re
@@ -80,7 +84,18 @@ def duplicates(window: list[Answer]) -> Finding | None:
                    {"submission_ids": ids})
 
 
-RULES: list[Callable[[list[Answer]], Finding | None]] = [too_fast, pasted, duplicates]
+def terse(window: list[Answer]) -> Finding | None:
+    """New, and in shadow until it proves itself: reasons too short to engage with the task, on
+    almost every answer."""
+    short = [a for a in window if a.rationale is not None and len(a.rationale.split()) <= 5]
+    if len(short) < 8:
+        return None
+    return Finding("terse", "terse-v1",
+                   f"{len(short)} of the last {len(window)} reasons were five words or fewer.",
+                   {"submission_ids": [a.submission_id for a in short]})
+
+
+RULES: list[Callable[[list[Answer]], Finding | None]] = [too_fast, pasted, duplicates, terse]
 
 
 # Rules that rest only on signals the browser reports.
@@ -97,3 +112,14 @@ def severity(findings: list[Finding]) -> str:
     """'case' when at least two rules agree and one of them rests on server-side evidence."""
     rules = {f.rule for f in findings}
     return "case" if len(rules) >= 2 and rules - CLIENT_ONLY else "watch"
+
+
+def severities(findings: list[Finding], live: set[str] | None) -> dict[str, str]:
+    """Each finding's severity by rule version. Live findings are judged on live rules alone; a
+    shadow finding gets the severity it would have if its rule were live, for measuring it.
+    live=None means every rule is live."""
+    on = [f for f in findings if live is None or f.version in live]
+    out = {f.version: severity(on) for f in on}
+    for f in findings:
+        out.setdefault(f.version, severity(on + [f]))
+    return out

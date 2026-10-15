@@ -7,10 +7,10 @@ answers that come after it are judged (D20): a cleared or reinstated worker isn'
 again on evidence a person has already weighed.
 """
 
-from collections import deque
+from collections import Counter, deque
 from dataclasses import dataclass, field
 
-from rules import WINDOW, Answer, evaluate, severity
+from rules import WINDOW, Answer, evaluate, severities
 
 DETECTOR = "rules-v1"
 
@@ -37,6 +37,8 @@ class Detector:
     reported: dict = field(default_factory=dict)  # (worker, project) -> {rule: severity}
     decided_through: dict = field(default_factory=dict)  # worker -> last event id a decision covered
     processed_through: int = 0
+    live: set | None = None  # rule versions the platform has made live (D41); None: all of them
+    judged: Counter = field(default_factory=Counter)  # reviewers' abuse judgements received (D40)
 
     def apply_label(self, label: dict) -> None:
         """A person decided a case on this worker: start judging afresh from the next answer."""
@@ -46,6 +48,15 @@ class Detector:
         for key in [k for k in self.windows if k[0] == worker]:
             self.windows[key] = deque((i, a) for i, a in self.windows[key] if i > through)
             self.reported.pop(key, None)
+
+    def apply_cleared(self, outcome: dict) -> None:
+        """An escalation cleared this worker: the signal that started it, plus their later gold,
+        was judged fine. Later answers are judged on their own, but the same signal alone isn't
+        reported again; a new signal, or signals agreeing on a case, still are."""
+        worker, through = outcome["worker_id"], outcome["through_event"] or 0
+        self.decided_through[worker] = max(self.decided_through.get(worker, 0), through)
+        for key in [k for k in self.windows if k[0] == worker]:
+            self.windows[key] = deque((i, a) for i, a in self.windows[key] if i > through)
 
     def process(self, event: dict) -> list[Report]:
         """Take one event, in id order; return anything newly worth reporting."""
@@ -66,13 +77,13 @@ class Detector:
         findings = evaluate([a for _, a in reversed(window)])
         if not findings:
             return []
-        level = severity(findings)
+        level = severities(findings, self.live)
         before = self.reported.setdefault(key, {})
-        # Report a rule the first time it fires, and again if the severity rises to a case.
-        new = [f for f in findings if f.rule not in before or (level == "case" and before[f.rule] != "case")]
+        # Report a rule the first time it fires, and again if its severity rises to a case.
+        new = [f for f in findings if f.rule not in before or (level[f.version] == "case" and before[f.rule] != "case")]
         for f in findings:
-            before[f.rule] = "case" if level == "case" else before.get(f.rule, "watch")
+            before[f.rule] = "case" if level[f.version] == "case" else before.get(f.rule, "watch")
         return [
-            Report(worker, event["vendor_id"], project, f.rule, f.version, level, f.observation, f.evidence, event["id"])
+            Report(worker, event["vendor_id"], project, f.rule, f.version, level[f.version], f.observation, f.evidence, event["id"])
             for f in new
         ]

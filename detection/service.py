@@ -3,6 +3,8 @@ through its contract.
 
 - GET  /detection/events?after=N   submission events, in commit order (D24)
 - GET  /detection/labels?after=N   case decisions, so a decided worker is judged afresh (D20)
+- GET  /detection/outcomes?after=N reviewers' abuse judgements and cleared escalations (D40)
+- GET  /detection/rules            which rule versions are live; the rest run in shadow (D41)
 - GET  /detection/progress         how far this detector got before it last stopped
 - POST /detection/findings         findings with a severity, plus how far it has processed
 
@@ -44,6 +46,25 @@ async def catch_up_labels(c: httpx.AsyncClient, d: Detector, after: int) -> int:
             after = label["seq"]
 
 
+async def catch_up_outcomes(c: httpx.AsyncClient, d: Detector, after: int) -> int:
+    """A cleared escalation is treated like a decision: the worker is judged afresh from there.
+    Abuse judgements are counted; the platform measures precision from them (D40)."""
+    while True:
+        outcomes = (await fetch(c, "/detection/outcomes", after=after))["outcomes"]
+        if not outcomes:
+            return after
+        for o in outcomes:
+            if o["kind"] == "escalation":
+                d.apply_cleared(o)
+            else:
+                d.judged[o["outcome"]] += 1
+            after = o["seq"]
+
+
+async def read_modes(c: httpx.AsyncClient, d: Detector) -> None:
+    d.live = {version for version, mode in (await fetch(c, "/detection/rules", detector=DETECTOR))["modes"].items() if mode == "live"}
+
+
 async def replay(c: httpx.AsyncClient, d: Detector, through: int) -> None:
     """Rebuild state from the events already processed, without reporting them again."""
     after = 0
@@ -61,11 +82,15 @@ async def replay(c: httpx.AsyncClient, d: Detector, through: int) -> None:
 async def run(c: httpx.AsyncClient) -> None:
     d = Detector()
     progress = (await fetch(c, "/detection/progress"))["processed_through"]
+    await read_modes(c, d)
     label_cursor = await catch_up_labels(c, d, 0)
+    outcome_cursor = await catch_up_outcomes(c, d, 0)
     await replay(c, d, progress)
-    log.info("%s started: replayed through event %s", DETECTOR, progress)
+    log.info("%s started: replayed through event %s; live rules: %s", DETECTOR, progress, ", ".join(sorted(d.live)))
     while True:
+        await read_modes(c, d)
         label_cursor = await catch_up_labels(c, d, label_cursor)
+        outcome_cursor = await catch_up_outcomes(c, d, outcome_cursor)
         events = (await fetch(c, "/detection/events", after=d.processed_through, limit=BATCH))["events"]
         if not events:
             await asyncio.sleep(POLL_SECONDS)

@@ -9,6 +9,7 @@ SIGNALS = {
     "speed": "9 of the last 10 answers were submitted faster than the task can be read.",
     "paste": "Reason text was pasted rather than typed in 10 of the last 10 answers.",
     "duplicate": "The same reason, word for word, was given for 10 of the last 10 answers to different questions.",
+    "terse": "10 of the last 10 reasons were five words or fewer.",
 }
 
 

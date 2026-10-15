@@ -7,6 +7,7 @@ export default function Review({ me }: { me: User }) {
   const [items, setItems] = useState<ReviewItem[]>([]);
   const [reasons, setReasons] = useState<Record<string, string>>({});
   const [done, setDone] = useState<Record<string, string>>({});
+  const [abusive, setAbusive] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     api<Project[]>("/projects").then((list) => setProject(list.find((p) => p.kind === "human_data") ?? null));
@@ -17,6 +18,7 @@ export default function Review({ me }: { me: User }) {
     setItems(await api<ReviewItem[]>(`/projects/${project.id}/review-queue?n=5`));
     setDone({});
     setReasons({});
+    setAbusive({});
   }
 
   useEffect(() => {
@@ -26,7 +28,7 @@ export default function Review({ me }: { me: User }) {
   async function decide(item: ReviewItem, verdict: "accepted" | "rejected") {
     await api(`/submissions/${item.submission_id}/review`, {
       method: "POST",
-      body: JSON.stringify({ verdict, reason: reasons[item.submission_id] ?? null }),
+      body: JSON.stringify({ verdict, reason: reasons[item.submission_id] ?? null, looks_abusive: abusive[item.submission_id] }),
     });
     setDone((d) => ({ ...d, [item.submission_id]: verdict }));
   }
@@ -36,7 +38,10 @@ export default function Review({ me }: { me: User }) {
       <HackChecks />
       <EnvironmentQueue me={me} />
       <h2>Spot checks</h2>
-      <p className="muted">A random sample of answers on regular tasks. Rejections need a reason; the worker sees it.</p>
+      <p className="muted">
+        Answers on regular tasks. Rejections need a reason; the worker sees it. Whether an answer looks like abuse is a separate
+        question, never shown to the worker or vendor: an honest but poor answer is rejected, not abusive.
+      </p>
       <button onClick={load}>New sample</button>
       {items.map((item) => (
         <div key={item.submission_id} className="card task">
@@ -56,17 +61,30 @@ export default function Review({ me }: { me: User }) {
           {done[item.submission_id] ? (
             <p className="muted">Marked {done[item.submission_id]}.</p>
           ) : (
+            <>
+            <div className="row judgement">
+              <span>Looks like abuse?</span>
+              {([false, true] as const).map((v) => (
+                <label key={String(v)}>
+                  <input type="radio" name={`abuse-${item.submission_id}`} checked={abusive[item.submission_id] === v}
+                         onChange={() => setAbusive((a) => ({ ...a, [item.submission_id]: v }))} />{" "}
+                  {v ? "Yes: pasted, generic or not engaging with the task" : "No"}
+                </label>
+              ))}
+            </div>
             <div className="row">
               <input
                 placeholder="Reason (required to reject)"
                 value={reasons[item.submission_id] ?? ""}
                 onChange={(e) => setReasons((r) => ({ ...r, [item.submission_id]: e.target.value }))}
               />
-              <button onClick={() => decide(item, "accepted")}>Accept</button>
-              <button disabled={!reasons[item.submission_id]?.trim()} onClick={() => decide(item, "rejected")}>
+              <button disabled={abusive[item.submission_id] === undefined} onClick={() => decide(item, "accepted")}>Accept</button>
+              <button disabled={abusive[item.submission_id] === undefined || !reasons[item.submission_id]?.trim()}
+                      onClick={() => decide(item, "rejected")}>
                 Reject
               </button>
             </div>
+            </>
           )}
         </div>
       ))}

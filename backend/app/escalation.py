@@ -23,7 +23,7 @@ import uuid
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app import clock
+from app import clock, detection_quality
 from app.abuse import Observation, open_or_join_case
 from app.audit import record
 
@@ -102,6 +102,7 @@ async def review(session: AsyncSession) -> dict[str, int]:
                                   {"now": now, "x": r.id})
             record(session, actor=None, action="escalation.cleared", entity_type="escalation", entity_id=r.id, org_id=None,
                    after={"gold_n": r.gold_n, "gold_correct": r.gold_correct})
+            await detection_quality.record_cleared(session, r.worker_id, r.project_id)
             counts["cleared"] += 1
             continue
         # The vendor admin sees what was observed, never that it came from test questions (N17).

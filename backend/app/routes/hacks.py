@@ -23,7 +23,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app import clock, environments
+from app import clock, detection_quality, environments
 from app.abuse import add_action
 from app.audit import record
 from app.db import get_session
@@ -85,16 +85,17 @@ async def hack_findings(body: HackFindingsIn, session: AsyncSession = Depends(ge
         run_id = await session.scalar(text("SELECT id FROM training_runs WHERE label = :l"), {"l": f.run_label})
         if version is None or run_id is None:
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"Unknown version or run in finding {f.rule}")
+        live = await detection_quality.mode(session, body.detector, f.rule_version) == "live"
         finding_id = await session.scalar(
             text("INSERT INTO hack_findings (detector, rule, rule_version, severity, version_id, run_id, observation, evidence, "
-                 "through_seq, created_at) VALUES (:d, :r, :rv, :s, :v, :run, :o, CAST(:e AS jsonb), :t, :now) "
+                 "through_seq, shadow, created_at) VALUES (:d, :r, :rv, :s, :v, :run, :o, CAST(:e AS jsonb), :t, :shadow, :now) "
                  "ON CONFLICT ON CONSTRAINT hack_findings_once DO NOTHING RETURNING id"),
             {"d": body.detector, "r": f.rule, "rv": f.rule_version, "s": f.severity, "v": version.id, "run": run_id,
-             "o": f.observation, "e": json.dumps(f.evidence), "t": body.processed_through, "now": now},
+             "o": f.observation, "e": json.dumps(f.evidence), "t": body.processed_through, "shadow": not live, "now": now},
         )
         if finding_id is None:
             continue  # delivered again: already handled
-        if f.severity == "case":
+        if f.severity == "case" and live:
             had_case = await session.scalar(text("SELECT 1 FROM cases WHERE subject_type = 'environment_version' "
                                                  "AND subject_id = :v AND status = 'open'"), {"v": version.id})
             case_id = await flag_version(session, version, observation=f.observation, actor=None, rule=f.rule,

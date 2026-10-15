@@ -5,7 +5,8 @@ person. Events go out in commit order (app/events.py), findings come back with a
 and the point in the stream the detector has processed. The platform decides what a finding
 leads to: a case-severity finding opens or joins the worker's case and holds their answers;
 a watch finding opens a discreet escalation (app/escalation.py), and nobody outside Anthropic
-sees it.
+sees it. A finding from a rule version in shadow mode is stored and its answers go to
+reviewers, but it leads to nothing else (D41, app/detection_quality.py).
 """
 
 import json
@@ -19,7 +20,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app import clock, escalation
+from app import clock, detection_quality, escalation
 from app.abuse import Observation, open_or_join_case
 from app.config import settings
 from app.db import get_session
@@ -57,6 +58,25 @@ async def events(after: int = Query(0, ge=0), limit: int = Query(500, ge=1, le=2
         text("SELECT id, payload FROM submission_events WHERE id > :after ORDER BY id LIMIT :limit"), {"after": after, "limit": limit}
     )
     return {"events": [{"id": r.id, **r.payload} for r in rows]}
+
+
+@router.get("/rules", dependencies=[Depends(require_detection_service)])
+async def rules(detector: str = "rules-v1", session: AsyncSession = Depends(get_session)) -> dict:
+    """Each known rule version's mode. A version not listed is in shadow until data ops promotes it."""
+    return {"detector": detector, "modes": await detection_quality.modes(session, detector)}
+
+
+@router.get("/outcomes", dependencies=[Depends(require_detection_service)])
+async def outcomes(after: int = Query(0, ge=0), session: AsyncSession = Depends(get_session)) -> dict:
+    """Reviewers' abuse judgements and cleared escalations, in order (D40)."""
+    rows = await session.execute(
+        text("SELECT seq, kind, worker_id, project_id, submission_id, outcome, through_event FROM detection_outcomes "
+             "WHERE seq > :after ORDER BY seq LIMIT 1000"), {"after": after})
+    return {"outcomes": [
+        {"seq": r.seq, "kind": r.kind, "worker_id": str(r.worker_id), "project_id": str(r.project_id),
+         "submission_id": str(r.submission_id) if r.submission_id else None, "outcome": r.outcome, "through_event": r.through_event}
+        for r in rows
+    ]}
 
 
 @router.get("/progress", dependencies=[Depends(require_detection_service)])
@@ -100,7 +120,8 @@ async def findings(body: FindingsIn, session: AsyncSession = Depends(get_session
         if vendor_id is None:
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"Unknown worker {worker_id}")
         case_id = None
-        cases = [f for f in group if f.severity == "case"]
+        live = {f.rule_version: await detection_quality.mode(session, body.detector, f.rule_version) == "live" for f in group}
+        cases = [f for f in group if f.severity == "case" and live[f.rule_version]]
         if cases:
             case_id, new = await open_or_join_case(
                 session, worker_id=worker_id, vendor_id=vendor_id, project_id=project_id,
@@ -112,13 +133,18 @@ async def findings(body: FindingsIn, session: AsyncSession = Depends(get_session
             finding_id = await session.scalar(
                 text(
                     "INSERT INTO findings (detector, rule, rule_version, severity, worker_id, vendor_id, project_id, observation, "
-                    "evidence, through_event, case_id, created_at) VALUES (:d, :r, :rv, :sev, :w, :v, :p, :o, CAST(:e AS jsonb), "
-                    ":t, :c, :now) ON CONFLICT ON CONSTRAINT findings_once DO NOTHING RETURNING id"
+                    "evidence, through_event, case_id, shadow, created_at) VALUES (:d, :r, :rv, :sev, :w, :v, :p, :o, "
+                    "CAST(:e AS jsonb), :t, :c, :shadow, :now) ON CONFLICT ON CONSTRAINT findings_once DO NOTHING RETURNING id"
                 ),
                 {"d": body.detector, "r": f.rule, "rv": f.rule_version, "sev": f.severity, "w": worker_id, "v": vendor_id,
                  "p": project_id, "o": f.observation, "e": json.dumps(f.evidence), "t": f.through_event,
-                 "c": case_id if f.severity == "case" else None, "now": now},
+                 "c": case_id if f.severity == "case" and live[f.rule_version] else None,
+                 "shadow": not live[f.rule_version], "now": now},
             )
+            if finding_id:
+                await detection_quality.request_reviews(session, finding_id, [str(s) for s in f.evidence.get("submission_ids", [])])
+            if not live[f.rule_version]:
+                continue  # shadow: recorded and reviewed, nothing more
             held = await session.scalar(text("SELECT 1 FROM holds WHERE worker_id = :w AND released_at IS NULL"), {"w": worker_id})
             if f.severity == "watch" and finding_id and not held:
                 await escalation.start(session, finding_id=finding_id, worker_id=worker_id, project_id=project_id,

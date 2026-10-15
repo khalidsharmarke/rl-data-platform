@@ -11,7 +11,7 @@ import pytest
 from sqlalchemy import text
 
 from app import escalation
-from tests.builders import allocate, make_project, report
+from tests.builders import DETECTION, allocate, make_project, report
 from tests.people import DATA_OPS, NORTHWIND_ADMIN, NORTHWIND_WORKER, NORTHWIND_WORKER_2
 from tests.test_grades import grade_of
 from tests.test_release import answer_n
@@ -71,6 +71,9 @@ async def test_good_later_gold_clears_the_escalation(client, login, session, alw
     [x] = await escalations(client, login, project_id)
     assert x["outcome"] == "cleared" and x["gold_since"] == 10 and x["gold_right_since"] == 10
     assert (await grade_of(client, login, project_id))["integrity"] != "watch"
+    # Detection hears of it, so it judges the worker afresh and can flag a later change (D20, D40).
+    outcomes = (await client.get("/detection/outcomes", headers=DETECTION)).json()["outcomes"]
+    assert [(o["kind"], o["outcome"]) for o in outcomes] == [("escalation", "cleared")]
     assert (await client.get("/cases", headers=await login(NORTHWIND_ADMIN))).json() == []
 
 

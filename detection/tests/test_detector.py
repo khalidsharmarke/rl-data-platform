@@ -1,8 +1,14 @@
-"""The detection service on recorded events: rules, severity (D32), reporting once, replay,
-and judging afresh after a decision (D20)."""
+"""The detection service on recorded events: rules, severity (D32), shadow mode (D41),
+reporting once, replay, and judging afresh after a decision (D20)."""
 
 from detector import Detector
-from rules import Answer, evaluate, severity
+from rules import Answer, evaluate, severities, severity
+
+LIVE = {"speed-v1", "paste-v1", "duplicate-v1"}  # terse-v1 starts in shadow, like any new version
+
+
+def live(findings):
+    return [f for f in findings if f.version in LIVE]
 
 PASTE = "Answer A is more helpful because it directly addresses the user's question with accurate, actionable detail."
 
@@ -19,13 +25,13 @@ def test_rules_flag_pasted_duplicated_fast_answers():
 def test_rules_leave_honest_low_quality_alone():
     # Sloppy but honest: quick-ish, typed, short or no reasons. Low quality is not abuse (PD4).
     assert evaluate(window(9)) == []
-    assert evaluate(window(30, reason="Clearer steps.")) == []
+    assert live(evaluate(window(30, reason="Clearer steps."))) == []
     assert evaluate(window(3)[:9]) == []  # not enough answers to judge
 
 
 def test_one_signal_is_a_watch_and_agreeing_signals_are_a_case():
     assert severity(evaluate(window(3))) == "watch"  # speed alone
-    assert severity(evaluate(window(30, pasted=True, reason="Clearer steps."))) == "watch"  # paste alone
+    assert severity(live(evaluate(window(30, pasted=True, reason="Clearer steps.")))) == "watch"  # paste alone
     assert severity(evaluate(window(3, pasted=True, reason=PASTE))) == "case"
 
 
@@ -33,6 +39,17 @@ def test_a_client_signal_never_makes_a_case_on_its_own():
     # Pasting is reported by the browser; it can't be the only support for a case (AB11).
     paste_only = [f for f in evaluate(window(30, pasted=True, reason=PASTE)) if f.rule == "paste"]
     assert severity(paste_only) == "watch"
+
+
+def test_terse_v1_fires_on_honest_short_reasons_which_is_why_it_starts_in_shadow():
+    found = evaluate(window(30, reason="Clearer steps."))
+    assert [f.version for f in found] == ["terse-v1"]
+
+
+def test_a_shadow_rule_cant_raise_a_live_finding_to_a_case():
+    found = evaluate(window(30, pasted=True, reason="Clearer steps."))  # paste and terse agree
+    assert severities(found, LIVE) == {"paste-v1": "watch", "terse-v1": "case"}  # terse: what it would do if live
+    assert severities(found, LIVE | {"terse-v1"}) == {"paste-v1": "case", "terse-v1": "case"}
 
 
 def event(i, worker="w1", seconds=30, pasted=False, reason=None, project="p1"):
@@ -46,7 +63,7 @@ def feed(d, events):
 
 
 def test_reports_each_rule_once_and_again_only_when_it_becomes_a_case():
-    d = Detector()
+    d = Detector(live=LIVE)
     # Fast but typed: speed alone, a watch finding.
     reports = feed(d, [event(i, seconds=3) for i in range(1, 11)])
     assert [(r.rule, r.severity) for r in reports] == [("speed", "watch")]
@@ -66,6 +83,12 @@ def test_workers_and_projects_are_judged_separately():
     assert feed(d2, mixed) == []  # five on each project: not enough to judge either
 
 
+def test_a_shadow_rule_is_reported_but_leaves_the_live_findings_alone():
+    d = Detector(live=LIVE)
+    reports = feed(d, [event(i, pasted=True, reason="Clearer steps.") for i in range(1, 11)])
+    assert sorted((r.rule_version, r.severity) for r in reports) == [("paste-v1", "watch"), ("terse-v1", "case")]
+
+
 def test_after_a_decision_only_later_answers_count():
     d = Detector()
     feed(d, [event(i, seconds=3) for i in range(1, 11)])
@@ -73,6 +96,18 @@ def test_after_a_decision_only_later_answers_count():
     assert feed(d, [event(i, seconds=3) for i in range(11, 20)]) == []  # nine since the decision
     assert [r.rule for r in feed(d, [event(20, seconds=3)])] == ["speed"]  # ten: judged again
 
+
+def test_after_a_cleared_escalation_the_same_signal_alone_isnt_raised_again():
+    d = Detector(live=LIVE)
+    notes = ["cites the source the user asked for", "keeps the units consistent throughout", "answers the follow-up too",
+             "names the edge case the other one misses", "gives working code rather than a sketch"]
+    note_paster = lambda i: event(i, pasted=True, reason=f"From my notes: it {notes[i % 5]}, case {chr(97 + i % 26)}.")  # noqa: E731
+    assert [r.rule for r in feed(d, [note_paster(i) for i in range(1, 11)])] == ["paste"]
+    d.apply_cleared({"worker_id": "w1", "through_event": 10})
+    assert feed(d, [note_paster(i) for i in range(11, 31)]) == []  # still pasting notes: nothing new
+    # A new signal is still raised, and agreeing signals still make a case.
+    reports = feed(d, [event(i, seconds=3, pasted=True, reason=PASTE) for i in range(31, 41)])
+    assert {(r.rule, r.severity) for r in reports} >= {("speed", "case"), ("paste", "case")}
 
 def test_replaying_rebuilds_state_without_repeating_reports():
     events = [event(i, seconds=3) for i in range(1, 15)]

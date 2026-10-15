@@ -1,3 +1,4 @@
+import random
 import uuid
 from datetime import datetime
 from typing import Any
@@ -8,7 +9,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app import clock, grades
+from app import clock, detection_quality, grades
 from app.audit import record
 from app.db import get_session
 from app.models import GoldAnswer, GoldRetirement, Org, Review, Role, Submission, Task, TaskSchema, User
@@ -82,6 +83,8 @@ class ReviewItem(BaseModel):
 class ReviewIn(BaseModel):
     verdict: str = Field(pattern="^(accepted|rejected)$")
     reason: str | None = Field(default=None, max_length=1000)
+    # Asked on every spot check, separately from quality: honest but poor work isn't abuse (D40, PD4).
+    looks_abusive: bool
 
 
 class FeedbackItem(BaseModel):
@@ -179,9 +182,11 @@ async def review_queue(
     user: User = Depends(require_roles(Role.RESEARCHER)),
     session: AsyncSession = Depends(get_session),
 ) -> list[ReviewItem]:
-    """A random sample of unreviewed answers on regular tasks: researcher spot checks (DC4)."""
+    """Unreviewed answers on regular tasks for researcher spot checks (DC4). Answers the platform
+    asked to have reviewed (the audit sample and flagged answers, D40) come first, topped up at
+    random; the order is shuffled and nothing says why an item is here."""
     project = await get_visible_project(project_id, user, session)
-    rows = await session.execute(
+    rows = (await session.execute(
         text(
             """
             SELECT s.id, o.name AS vendor_name, u.handle, s.submitted_at, t.payload, s.answer
@@ -189,15 +194,17 @@ async def review_queue(
             JOIN tasks t ON t.id = s.task_id
             JOIN orgs o ON o.id = s.vendor_id
             JOIN users u ON u.id = s.worker_id
+            LEFT JOIN review_requests q ON q.submission_id = s.id
             WHERE s.project_id = :p
               AND NOT EXISTS (SELECT 1 FROM gold_answers g WHERE g.task_id = s.task_id)
               AND NOT EXISTS (SELECT 1 FROM reviews r WHERE r.submission_id = s.id)
-            ORDER BY random()
+            ORDER BY q.submission_id IS NULL, random()
             LIMIT :n
             """
         ),
         {"p": project.id, "n": n},
-    )
+    )).all()
+    random.shuffle(rows)
     return [
         ReviewItem(submission_id=r.id, vendor_name=r.vendor_name, worker_handle=r.handle, submitted_at=r.submitted_at, payload=r.payload, answer=r.answer)
         for r in rows
@@ -217,9 +224,11 @@ async def review_submission(
     reason = (body.reason or "").strip() or None
     if body.verdict == "rejected" and reason is None:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "A rejection needs a reason the worker can learn from")
-    review = Review(submission_id=submission.id, reviewer_id=user.id, verdict=body.verdict, reason=reason, created_at=clock.now())
+    review = Review(submission_id=submission.id, reviewer_id=user.id, verdict=body.verdict, reason=reason,
+                    looks_abusive=body.looks_abusive, created_at=clock.now())
     session.add(review)
     await session.flush()
+    await detection_quality.record_judgement(session, submission.id, body.looks_abusive)
     record(session, actor=user, action=f"submission.{body.verdict}", entity_type="submission", entity_id=submission.id,
            org_id=submission.vendor_id, after={"review_id": str(review.id), "reason": reason})
     await session.commit()

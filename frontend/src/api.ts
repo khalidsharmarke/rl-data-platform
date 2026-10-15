@@ -242,6 +242,15 @@ export type CaseDetail = CaseSummary & {
     pulls: { puller: string; run_label: string | null; pulled_at: string }[];
   } | null;
 };
+export type RuleMeasure = {
+  rule_version: string; detector: string; mode: "shadow" | "live"; bar: number | null; changed_at: string;
+  findings: number; subjects: number; reviewed: number; abusive: number; precision: number | null; can_promote: boolean;
+};
+
+export type DetectionQuality = {
+  rules: RuleMeasure[]; audited: number; audited_abusive: number; miss_rate: number | null; min_reviewed: number;
+};
+
 export type EnvironmentWork = {
   vendor_id: string; vendor_name: string; submitted: number; checked: number; passed_checks: number; reviewed: number;
   approved: number; sent_back: number; quarantined: number; check_pass_rate: number | null; approval_rate: number | null;

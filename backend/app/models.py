@@ -252,6 +252,7 @@ class Review(Base):
     reviewer_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
     verdict: Mapped[str] = mapped_column(Text)
     reason: Mapped[str | None] = mapped_column(Text)
+    looks_abusive: Mapped[bool | None] = mapped_column(Boolean)  # D40; null on reviews from before it was asked
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 

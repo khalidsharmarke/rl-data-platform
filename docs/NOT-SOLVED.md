@@ -40,6 +40,7 @@ Each entry is one of five kinds:
 | Problem | What the project does instead | Why | Where |
 |---|---|---|---|
 | Real workers | A simulator drives the public API with worker profiles: careful, average, sloppy, AI-pasting, note-pasting | No real workforce is available; everything they touch is real | BUILD M4, M12 |
+| Reviewers' judgement | In the demo, the researcher's spot checks are simulated: an answer is judged abusive when its reason is the generic pasted one, and rejected when it picks the worse answer | Judging abuse is reading, which a script can't do honestly; the queue, the judgements and what they measure are real | D40, M21 |
 | The model being trained | A modeled policy in the training stand-in: honest attempts whose chance of passing rises with training, and, on an environment marked hackable, a shortcut it discovers partway through the run. Outcomes are drawn, not computed | Real RL is out of scope; the platform reacts to episodes, not to how they were produced | B6 |
 | Training infrastructure | A stand-in service that pulls approved versions from the catalog, runs modeled training runs, sends one batch of episodes per step, and acts on recalls by rolling back to a checkpoint and reporting it | Training is out of scope, but the catalog, intake and recall need a counterpart | A23, M16, M17 |
 | Finding hacks nobody planted | The demo's hack is one we built into a fixture (`weak_grader`, "slugify edge cases"), and a sandbox test proves `return ""` really passes its grader in a container and fails a sound one | A real model finds holes nobody anticipated; a planted one shows the platform's response honestly | B6 |
@@ -70,7 +71,6 @@ These belong to the platform and come later. [`BUILD.md`](BUILD.md#not-in-the-bu
 | Task types beyond comparing two answers, including agentic tasks | One task type is enough to show the platform | DC1 |
 | Vendor-level abuse and actions on vendors | The worker-level path came first (planned, M23) | AB2, AB5 |
 | Vendor rules that need identities across vendors: removed workers returning, the same answers across vendors | They need a cross-vendor worker match, which is P2 | AB2, AB10 |
-| Measuring what detection misses, and shadow mode for new rules | Follows the detection service (planned, M21) | AB15, AB16 |
 | Vendor onboarding, API tokens, registry credentials | Vendors are seeded | VM2, VM3, N14 |
 | The vendor reviewer step | Optional for vendors (A29) (planned, M24) | DC8 |
 | Broken-task flags and disagreement alerts | The quality signals that don't need workers' input came first (planned, M22) | DC5 |

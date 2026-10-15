@@ -35,6 +35,8 @@ AUTOPILOT = os.environ.get("DEMO_AUTOPILOT", "true") == "true"
 REVIEW_DELAY_MINUTES = 30  # simulated time between a case opening and the admin deciding
 CLEANUP_DELAY_MINUTES = 15  # simulated time between the decision and data ops' clean-up
 EXPORT_EVERY_MINUTES = 30  # the researcher pulls released data every half hour (simulated)
+SPOT_CHECK_EVERY_MINUTES = 10  # the researcher's spot checks: a batch this often (simulated)
+SPOT_CHECK_BATCH = 12
 # Release stage (PD7): an accepted answer waits at least this long, and at most this long
 # before it's released as provisional (simulated minutes).
 RELEASE_AFTER_MINUTES = 30
@@ -357,6 +359,34 @@ async def vendor_admin(c, vendor: str, done: asyncio.Event) -> None:
         await sim_sleep(10 * 60)
 
 
+def looks_pasted(rationale: str | None) -> bool:
+    """The simulated researcher recognizes the generic pasted reason. A real reviewer judges by
+    reading; this one knows which simulated workers paste (docs/NOT-SOLVED.md, Modeled)."""
+    return bool(rationale) and rationale.startswith(PASTED_REASON.split("{choice}")[0])
+
+
+async def spot_checker(c, project_id, truth, done: asyncio.Event) -> None:
+    """The researcher's spot checks (DC4, D40): a batch every few minutes, each answer judged for
+    quality (against the right answer) and, separately, for abuse. The queue mixes in the audit
+    sample and answers detection flagged; the researcher can't tell which are which."""
+    users = (await c.get("/auth/demo-users")).json()
+    researcher = await as_person(c, next(u["display_name"] for u in users if u["role"] == "researcher"))
+    reviewed = abusive = 0
+    while not done.is_set():
+        await sim_sleep(SPOT_CHECK_EVERY_MINUTES * 60)
+        for item in (await c.get(f"/projects/{project_id}/review-queue", headers=researcher, params={"n": SPOT_CHECK_BATCH})).json():
+            pasted = looks_pasted(item["answer"].get("rationale"))
+            right = item["answer"]["choice"] == truth[item["payload"]["item"]]
+            body = {"verdict": "accepted" if right and not pasted else "rejected", "looks_abusive": pasted,
+                    "reason": None if right and not pasted else
+                    ("The reason is generic and doesn't engage with either answer." if pasted else "The other answer is better.")}
+            r = await c.post(f"/submissions/{item['submission_id']}/review", headers=researcher, json=body)
+            if r.status_code == 201:
+                reviewed += 1
+                abusive += pasted
+    print(f"  Researcher spot-checked {reviewed} answers and judged {abusive} abusive", flush=True)
+
+
 async def data_ops(c, project_id, progress: Progress, done: asyncio.Event) -> None:
     """The researcher exports every half hour; with autopilot, data ops cleans up after a suspension."""
     users = (await c.get("/auth/demo-users")).json()
@@ -403,6 +433,14 @@ async def report(c, project_id) -> None:
         if w["episodes"]:
             print(f"  In training, {w['vendor_name']}: {w['episodes']:,} episodes, {pct(w['solve_rate']).strip()} solved, "
                   f"{w['flagged']} attempts flagged as hacks, {w['recalls']} recalls", flush=True)
+    d = (await c.get("/detection-quality", headers=ops)).json()
+    for r in d["rules"]:
+        if r["detector"] == "rules-v1" and r["findings"]:
+            print(f"  Detection, {r['rule_version']} ({r['mode']}): {r['findings']} findings on {r['subjects']} workers, "
+                  f"{r['abusive']} of {r['reviewed']} reviewed flags judged abusive", flush=True)
+    if d["audited"]:
+        print(f"  Audit sample: {d['audited_abusive']} of {d['audited']} audited answers from unflagged workers judged abusive",
+              flush=True)
     for x in (await c.get(f"/projects/{project_id}/escalations", headers=ops)).json():
         print(f"  Escalation on {x['handle']} ({x['vendor_name']}) after a {x['rule']} signal: "
               f"{x['outcome'] or 'still open'}, {x['gold_right_since']} of {x['gold_since']} later gold answers right", flush=True)
@@ -429,7 +467,8 @@ async def main() -> None:
 
         tick = asyncio.create_task(ticker())
         done = asyncio.Event()
-        helpers = [asyncio.create_task(data_ops(c, project_id, progress, done)), asyncio.create_task(environments_and_training(c))]
+        helpers = [asyncio.create_task(data_ops(c, project_id, progress, done)), asyncio.create_task(environments_and_training(c)),
+                   asyncio.create_task(spot_checker(c, project_id, truth, done))]
         if AUTOPILOT:
             helpers.append(asyncio.create_task(vendor_admin(c, "Brightline Annotation", done)))
         rngs = random.Random(SEED)

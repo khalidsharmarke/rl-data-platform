@@ -20,6 +20,8 @@ class Settings(BaseSettings):
     detection_token: str = ""
     # Training infrastructure signs in with this token to use the catalog (EC6). Empty disables it.
     training_token: str = ""
+    # Share of regular answers sent to spot checks at random: the audit sample (AB15, D28).
+    audit_rate: float = 0.03
     # Training steps per bucket in the training statistics (TO2).
     training_step_bucket: int = 500
     # Object storage stand-in: exported datasets are written here.

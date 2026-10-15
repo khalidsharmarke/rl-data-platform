@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import Cases from "./Cases";
+import Detection from "./Detection";
 import Feedback from "./Feedback";
 import Projects from "./Projects";
 import Review from "./Review";
@@ -55,6 +56,7 @@ function Views({ me }: { me: User }) {
     ...(me.role === "researcher" ? ["Review"] : []),
     ...(["data_ops", "researcher"].includes(me.role) ? ["Training"] : []),
     ...(["data_ops", "vendor_admin"].includes(me.role) ? ["Cases"] : []),
+    ...(["data_ops", "researcher"].includes(me.role) ? ["Detection"] : []),
     "Workspaces",
   ];
   const [tab, setTab] = useState(tabs[0]);
@@ -74,6 +76,7 @@ function Views({ me }: { me: User }) {
       {tab === "Training" && <Training />}
       {tab === "Scorecards" && <Scorecards me={me} />}
       {tab === "Cases" && <Cases me={me} />}
+      {tab === "Detection" && <Detection canChange={me.role === "data_ops"} />}
       {tab === "Workspaces" && <Workspaces me={me} />}
     </>
   );
@@ -107,6 +110,7 @@ function DemoLogin({ onSignedIn }: { onSignedIn: (user: User) => void }) {
         <li><strong>Sam Lindqvist</strong> (Anthropic data ops) → Scorecards: three vendors compared on the same measures, and Brightline's dip.</li>
         <li><strong>Grace Adeyemi</strong> (Brightline's admin) → Cases: what the platform observed about one of her workers, and her decision.</li>
         <li><strong>Sam</strong> again → Cases → the case: lineage, clean-up, and which datasets held the answers.</li>
+        <li><strong>Sam</strong> → Detection: each rule's precision from reviewed flags, a new rule held in shadow, and what the audit sample found.</li>
         <li><strong>Rae Okafor</strong> (researcher) → Review, and any <strong>worker</strong> → Work, to see the work itself.</li>
         <li><strong>Sofia Lindgren</strong> (Kestrel's environment builder) → Projects: six environments and what the sandbox said about each.</li>
         <li><strong>Rae</strong> → Training → the second run: one environment's solve rate leaps as attempts get shorter.</li>

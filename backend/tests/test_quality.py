@@ -53,10 +53,10 @@ async def test_rejection_needs_a_reason_and_the_worker_sees_it(client, login):
     researcher = await login(RESEARCHER)
     item = (await client.get(f"/projects/{project_id}/review-queue?n=1", headers=researcher)).json()[0]
 
-    no_reason = await client.post(f"/submissions/{item['submission_id']}/review", headers=researcher, json={"verdict": "rejected"})
+    no_reason = await client.post(f"/submissions/{item['submission_id']}/review", headers=researcher, json={"verdict": "rejected", "looks_abusive": False})
     assert no_reason.status_code == 422
     rejected = await client.post(f"/submissions/{item['submission_id']}/review", headers=researcher,
-                                 json={"verdict": "rejected", "reason": "The shorter answer is wrong, not just short."})
+                                 json={"verdict": "rejected", "reason": "The shorter answer is wrong, not just short.", "looks_abusive": False})
     assert rejected.status_code == 201
 
     feedback = (await client.get("/me/feedback", headers=worker)).json()
