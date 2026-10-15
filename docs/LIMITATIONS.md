@@ -4,13 +4,13 @@
 |---|---|
 | Version | 0.3.0: the 0.1.0 MVP, the integrity milestones M9–M12 (0.2.0) and the environment milestones M13–M16 (see [`BUILD.md`](BUILD.md#environment-milestones)) |
 | Covers | Slice A from [`BUILD.md`](BUILD.md): multi-vendor human data, with allocation, gold QA, scorecards, worker-abuse cases and lineage clean-up; a separate detection service; the release stage; contributor grades; discreet escalation |
-| Related | [`POSTING.md`](POSTING.md) · [`PRD.md`](PRD.md) · [`DESIGN.md`](DESIGN.md) · [`DECISIONS.md`](DECISIONS.md) |
+| Related | [`POSTING.md`](POSTING.md) · [`PRD.md`](PRD.md) · [`DESIGN.md`](DESIGN.md) · [`DECISIONS.md`](DECISIONS.md) · [`NOT-SOLVED.md`](NOT-SOLVED.md) (choices, as opposed to shortfalls) |
 
 What the build does not do, where it falls short, and what is still undecided. The design describes the full platform; this page describes the gap between the design and the build.
 
 ## 1. Coverage of the posting
 
-The posting names three areas: *"environment creation, data collection, and training observability."* The build covers the core of data collection, plus the vendor management, workspaces and audit trail it needs. It covers 35 of the design's 55 functional requirements.
+The posting names three areas: *"environment creation, data collection, and training observability."* The build covers the core of data collection, plus the vendor management, workspaces and audit trail it needs. It covers 35 of the design's 56 functional requirements.
 
 | Posting line | Coverage in the build |
 |---|---|
@@ -102,7 +102,7 @@ The design's scale estimate is about 1.2 million submissions a day ([`DESIGN.md`
 
 In order, from [`BUILD.md`](BUILD.md#stretch-in-order) and the gaps above:
 
-1. Training observability (TO1–TO7), starting with a training stand-in that runs the catalog's environments and reports episodes, so reward hacks can be flagged and traced back to versions and vendors.
+1. Training observability, planned as milestones M17–M20 in [`BUILD.md`](BUILD.md#training-observability-milestones): episode intake from a training stand-in, statistics and dashboards, a reward-hack detector behind its contract, and a recall training acts on (TO1–TO5, TO7, TO8).
 2. The audit sample and shadow mode (AB15, AB16), which measure what detection misses and keep a new rule from acting before it's proven. Escalation outcomes sent back to detection as labels.
 3. Broken-task flags and disagreement alerts (DC5).
 4. Vendor-level abuse rules and vendor actions (AB2, AB5).

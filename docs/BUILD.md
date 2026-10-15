@@ -2,15 +2,15 @@
 
 | | |
 |---|---|
-| Status | 0.1.0 (MVP): M0–M8. 0.2.0: integrity milestones M9–M12. 0.3.0: environment milestones M13–M16. Stretch goals not started. Known limitations in [`LIMITATIONS.md`](LIMITATIONS.md) |
+| Status | 0.1.0 (MVP): M0–M8. 0.2.0: integrity milestones M9–M12. 0.3.0: environment milestones M13–M16. Training observability milestones M17–M20 planned. Stretch goals not started. Known limitations in [`LIMITATIONS.md`](LIMITATIONS.md) |
 | Timebox | ~33 hours for 0.1.0 (M0–M8), ~15 for the integrity milestones (M9–M12), ~15 planned for the environment milestones (M13–M16) |
 | Stack | Python (FastAPI, async) · Postgres · React + TypeScript (Vite) · Docker Compose |
 | Delivered as | This repo, runnable with `make demo`, plus a three-minute recorded walkthrough linked from the README |
-| Related | [`PRD.md`](PRD.md) · [`DESIGN.md`](DESIGN.md) · [`DECISIONS.md`](DECISIONS.md) · [`LIMITATIONS.md`](LIMITATIONS.md) · [`GLOSSARY.md`](GLOSSARY.md) |
+| Related | [`PRD.md`](PRD.md) · [`DESIGN.md`](DESIGN.md) · [`DECISIONS.md`](DECISIONS.md) · [`LIMITATIONS.md`](LIMITATIONS.md) · [`NOT-SOLVED.md`](NOT-SOLVED.md) · [`GLOSSARY.md`](GLOSSARY.md) |
 
 ## 1. What the build shows
 
-The build covers the PRD's core: **several vendors working on the same project, measured the same way, with abuse caught and cleaned up.** These are core flows 2, 4 and 5 in [`DESIGN.md`](DESIGN.md#4-core-flows), built in M0–M12. The environment milestones (M13–M16) add flow 1 and the quarantine end of flow 3.
+The build covers the PRD's core: **several vendors working on the same project, measured the same way, with abuse caught and cleaned up.** These are core flows 2, 4 and 5 in [`DESIGN.md`](DESIGN.md#4-core-flows), built in M0–M12. The environment milestones (M13–M16) add flow 1 and the quarantine end of flow 3; the training observability milestones (M17–M20, planned) add the rest of flow 3.
 
 ### The demo story
 
@@ -67,7 +67,7 @@ These keep the boundaries from [`DESIGN.md`](DESIGN.md) but use simpler parts:
 | Left out | Requirements | Why |
 |---|---|---|
 | Parts of the environment pipeline | EC3's difficulty estimate, EC7, vendor-built images (A15, VM2) | The [environment milestones](#environment-milestones) build a thin slice; these come after it |
-| Training ingestion and observability | TO1–TO7, D5, D6 | Depends on environments |
+| Real training and real models | none (A23) | Training is modeled by scripted agents; see the [training observability milestones](#training-observability-milestones) and [`NOT-SOLVED.md`](NOT-SOLVED.md) |
 | Vendor-level abuse and actions | AB2, AB5 | P1 in the PRD. First stretch goal |
 | Vendor reviewer | DC8 | P1 in the PRD |
 | The rest of the integrity layers | AB11 and AB12 beyond paste and time on task; AB14's extra overlap and spot checks; AB15, AB16; DC11's aggregate view for vendors | Audit sampling and shadow mode are the next integrity work; they feed the labels the detection service already receives |
@@ -167,6 +167,29 @@ Hostile environments (task-file code that reaches for the network, runs forever,
 | M15 | Builder loop, review and catalog | Builder screens: versions, check results with logs, resubmit as a new version with a diff; researcher review queue per brief, graded against the brief's rubric, with feedback; progress against the brief's target count; approval; `GET /catalog` returning approved versions by exact id, with every pull recorded (EC4, EC5, EC6, D10) | A builder sees why a check failed and fixes it in a new version; only approved versions appear in the catalog; training pulls an exact version, gets the task files and grader but never the reference solution, and the pull is recorded (tested) | 3 | Done |
 | M16 | Quarantine, scorecard and demo | Environment cases owned by data ops; quarantine removes a version from the catalog and sends it back to review; lineage lists who pulled it; environment work on the vendor scorecard (validation pass rate, review grades); the demo adds a researcher's brief, allocated by data ops to Kestrel, whose builder submits the four fixture environments; a training stand-in script that pulls approved versions; data ops opening an environment case by hand; README and walkthrough (TO6, AB6, AB8, VP3, D13) | In `make demo`, the three broken environments are stopped by the checks that target them, the sound one is approved and pulled by the training stand-in, then quarantined through a case data ops opens and dropped from the catalog with its pulls listed; Kestrel's scorecard shows its environment pass rate | 3 | Done |
 | | | | **Total** | **15** | |
+
+### Training observability milestones
+
+What happens when training actually uses the environments: results come back episode by episode, the platform turns them into statistics and dashboards, a reward-hack detector flags environments that are being gamed, and a recall tells training which runs to roll back. This is the rest of core flow 3 and the second half of PRD goal G6 (TO1–TO5, TO7, TO8, and the difficulty part of EC3).
+
+**What's real and what's modeled.** The platform side is real: the intake contract, statistics, dashboards and drill-down, the case and quarantine that a finding triggers, the recall and training's report, and attribution to the vendor. Training and the model are modeled, the hack detector's logic is a black box with stand-in rules, and nothing touches a model. Each of these choices is listed with its reason in [`NOT-SOLVED.md`](NOT-SOLVED.md).
+
+**Build decisions for this slice**
+
+| # | Decision | Why | Trade-off |
+|---|---|---|---|
+| B6 | Episodes come from a training stand-in running scripted agents, not a model. An honest agent's chance of solving a task rises with training steps; a cheating agent tries known hacks and, once one works on an environment, keeps using it. Outcomes are modeled from each environment's known behavior; a sandbox test proves the demo's hack really passes the weak grader in a container | Real RL is out of scope (A23), and running every episode in a container would be slow without making the platform side any more real | The demo's hacks are ones we planted; a real model finds holes nobody anticipated |
+| B7 | On this path, Postgres tables stand in for the durable log and the analytics store, and the live view refreshes by polling every few seconds instead of server-sent events | Keeps the slice to the platform's contracts and logic; 10–30 s behind training (A9) is met either way | Nothing here is tested near 1,000 episodes a second (A6); the design's Kafka and ClickHouse path (D5) stays on paper |
+
+**The demo's third act.** Kestrel's builder submits a fifth environment whose grader only checks the empty-string case (fixture `weak_grader`). It passes all three sandbox checks, because the reference passes and the untouched task fails, and a researcher approves it alongside a sound one. The training stand-in pulls both and starts a run. On the sound environment the honest agent's solve rate climbs slowly; on the weak one the cheating agent discovers mid-run that returning an empty string always passes, and its episodes become perfect scores at a fraction of the usual length. The run dashboard shows the jump, the hack detector flags it, and the version is quarantined. The recall names the run and the step the version first appeared at; the training stand-in rolls back to the checkpoint before that and reports it. Data ops retires the version, and Kestrel's scorecard shows its training outcomes.
+
+| # | Milestone | Delivers | Done when | Hours | Status |
+|---|---|---|---|---|---|
+| M17 | Episode intake and the training stand-in | `POST /ingest/episodes` for training's token: batches, deduplicated by episode id, acknowledged once stored, with no processing inline; runs; transcripts stored by hash; the training stand-in with honest and cheating agents on pulled environments, every episode carrying run, step and the files it touched; the `weak_grader` fixture (TO1, D5, D6, D36, N4, N5, B6) | Resending a batch changes nothing; intake answers without waiting on any processing; every stored episode has run, step, version and vendor; the weak grader's hack passes in a real container (tested) | 5 | Planned |
+| M18 | Statistics and dashboards | A processor job rolling episodes up per version, per run (by step) and per vendor: solve rate, reward variance, episode length, and a difficulty band from the solve rate; a run dashboard that refreshes every few seconds; drill-down from a run to an environment to one episode's transcript; flagging a version from the drill-down (TO2, TO4, TO5, EC3, D39, B7) | Statistics match a hand-computed fixture and don't change when the processor runs twice; a solve-rate jump shows on the dashboard within 30 s of its episodes arriving; a transcript opens from the episode view (tested) | 4 | Planned |
+| M19 | Hack detection and the recall | The hack detector as a separate service (in `detection/`) behind its contract: episode feed, findings with severity and progress, labels; stand-in rules for full marks on unusually short episodes and attempts that touch grader files; watch findings queue transcripts for researcher review; case findings open an environment case and quarantine the version; the recall with runs, first step and flagged share; training's reports recorded on the case (TO3, TO6, TO8, D35, D37, D38) | The weak grader's hack is flagged and quarantined without a person; the recall names the run and first step; the stand-in's rollback report appears on the case; the sound environment raises nothing (tested) | 5 | Planned |
+| M20 | Attribution, demo and docs | Training outcomes on the vendor scorecard: episodes, solve rate, flagged share, recalls (TO7, VP3); the third act in `make demo`; README, walkthrough, and [`NOT-SOLVED.md`](NOT-SOLVED.md) kept current | In `make demo`, the weak grader passes the sandbox and review, the cheating agent finds the hack mid-run, the detector quarantines it, training rolls back and reports, and Kestrel's scorecard shows it | 3 | Planned |
+| | | | **Total** | **17** | |
 
 ### Stretch, in order
 

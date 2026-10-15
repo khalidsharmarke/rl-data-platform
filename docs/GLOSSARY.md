@@ -51,6 +51,8 @@ Terms used in [`POSTING.md`](POSTING.md), [`PRD.md`](PRD.md) and [`DESIGN.md`](D
 | **Validation** | Automated checks on an environment before training uses it: the reference solution passes, a no-op fails, repeated runs agree | *"validate correctness and difficulty calibration"* |
 | **Difficulty calibration** | Measuring how hard an environment is (for example, how often a baseline model solves it) so training gets a useful mix | *"difficulty calibration"* |
 | **Training run** | One training job that uses environments and datasets | *"training run health"* |
+| **Recall** | The platform's notice to training that an environment it used has been quarantined: which runs used it, from which training step, and how much of it looked hacked. Training decides whether to roll back and reports what it did | |
+| **Training step** | A point in a training run, counting up as training proceeds. Checkpoints are saved at steps, so a run can be rolled back to one | |
 | **Episode** | One attempt by the model at one environment during a training run. Produces a reward and a transcript | |
 | **Transcript** | The full record of an episode: what the model saw and did | |
 | **Quarantine** | Removing an environment version or dataset from training until it's reviewed | |

@@ -22,6 +22,7 @@ Every product and design decision made so far, sorted by how hard it would be to
 | PD2 | Gold-task accuracy is shown to vendors only as a daily aggregate | Tightening this later is easy. **Loosening** it is one-way: once per-task gold results are shown, those gold tasks are known and have to be retired | Rotate gold tasks (DC4), so any exposed set is replaced over time |
 | D8, D15 | Gold answers and detector rules are never exposed to vendors or workers | Same as PD2: a leaked gold set or a published rule can't be made secret again | Rotate gold tasks; keep rules pluggable (A27) so a known rule can be replaced |
 | D26 / PD6 | Automatic responses to a finding can't be perceived by its subject | Same as PD2: once workers have seen how and when the platform reacts, they know what triggers it, and that can't be taken back | Keep evidence shown to vendors to what was observed (N18), never thresholds |
+| D36 | Every episode records its run and training step | An episode stored without its step can never be placed in its run, so a later recall can't say where to roll back to | Record the step from the first episode ingested |
 | D31 | Each exported row records its tier and the worker's grades at release | A row exported without them can never be filtered by trust later, because the evidence at that moment isn't kept anywhere else | Record both from the first export after release ships |
 | AB11, AB12 | Client and API signals are recorded with every submission | A signal not captured at submission can't be reconstructed, so a new detector can't be tried in shadow mode (D27) against past work | Record raw signals, including ones no rule uses yet |
 | D34 / N21 | The grader and reference solution are stored apart from the task files and never shown to the model | Same as D8: once a model has trained on environments whose grader it could read or edit, the lessons it learned can't be removed | Separate the parts from the first environment stored |
@@ -41,6 +42,8 @@ Every product and design decision made so far, sorted by how hard it would be to
 | D10 | Training pulls approved environments from a catalog API and datasets via signed URLs | Training integrates, as above | Version the catalog API |
 | D23 | Worker-abuse detection is a separate service behind a contract (events in, findings out) | The detection service integrates. The event and finding schemas become a contract with another team | Version both schemas; put raw signals in events, not derived ones |
 | D33 | One project model for human-data projects and environment briefs; every environment belongs to a brief | The first environment vendor builds against a brief. After that, environments, reviews and scorecards all refer to briefs | Keep kind-specific fields in their own part of the project, so a third kind of work can be added the same way |
+| D35 | Reward-hack detection is a black box behind a contract | The hack detector integrates; the episode and finding schemas become a contract with another team | Version both schemas; put raw facts in episodes |
+| PD8 / D37 | Rollback is a recall the platform publishes and training acts on | Training integrates with recalls; the recall and report shapes become a contract | Keep the recall small: version, runs, first step, counts |
 | D9 | Task types and environment configs are JSON schemas stored as data | Many projects exist. Every stored task follows the schema it was created under | Store the schema version with each task and config |
 
 ## Two-way
@@ -67,6 +70,8 @@ Every product and design decision made so far, sorted by how hard it would be to
 | PD7 / D29 | Release is decided from evidence at export time, with a per-project minimum gap and cap | Changing the conditions; nothing is stored, so the next export follows the new rule |
 | D30 | Grades on two axes, with integrity tiers setting how much later gold release needs | Changing the tiers or counts (A35) |
 | D32 | A single signal is a watch finding; agreeing signals open a case | Changing the severity rule inside the detection service |
+| D38 | A strong hack finding quarantines at once; a weak one queues transcripts for review | Changing what each severity triggers |
+| D39 | Observability is computed by the platform, independent of detection | Moving roll-ups into the analytics store; nothing about detection changes |
 | | Three planes (control, execution, ingestion); Postgres, an analytics store and object storage | Replacing a store means a data migration, which is costly but loses nothing |
 | | Web app in React and TypeScript | A rewrite of the front end; the API (VM5) is unaffected |
 | B1 | The first build covers multi-vendor human data (flows 2, 4, 5), not the environment pipeline ([`BUILD.md`](BUILD.md)) | The environment slice can follow; nothing in slice A blocks it |
