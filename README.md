@@ -1,10 +1,10 @@
 # RL Data Platform
 
-A working slice of a platform for sourcing AI training data through many vendors. Work is split across vendors, every vendor is measured the same way by the platform, and abuse is caught, decided on by a person, and cleaned out of the data, with a trail back to every answer.
+A working slice of a platform for sourcing AI training data through many vendors. Work is split across vendors, every vendor is measured the same way by the platform, and abuse is caught, decided on by a person, and cleaned out of the data, with a trail back to every answer. Vendors also build training environments to a researcher's brief, and the platform checks each one in a sandbox before anyone reviews it or training uses it.
 
-Built in response to Anthropic's [Full-Stack Software Engineer, Reinforcement Learning](docs/POSTING.md) posting. Version 0.1.0 is an MVP: it builds the data-collection core of the design, not environments or training observability. [Limitations](docs/LIMITATIONS.md) says what it doesn't do and where it falls short.
+Built in response to Anthropic's [Full-Stack Software Engineer, Reinforcement Learning](docs/POSTING.md) posting. It builds the data-collection core of the design and a thin slice of environment creation, not training observability. [Limitations](docs/LIMITATIONS.md) says what it doesn't do and where it falls short.
 
-**[Watch the 100-second walkthrough](docs/media/walkthrough.mp4)** · [Product requirements](docs/PRD.md) · [Design](docs/DESIGN.md) · [Decisions](docs/DECISIONS.md) · [Build plan](docs/BUILD.md) · [Limitations](docs/LIMITATIONS.md)
+**[Watch the three-minute walkthrough](docs/media/walkthrough.mp4)** · [Product requirements](docs/PRD.md) · [Design](docs/DESIGN.md) · [Decisions](docs/DECISIONS.md) · [Build plan](docs/BUILD.md) · [Limitations](docs/LIMITATIONS.md)
 
 ![Scorecards: three vendors compared on identical measures, with Brightline's dip](docs/media/scorecards.png)
 
@@ -22,6 +22,17 @@ Three fictional vendors work on one project, *"Which of these two answers is mor
 8. **Every export contains only released answers**: checked by detection, past a minimum gap, and backed by good test answers from the same worker afterwards. How many depends on the worker's grade: a trusted worker needs one, a new one three. Grades rate quality and integrity separately, so an honest but sloppy worker is trusted with low quality, not treated as abusive. Each row is tagged verified or provisional and points back to its source.
 9. **The audit log holds the whole chain** and can't be edited, even by direct SQL.
 
+### The second act: environments
+
+10. **A researcher writes a brief:** four Python bug-fix environments, with constraints (nothing copied from public benchmarks) and a review rubric. Data ops gives it to Kestrel, the vendor set up to build environments.
+11. **Kestrel's builder submits four environments.** Each version is stored by hash in three parts: the task files the model works in, the grader, and the reference solution.
+12. **The sandbox checks each one** in fresh containers with no network and strict limits, keeping the grader out of the attempt: the reference solution must pass, the untouched task files must fail, and ten repeat runs must agree. Three are stopped: a grader that rewards an empty answer, a task even its own solution can't pass, and a test that passes at random. The builder sees why, with logs.
+13. **The researcher grades the sound one against the brief's rubric** and approves it. Training pulls it from the catalog: the task files and grader, never the reference solution.
+14. **Later, a researcher spots that the task copies a public benchmark.** Data ops opens a case: the version is quarantined and leaves the catalog at once, and the case lists which training run pulled it. Data ops retires it.
+15. **Kestrel's scorecard shows its environment work:** versions submitted, how many passed the checks and review, and how many were quarantined.
+
+![A builder's view of a brief: one environment quarantined, three stopped by the sandbox's checks, with the reason and logs](docs/media/environment-checks.png)
+
 | Brightline's admin: the case | Data ops: lineage and clean-up |
 |---|---|
 | ![Case as the vendor admin sees it](docs/media/case-vendor.png) | ![Case as data ops sees it, with lineage](docs/media/case-data-ops.png) |
@@ -33,9 +44,9 @@ Three fictional vendors work on one project, *"Which of these two answers is mor
 Needs Docker with Compose. The sandbox runner starts a container for every environment check through your Docker daemon, which is fine on a laptop and nowhere else ([B5](docs/BUILD.md#environment-milestones)).
 
 ```sh
-make demo    # fresh database, then the scripted scenario above (about 3 minutes)
+make demo    # fresh database, then the scripted scenario above (about 4 minutes)
 make up      # start Postgres, the API, the background worker and the web app on real time
-make test    # 129 backend tests, 9 detection-service tests, and 8 sandbox tests on real containers
+make test    # 133 backend tests, 9 detection-service tests, and 8 sandbox tests on real containers
 make down    # stop (make reset also deletes the database)
 ```
 
@@ -52,11 +63,12 @@ Open http://localhost:5173 and pick a demo user. The login page suggests a path 
 | Postgres job table claimed with `SKIP LOCKED` | A message queue (needless at this load; see [D2](docs/DESIGN.md)) |
 | Summary tables in Postgres | An analytics store |
 | A Docker volume | Object storage for exported datasets |
+| A script that pulls approved environments from the catalog and trains nothing | Training infrastructure ([A23](docs/DESIGN.md)) |
 | An outbox table the detection service reads through a cursor feed | A message broker between the platform and the detection service ([D24](docs/DESIGN.md)) |
 | Docker containers with no network and strict limits, started per check | A hardened sandbox (gVisor or Firecracker) on dedicated hosts ([B5](docs/BUILD.md#environment-milestones)) |
 | A demo clock running 180× real time, `make demo` only | Waiting five hours for the story |
 
-Out of scope so far: the environment pipeline (planned as the [environment milestones](docs/BUILD.md#environment-milestones)) and training observability, vendor-level abuse rules, vendor reviewers, and the rest of the design's [integrity layers](docs/DESIGN.md#integrity-layers): audit sampling, shadow mode, and extra overlap and spot checks during escalation. [BUILD.md](docs/BUILD.md#2-scope) lists everything left out and why, and [LIMITATIONS.md](docs/LIMITATIONS.md) covers where the built part falls short.
+Out of scope so far: training observability, difficulty estimates, vendor-built environment images, vendor-level abuse rules, vendor reviewers, and the rest of the design's [integrity layers](docs/DESIGN.md#integrity-layers): audit sampling, shadow mode, and extra overlap and spot checks during escalation. [BUILD.md](docs/BUILD.md#2-scope) lists everything left out and why, and [LIMITATIONS.md](docs/LIMITATIONS.md) covers where the built part falls short.
 
 **On detecting AI-written answers.** The platform doesn't try to tell AI text from human text; that's unreliable. It flags the *behavior* around a submission: answering faster than the task can be read, pasting rather than typing, and giving the same reason to different questions. Honest but sloppy work isn't flagged: it shows up as low quality on the scorecard instead.
 
@@ -80,6 +92,6 @@ backend/     FastAPI app, migrations, background worker (app/jobs.py), the detec
 sandbox/     the sandbox runner's image and the base image environment checks run on
 detection/   the separate detection service: abuse rules and severity (rules.py), its state (detector.py), 9 tests
 frontend/    React + TypeScript: one app, a view per role
-simulator/   the scripted scenario, driving the public API
+simulator/   the scripted scenario, driving the public API, and the training stand-in (training.py)
 docs/        posting, glossary, PRD, design, decisions, build plan, diagrams, media
 ```

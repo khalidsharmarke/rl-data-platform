@@ -8,7 +8,15 @@ const DECISIONS = [
   { value: "remove", label: "Remove worker" },
 ];
 
+// An environment case (TO6): data ops keeps the version quarantined, or sends it back to review.
+const ENVIRONMENT_DECISIONS = [
+  { value: "remove", label: "Keep quarantined: retire this version" },
+  { value: "clear", label: "Clear: send it back to review" },
+];
+
 const OUTCOME: Record<string, string> = { suspend: "Suspended", remove: "Removed", warn: "Warned", clear: "Cleared" };
+const ENVIRONMENT_OUTCOME: Record<string, string> = { remove: "Retired", clear: "Back in review" };
+const isEnvironment = (c: CaseSummary) => c.subject_type === "environment_version";
 
 const when = (t: string) => new Date(t).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 
@@ -33,8 +41,9 @@ export default function Cases({ me }: { me: User }) {
     setReason("");
     const detail = await api<CaseDetail>(`/cases/${id}`);
     setOpen(detail);
+    setDecision(isEnvironment(detail) ? "remove" : "suspend");
     setLineage(null);
-    if (me.role === "data_ops" && detail.subject_id && detail.project_id) {
+    if (me.role === "data_ops" && !isEnvironment(detail) && detail.subject_id && detail.project_id) {
       setLineage(await api<Lineage>(`/lineage?worker_id=${detail.subject_id}&project_id=${detail.project_id}`));
     }
   }
@@ -67,7 +76,7 @@ export default function Cases({ me }: { me: User }) {
       <h2>Cases</h2>
       <p className="muted">
         {me.role === "data_ops"
-          ? "Every case across vendors and how it was resolved. Worker cases are decided by the worker's vendor."
+          ? "Every case across vendors and how it was resolved. Worker cases are decided by the worker's vendor; environment cases by data ops."
           : "Workers the platform's signals flagged. Their answers are held from training until you decide."}
       </p>
       <table>
@@ -75,7 +84,7 @@ export default function Cases({ me }: { me: User }) {
           <tr>
             <th>Opened</th>
             {me.role === "data_ops" && <th>Vendor</th>}
-            <th>Worker</th>
+            <th>Subject</th>
             <th>What was observed</th>
             <th>Status</th>
           </tr>
@@ -91,16 +100,16 @@ export default function Cases({ me }: { me: User }) {
               <td>{when(c.opened_at)}</td>
               {me.role === "data_ops" && <td>{c.vendor_name}</td>}
               <td>
-                {c.subject_name ?? ""} <span className="mono muted">{c.subject_handle}</span>
+                {isEnvironment(c) ? c.subject_handle : <>{c.subject_name ?? ""} <span className="mono muted">{c.subject_handle}</span></>}
               </td>
-              <td>{c.observations.length} signal{c.observations.length === 1 ? "" : "s"}</td>
+              <td>{isEnvironment(c) ? "Flagged by a person" : `${c.observations.length} signal${c.observations.length === 1 ? "" : "s"}`}</td>
               <td>
                 {c.status === "open" ? (
-                  <span className="badge warn">Open{c.held ? " · data held" : ""}</span>
+                  <span className="badge warn">Open{c.held ? (isEnvironment(c) ? " · quarantined" : " · data held") : ""}</span>
                 ) : (
                   <span className="badge">
-                    {OUTCOME[c.decision ?? ""] ?? c.decision}
-                    {c.held ? " · data held" : ""}
+                    {(isEnvironment(c) ? ENVIRONMENT_OUTCOME : OUTCOME)[c.decision ?? ""] ?? c.decision}
+                    {c.held && !isEnvironment(c) ? " · data held" : ""}
                   </span>
                 )}
               </td>
@@ -112,18 +121,41 @@ export default function Cases({ me }: { me: User }) {
       {open && (
         <div className="card case">
           <h3>
-            {open.subject_name ?? "Worker"} <span className="mono muted">{open.subject_handle}</span> · {open.vendor_name}
+            {isEnvironment(open) ? <>Environment: {open.subject_handle}</> : <>{open.subject_name ?? "Worker"} <span className="mono muted">{open.subject_handle}</span></>} ·{" "}
+            {open.vendor_name}
           </h3>
-          <h4>What the platform observed</h4>
+          <h4>{isEnvironment(open) ? "Why it was flagged" : "What the platform observed"}</h4>
           <ul>
             {open.flags.map((f) => (
               <li key={f.observation}>
                 {f.observation}
-                {f.rule && <span className="mono muted"> ({f.rule_version})</span>}
+                {f.rule && f.rule !== "person" && <span className="mono muted"> ({f.rule_version})</span>}
               </li>
             ))}
           </ul>
-          <h4>Examples</h4>
+          {open.environment && (
+            <div className="lineage">
+              <h4>Lineage</h4>
+              <p>
+                Version {open.environment.number} is <strong>{open.environment.status.replace("_", " ")}</strong>
+                {open.environment.status === "quarantined" ? ": out of the catalog, so training can't pull it." : "."}
+              </p>
+              {open.environment.pulls.length > 0 ? (
+                <ul>
+                  {open.environment.pulls.map((p, i) => (
+                    <li key={i}>
+                      Pulled by {p.puller}
+                      {p.run_label && <> for <span className="mono">{p.run_label}</span></>} · {when(p.pulled_at)}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="muted">Training never pulled this version.</p>
+              )}
+            </div>
+          )}
+          {open.samples.length > 0 && <h4>Examples</h4>}
+          {open.samples.length > 0 && (
           <table>
             <thead>
               <tr>
@@ -147,6 +179,7 @@ export default function Cases({ me }: { me: User }) {
               ))}
             </tbody>
           </table>
+          )}
           <h4>History</h4>
           <ul className="history">
             {open.actions.map((a, i) => (
@@ -159,7 +192,7 @@ export default function Cases({ me }: { me: User }) {
           {open.status === "open" && isOwner(open) && (
             <div className="decide">
               <select value={decision} onChange={(e) => setDecision(e.target.value)}>
-                {DECISIONS.map((d) => (
+                {(isEnvironment(open) ? ENVIRONMENT_DECISIONS : DECISIONS).map((d) => (
                   <option key={d.value} value={d.value}>
                     {d.label}
                   </option>

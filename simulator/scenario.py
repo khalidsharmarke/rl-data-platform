@@ -10,10 +10,13 @@ clock speed, so the platform's own time-on-task measurement sees realistic durat
 """
 
 import asyncio
+import base64
+import json
 import os
 import random
 import sys
 from dataclasses import dataclass, field
+from pathlib import Path
 
 import httpx
 
@@ -65,6 +68,84 @@ TYPED_REASONS = ["Directly answers the question.", "The other one is vague.", "G
                  "More accurate.", "Clearer steps.", "The other answer is wrong.", "Covers the edge case."]
 PASTED_REASON = ("Answer {choice} is more helpful because it directly addresses the user's question with accurate, "
                  "actionable detail and a clear structure, whereas the other response is vague and less useful.")
+
+
+# The second act: environments (docs/BUILD.md, environment milestones). A researcher's brief, given to
+# Kestrel, whose builder submits four environments from the repo's fixtures; three are broken in the
+# way one sandbox check is built to catch.
+ENVIRONMENTS = Path(os.environ.get("ENVIRONMENTS_DIR", "/sim/environments"))
+BUILDER = "Sofia Lindgren"
+BRIEF = {
+    "description": "Bug-fix tasks in small Python libraries, each with hidden tests that check the fix.",
+    "languages": ["python"],
+    "constraints": ["Nothing copied from public benchmarks", "Tests run in under 10 seconds"],
+    "difficulty_mix": {"easy": 0.5, "medium": 0.5},
+    "review_rubric": ["The task statement is clear and self-contained", "The tests check the behavior the task asks for",
+                      "The task teaches a real debugging skill"],
+}
+SUBMISSIONS = [  # (environment name, fixture)
+    ("slugify handles empty strings", "sound"),
+    ("slugify exists", "passes_anything"),
+    ("slugify with hyphens and underscores", "unsolvable"),
+    ("slugify with a lucky test", "flaky"),
+]
+REVIEW_DELAY_MINUTES_ENV = 20  # simulated time before the researcher reviews
+QUARANTINE_AFTER_MINUTES = 40  # simulated time after training's pull before a researcher spots the copied task
+BENCHMARK = "A researcher noticed this task copies a public benchmark problem word for word, against the brief's constraints."
+
+
+def version_body(fixture: str) -> dict:
+    base = ENVIRONMENTS / fixture
+    manifest = json.loads((base / "manifest.json").read_text())
+    files = [p for p in sorted(base.rglob("*")) if p.is_file() and p.name != "manifest.json"]
+    return {**manifest, "files": [{"path": str(p.relative_to(base)), "part": p.relative_to(base).parts[0],
+                                   "content_b64": base64.b64encode(p.read_bytes()).decode()} for p in files]}
+
+
+async def environment_act(c: httpx.AsyncClient) -> None:
+    users = (await c.get("/auth/demo-users")).json()
+    by_role = lambda role: next(u["display_name"] for u in users if u["role"] == role)  # noqa: E731
+    researcher, ops, builder = await as_person(c, by_role("researcher")), await as_person(c, by_role("data_ops")), await as_person(c, BUILDER)
+    brief = (await c.post("/projects", headers=researcher, json={
+        "name": "Python bug fixes", "kind": "environment", "target_volume": 4, "brief": BRIEF})).json()
+    kestrel = next(o for o in (await c.get("/orgs", headers=ops)).json() if o["name"] == "Kestrel Labs")
+    contract = next(k for k in (await c.get(f"/orgs/{kestrel['id']}/contracts", headers=ops)).json() if k["kind"] == "environments")
+    (await c.post(f"/projects/{brief['id']}/allocations", headers=ops,
+                  json={"vendor_id": kestrel["id"], "contract_id": contract["id"], "share": "1"})).raise_for_status()
+    print("  Researcher writes an environment brief; data ops gives it to Kestrel", flush=True)
+    versions = {}
+    for name, fixture in SUBMISSIONS:
+        env = (await c.post("/environments", headers=builder, json={"project_id": brief["id"], "name": name})).json()
+        v = (await c.post(f"/environments/{env['id']}/versions", headers=builder, json=version_body(fixture))).json()
+        (await c.post(f"/versions/{v['id']}/submit", headers=builder)).raise_for_status()
+        versions[name] = v["id"]
+    print(f"  Kestrel's builder submits {len(versions)} environments", flush=True)
+    outcome = {}
+    while len(outcome) < len(versions):
+        for name, vid in versions.items():
+            status = (await c.get(f"/versions/{vid}", headers=builder)).json()["status"]
+            if name not in outcome and status in ("failed", "in_review"):
+                failed = [ch["detail"] for ch in (await c.get(f"/versions/{vid}/checks", headers=builder)).json() if not ch["passed"]]
+                outcome[name] = status
+                print(f"  Sandbox: {name!r} {'failed: ' + failed[0] if failed else 'passed all three checks'}", flush=True)
+        await asyncio.sleep(1)
+    sound = versions[SUBMISSIONS[0][0]]
+    if not AUTOPILOT:
+        return  # the researcher's review and data ops' quarantine are made by hand
+    await sim_sleep(REVIEW_DELAY_MINUTES_ENV * 60)
+    (await c.post(f"/versions/{sound}/reviews", headers=researcher, json={
+        "decision": "approve", "rubric": {k: True for k in BRIEF["review_rubric"]},
+        "feedback": "Clear task; the tests check exactly the empty-string fix."})).raise_for_status()
+    print(f"  Researcher approves {SUBMISSIONS[0][0]!r} against the brief's rubric", flush=True)
+    while not (await c.get(f"/versions/{sound}/pulls", headers=ops)).json():
+        await asyncio.sleep(1)
+    print("  Training pulls it from the catalog", flush=True)
+    await sim_sleep(QUARANTINE_AFTER_MINUTES * 60)
+    case = (await c.post("/cases/environment", headers=ops, json={"version_id": sound, "observation": BENCHMARK})).json()
+    print("  Data ops opens a case: the version is quarantined and leaves the catalog", flush=True)
+    await sim_sleep(REVIEW_DELAY_MINUTES_ENV * 60)
+    await c.post(f"/cases/{case['id']}/decision", headers=ops, json={"decision": "remove", "reason": "Confirmed against the benchmark: retire it."})
+    print("  Data ops retires the version; the pull stays on record for lineage", flush=True)
 
 
 @dataclass
@@ -217,7 +298,7 @@ async def data_ops(c, project_id, progress: Progress, done: asyncio.Event) -> No
                   f" ({d['provisional']} provisional)", flush=True)
             next_export += EXPORT_EVERY_MINUTES * 60 / SPEED
         for case in (await c.get("/cases?status=decided", headers=ops)).json() if AUTOPILOT else []:
-            if case["decision"] in ("suspend", "remove") and case["id"] not in cleaned:
+            if case["subject_type"] == "worker" and case["decision"] in ("suspend", "remove") and case["id"] not in cleaned:
                 decided_at.setdefault(case["id"], loop.time())
                 if loop.time() - decided_at[case["id"]] >= CLEANUP_DELAY_MINUTES * 60 / SPEED:
                     r = (await c.post("/cleanups", headers=ops, json={"case_id": case["id"], "mode": "relabel"})).json()
@@ -240,6 +321,9 @@ async def report(c, project_id) -> None:
     ops = await as_person(c, next(u["display_name"] for u in users if u["role"] == "data_ops"))
     q = (await c.get(f"/projects/{project_id}/quality", headers=ops)).json()
     pct = lambda x: "  —" if x is None else f"{x * 100:4.0f}%"  # noqa: E731
+    for w in (await c.get("/vendors/environment-work", headers=ops)).json():
+        print(f"  Environment work, {w['vendor_name']}: {w['submitted']} versions submitted, {w['passed_checks']} passed the "
+              f"sandbox's checks, {w['approved']} approved, {w['quarantined']} quarantined", flush=True)
     for x in (await c.get(f"/projects/{project_id}/escalations", headers=ops)).json():
         print(f"  Escalation on {x['handle']} ({x['vendor_name']}) after a {x['rule']} signal: "
               f"{x['outcome'] or 'still open'}, {x['gold_right_since']} of {x['gold_since']} later gold answers right", flush=True)
@@ -266,7 +350,7 @@ async def main() -> None:
 
         tick = asyncio.create_task(ticker())
         done = asyncio.Event()
-        helpers = [asyncio.create_task(data_ops(c, project_id, progress, done))]
+        helpers = [asyncio.create_task(data_ops(c, project_id, progress, done)), asyncio.create_task(environment_act(c))]
         if AUTOPILOT:
             helpers.append(asyncio.create_task(vendor_admin(c, "Brightline Annotation", done)))
         rngs = random.Random(SEED)

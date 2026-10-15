@@ -73,12 +73,14 @@ function VersionView({ version, me, rubric, onReviewed }: { version: EnvVersion;
   const [reviews, setReviews] = useState<EnvReview[]>([]);
   const [diff, setDiff] = useState<VersionDiff | null>(null);
   const [file, setFile] = useState<{ path: string; text: string } | null>(null);
+  const [pulls, setPulls] = useState<{ run_label: string | null }[]>([]);
 
   useEffect(() => {
     api<CheckRun[]>(`/versions/${version.id}/checks`).then(setChecks);
     api<EnvReview[]>(`/versions/${version.id}/reviews`).then(setReviews);
     api<VersionDiff>(`/versions/${version.id}/diff`).then(setDiff);
-  }, [version.id]);
+    if (me.org_kind === "internal") api<{ run_label: string | null }[]>(`/versions/${version.id}/pulls`).then(setPulls);
+  }, [version.id, me.org_kind]);
 
   async function open(path: string) {
     const token = savedToken();
@@ -130,6 +132,13 @@ function VersionView({ version, me, rubric, onReviewed }: { version: EnvVersion;
       )}
 
       {me.role === "researcher" && version.status === "in_review" && <ReviewForm versionId={version.id} rubric={rubric} onDone={onReviewed} />}
+
+      {pulls.length > 0 && (
+        <p className="muted">
+          Pulled by training {pulls.length} time{pulls.length === 1 ? "" : "s"}: {pulls.map((p) => p.run_label ?? "unlabeled").join(", ")}
+        </p>
+      )}
+      {me.role === "data_ops" && version.status === "approved" && <QuarantineForm versionId={version.id} onDone={onReviewed} />}
 
       {diff?.against_number && (
         <>
@@ -195,6 +204,35 @@ function ReviewForm({ versionId, rubric, onDone }: { versionId: string; rubric: 
       <div className="actions">
         <button className="primary" disabled={!allMet || feedback.length < 3} onClick={() => decide("approve")}>Approve</button>
         <button disabled={feedback.length < 3} onClick={() => decide("send_back")}>Send back</button>
+      </div>
+      {error && <p className="bad">{error}</p>}
+    </div>
+  );
+}
+
+/** Data ops flags an approved version: a case opens and the version leaves the catalog at once (TO6, AB8). */
+function QuarantineForm({ versionId, onDone }: { versionId: string; onDone: () => void }) {
+  const [observation, setObservation] = useState("");
+  const [opened, setOpened] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function open() {
+    try {
+      await api("/cases/environment", { method: "POST", body: JSON.stringify({ version_id: versionId, observation }) });
+      setOpened(true);
+      onDone();
+    } catch (e) {
+      setError(String((e as Error).message));
+    }
+  }
+
+  if (opened) return <p className="muted">Case opened and the version quarantined. Decide it on the Cases tab.</p>;
+  return (
+    <div className="review-form">
+      <h4>Flag this version</h4>
+      <textarea placeholder="What's wrong with it (required, kept on record)" value={observation} onChange={(e) => setObservation(e.target.value)} />
+      <div className="actions">
+        <button className="primary" disabled={observation.trim().length < 3} onClick={open}>Open a case and quarantine</button>
       </div>
       {error && <p className="bad">{error}</p>}
     </div>

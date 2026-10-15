@@ -461,6 +461,6 @@ Step 2 also turns a suspicion into evidence: a few dozen extra gold answers conf
 
 1. **First slice: built.** Multi-vendor human data (core flows 2, 4 and 5), scoped in [`BUILD.md`](BUILD.md) and described in the [project README](../README.md).
 2. **Integrity: built in 0.2.0.** A separate detection service, the release stage, contributor grades and discreet escalation (the [integrity layers](#integrity-layers)).
-3. **Next: the environment slice,** planned in [`BUILD.md`](BUILD.md#environment-milestones) as M13–M16: briefs, versions stored in three parts, sandboxed validation, review, the catalog and quarantine (flow 1 and the end of flow 3).
-4. **After that:** training observability (TO1–TO7), which needs a training stand-in that produces episodes.
+3. **The environment slice: built** in [`BUILD.md`](BUILD.md#environment-milestones) M13–M16: briefs, versions stored in three parts, sandboxed validation, review, the catalog and quarantine (flow 1 and the end of flow 3).
+4. **Next:** training observability (TO1–TO7), which needs a training stand-in that produces episodes.
 5. **Deeper diagrams if needed:** the environment-version state machine (D3), the case life cycle (D13), and sequence diagrams for the five core flows.

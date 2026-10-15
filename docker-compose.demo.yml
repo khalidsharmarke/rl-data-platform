@@ -28,5 +28,17 @@ services:
       DEMO_AUTOPILOT: ${DEMO_AUTOPILOT:-true}
     volumes:
       - ./backend/app/demo_content.py:/sim/demo_content.py:ro
+      - ./backend/tests/fixtures/environments:/sim/environments:ro
+    depends_on:
+      - api
+
+  # A stand-in for training infrastructure: pulls each newly approved environment from the catalog.
+  training:
+    build: ./simulator
+    command: python training.py
+    environment:
+      API_URL: http://api:8000
+      TRAINING_TOKEN: dev-only-training-token
+    restart: unless-stopped
     depends_on:
       - api

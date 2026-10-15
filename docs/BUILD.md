@@ -2,15 +2,15 @@
 
 | | |
 |---|---|
-| Status | 0.1.0 (MVP): M0–M8. 0.2.0: integrity milestones M9–M12. Environment milestones: M13–M15 done, M16 planned. Stretch goals not started. Known limitations in [`LIMITATIONS.md`](LIMITATIONS.md) |
+| Status | 0.1.0 (MVP): M0–M8. 0.2.0: integrity milestones M9–M12. Environment milestones M13–M16 done. Stretch goals not started. Known limitations in [`LIMITATIONS.md`](LIMITATIONS.md) |
 | Timebox | ~33 hours for 0.1.0 (M0–M8), ~15 for the integrity milestones (M9–M12), ~15 planned for the environment milestones (M13–M16) |
 | Stack | Python (FastAPI, async) · Postgres · React + TypeScript (Vite) · Docker Compose |
-| Delivered as | This repo, runnable with `make demo`, plus a 100-second recorded walkthrough linked from the README |
+| Delivered as | This repo, runnable with `make demo`, plus a three-minute recorded walkthrough linked from the README |
 | Related | [`PRD.md`](PRD.md) · [`DESIGN.md`](DESIGN.md) · [`DECISIONS.md`](DECISIONS.md) · [`LIMITATIONS.md`](LIMITATIONS.md) · [`GLOSSARY.md`](GLOSSARY.md) |
 
 ## 1. What the build shows
 
-The build covers the PRD's core: **several vendors working on the same project, measured the same way, with abuse caught and cleaned up.** These are core flows 2, 4 and 5 in [`DESIGN.md`](DESIGN.md#4-core-flows), built in M0–M12. The environment milestones (M13–M16, planned) add flow 1 and the quarantine end of flow 3.
+The build covers the PRD's core: **several vendors working on the same project, measured the same way, with abuse caught and cleaned up.** These are core flows 2, 4 and 5 in [`DESIGN.md`](DESIGN.md#4-core-flows), built in M0–M12. The environment milestones (M13–M16) add flow 1 and the quarantine end of flow 3.
 
 ### The demo story
 
@@ -42,7 +42,7 @@ The [environment milestones](#environment-milestones) add a second act: a resear
 | Abuse | AB1, AB3, AB4, AB6, AB7, AB8, D13, D16, N18 | Worker-level rules, cases, automatic holds, human decisions, lineage clean-up |
 | Integrity layers | AB11 and AB12 (partly), AB13, AB14, D20, D23–D27, D32, N20 | A separate detection service behind its contract, findings with severity, discreet escalation (M9, M12) |
 | Release and grades | DC10, DC11, AB17, D25, D29–D31 | The release stage between acceptance and export, and contributor grades on quality and integrity (M10, M11) |
-| Environments | EC0–EC6, EC8, D3, D4, D33, D34, N8, N10, N21, N22, TO6 | The [environment milestones](#environment-milestones): briefs and versions (M13), sandboxed checks (M14), the builder's loop, review and the catalog (M15) built; quarantine planned (M16) |
+| Environments | EC0–EC6, EC8, D3, D4, D33, D34, N8, N10, N21, N22, TO6, VP3 (environment work) | The [environment milestones](#environment-milestones): briefs and versions (M13), sandboxed checks (M14), the builder's loop, review and the catalog (M15), quarantine through a case and environment work on the scorecard (M16) |
 | Export | DC6 | Datasets exported as files; re-export excludes removed data |
 | Versioning | N19 | Metric and rule versions recorded with every score and flag; task schema version recorded with every task |
 | Simulator | none (demo tooling) | Synthetic workers with behavior profiles, driven through the public API like real clients |
@@ -85,7 +85,7 @@ From the [decision register](DECISIONS.md#what-this-means-for-the-first-build): 
 
 | # | Must-have | How the build covers it | Milestone |
 |---|---|---|---|
-| 1 | Immutable environment versions (D3), answer key stored apart (D34) | Planned in M13–M14. Until then, the build stores no environments. The same rule is applied to what it does store: tasks and gold answers are immutable, and a changed task design is a new schema version | M2; M13–M14 (planned) |
+| 1 | Immutable environment versions (D3), answer key stored apart (D34) | A version's manifest can't change, even by direct SQL, and its files are stored by hash in three parts; the grader never enters the attempt and training never receives the reference solution. Tasks and gold answers are immutable too, and a changed task design is a new schema version | M2, M13, M14 |
 | 2 | Lineage on every submission (D14) | Every submission stores task, worker ID, vendor, project, schema version and review; every dataset row references its submission | M2, M7 |
 | 3 | Append-only audit log (VM4) | Every state change writes an audit event; the table has no update or delete path | M1 |
 | 4 | Gold tasks secret and rotatable (D8, PD2) | Gold answers in their own table, never read by worker or vendor endpoints; rotation by gold-set version | M2, M3 |
@@ -165,7 +165,7 @@ Hostile environments (task-file code that reaches for the network, runs forever,
 | M13 | Briefs and environment versions | Environment briefs as a project kind, with a review rubric and target count, allocated to vendors with the environments capability (EC0, D33); environments that each belong to a brief, and immutable versions: a manifest in Postgres pointing at content stored once by hash in object storage, with task files, grader and reference solution kept apart (EC8, D34), the version state machine (draft → submitted → validating → failed or in review → approved → quarantined), a seeded environment builder at Kestrel (the vendor with the environments capability), per-environment contracts, the builder's upload and submit API (EC1, EC2, D3, VM6, VM7) | A brief can only be allocated to a vendor with the environments capability; a builder can only submit against a brief allocated to their vendor; a version can't be changed once stored, even by direct SQL; identical files across versions are stored once; a pulled version can't be deleted; only legal transitions succeed, each with an audit event; a vendor without the environments capability can't submit; other vendors can't see the brief's environments (tested) | 4 | Done |
 | M14 | Sandbox validation | Validation jobs queued in the same transaction as submission and taken fairly across vendors; the sandbox runner service and the platform's base image (Python with pytest); three checks per version (reference passes, empty solution fails, ten repeat runs in one container agree), each running the attempt first and then the grader in its own step, with logs in object storage; failed or in-review outcome (EC3, D4, N8, N10, A11, A12) | A sound environment passes; a grader that passes an empty solution fails the empty check; an unsolvable task fails the reference check; a flaky grader fails the repeat check; a check that reaches for the network or runs past its limit is stopped and failed; one vendor's burst of submissions doesn't hold back another's; code in the task files can't read the grader or the reference solution (tested, with hostile fixtures) | 5 | Done |
 | M15 | Builder loop, review and catalog | Builder screens: versions, check results with logs, resubmit as a new version with a diff; researcher review queue per brief, graded against the brief's rubric, with feedback; progress against the brief's target count; approval; `GET /catalog` returning approved versions by exact id, with every pull recorded (EC4, EC5, EC6, D10) | A builder sees why a check failed and fixes it in a new version; only approved versions appear in the catalog; training pulls an exact version, gets the task files and grader but never the reference solution, and the pull is recorded (tested) | 3 | Done |
-| M16 | Quarantine, scorecard and demo | Environment cases owned by data ops; quarantine removes a version from the catalog and sends it back to review; lineage lists who pulled it; environment work on the vendor scorecard (validation pass rate, review grades); the demo adds a researcher's brief, allocated by data ops to Kestrel, whose builder submits the four fixture environments; a training stand-in script that pulls approved versions; data ops opening an environment case by hand; README and walkthrough (TO6, AB6, AB8, VP3, D13) | In `make demo`, the three broken environments are stopped by the checks that target them, the sound one is approved and pulled by the training stand-in, then quarantined through a case data ops opens and dropped from the catalog with its pulls listed; Kestrel's scorecard shows its environment pass rate | 3 | Planned |
+| M16 | Quarantine, scorecard and demo | Environment cases owned by data ops; quarantine removes a version from the catalog and sends it back to review; lineage lists who pulled it; environment work on the vendor scorecard (validation pass rate, review grades); the demo adds a researcher's brief, allocated by data ops to Kestrel, whose builder submits the four fixture environments; a training stand-in script that pulls approved versions; data ops opening an environment case by hand; README and walkthrough (TO6, AB6, AB8, VP3, D13) | In `make demo`, the three broken environments are stopped by the checks that target them, the sound one is approved and pulled by the training stand-in, then quarantined through a case data ops opens and dropped from the catalog with its pulls listed; Kestrel's scorecard shows its environment pass rate | 3 | Done |
 | | | | **Total** | **15** | |
 
 ### Stretch, in order

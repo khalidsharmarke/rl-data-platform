@@ -236,6 +236,14 @@ export type CaseDetail = CaseSummary & {
   flags: { observation: string; rule: string | null; rule_version: string | null }[];
   samples: { submission_id: string; prompt: string; answer: { choice: string; rationale?: string }; time_on_task_s: number; pasted: boolean }[];
   actions: { action: string; by: string; note: string | null; at: string }[];
+  environment: {
+    version_id: string; environment_id: string; name: string; number: number; status: string;
+    pulls: { puller: string; run_label: string | null; pulled_at: string }[];
+  } | null;
+};
+export type EnvironmentWork = {
+  vendor_id: string; vendor_name: string; submitted: number; checked: number; passed_checks: number; reviewed: number;
+  approved: number; sent_back: number; quarantined: number; check_pass_rate: number | null; approval_rate: number | null;
 };
 
 export type Lineage = {

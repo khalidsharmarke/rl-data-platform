@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Version | 0.2.0 (the 0.1.0 MVP plus integrity milestones M9–M12), plus environment milestones M13–M15 (see [`BUILD.md`](BUILD.md#environment-milestones)) |
+| Version | 0.2.0 (the 0.1.0 MVP plus integrity milestones M9–M12), plus environment milestones M13–M16 (see [`BUILD.md`](BUILD.md#environment-milestones)) |
 | Covers | Slice A from [`BUILD.md`](BUILD.md): multi-vendor human data, with allocation, gold QA, scorecards, worker-abuse cases and lineage clean-up; a separate detection service; the release stage; contributor grades; discreet escalation |
 | Related | [`POSTING.md`](POSTING.md) · [`PRD.md`](PRD.md) · [`DESIGN.md`](DESIGN.md) · [`DECISIONS.md`](DECISIONS.md) |
 
@@ -10,15 +10,15 @@ What the build does not do, where it falls short, and what is still undecided. T
 
 ## 1. Coverage of the posting
 
-The posting names three areas: *"environment creation, data collection, and training observability."* The build covers the core of data collection, plus the vendor management, workspaces and audit trail it needs. It covers 34 of the design's 55 functional requirements.
+The posting names three areas: *"environment creation, data collection, and training observability."* The build covers the core of data collection, plus the vendor management, workspaces and audit trail it needs. It covers 35 of the design's 55 functional requirements.
 
 | Posting line | Coverage in the build |
 |---|---|
 | *"platforms for human data collection at scale, including labeling workflows, quality assurance systems, and feedback mechanisms that surface reward signal integrity issues early"* | Mostly. Labeling, gold QA, agreement, spot checks and worker feedback are built. DC5 isn't: workers can't flag broken tasks, and disagreement spikes raise no alert |
 | *"a unified platform for human data collection that integrates labeling workflows, vendor management, and QA for complex agentic tasks"* | Except for agentic tasks. There is one task type: pick the more helpful of two answers, with a reason |
-| *"evaluation dashboards and observability UIs that give researchers real-time insight into environment quality, training run health, and reward hacking"* | Partly. Vendor scorecards and drop alerts exist; nothing covers environments, training runs or reward hacking |
+| *"evaluation dashboards and observability UIs that give researchers real-time insight into environment quality, training run health, and reward hacking"* | Partly. Vendor scorecards and drop alerts exist, and environment work (checks passed, review, quarantine) is on the scorecard. Nothing covers training runs or reward hacking |
 | *"backend services and APIs that connect environment authoring tools, data collection systems, and RL training infrastructure"* | Partly. Datasets are exported as files. Nothing comes back from training |
-| *"web platforms for RL environment creation, management, and quality review"* and *"vendor-facing interfaces… to create, submit, and iterate on training environments"* | Started. Researchers write briefs, data ops allocates them, and builders upload versions that never change, stored by hash in three parts (EC0, EC1, M13), every submitted version is checked in a sandbox (EC3 without difficulty, M14), builders see why a check failed and what changed between versions, researchers grade against the brief's rubric, and training pulls approved versions from a catalog without the reference solution (EC2, EC4–EC6, EC8, M15). Quarantine is M16 |
+| *"web platforms for RL environment creation, management, and quality review"* and *"vendor-facing interfaces… to create, submit, and iterate on training environments"* | Started. Researchers write briefs, data ops allocates them, and builders upload versions that never change, stored by hash in three parts (EC0, EC1, M13), every submitted version is checked in a sandbox (EC3 without difficulty, M14), builders see why a check failed and what changed between versions, researchers grade against the brief's rubric, training pulls approved versions from a catalog without the reference solution (EC2, EC4–EC6, EC8, M15), and a flagged version is quarantined through a case, with the runs that pulled it listed (TO6, M16). Not built: difficulty estimates, vendor-built images and generated tasks |
 | *"scalable code data generation pipelines"* | No (EC7) |
 | *"onboarding automation… Docker registry access, API token management, and environment validation"* | No. Vendors and users are seeded (VM2, VM3) |
 
@@ -42,6 +42,7 @@ The posting names three areas: *"environment creation, data collection, and trai
 | Grades are per project | A worker trusted on one project starts unproven on the next | Carry evidence across projects, weighted by how similar the work is |
 | Vendors get no view of grades | DC11 gives vendors an aggregate (for example, how much of their work is released); the build shows them nothing | An aggregate on the vendor's own scorecard, coarse enough not to single out a watched worker |
 | The grader runs alongside the code it grades | In the grading step, the task code is imported by the tests, so it runs with the grader in the same container. The grader's files are read-only, but code that exits early with success, or patches the test runner, could still fool a grader that only checks the exit code (N21) | Run the grader in its own process or container and call the task code through a narrow interface, and judge results from a report the task code can't write |
+| Quarantine is triggered only by a person | Without training results there's no reward-hack detector (TO3) to flag a version; data ops opens environment cases by hand | Training results into the platform (TO1), and detectors over them raising flags through the same case path (D7) |
 | Training's access is one shared token | The catalog trusts anything holding the training token, and a pull records only a free-text run label. Nothing ties a pull to a real training run | Per-run credentials issued by training infrastructure, and runs reported back (TO1) |
 | A crashed check is stuck | If the sandbox runner dies mid-check, the job stays running and the version stays validating; nothing retries it | A lease on running jobs, as D2 describes for the job queue |
 | Rule thresholds were set against simulated workers | The demo's results depend on the simulator's settings (clock speed, Rosa's accuracy, when she switches, how often workers take breaks). Real workers will behave differently | Recalibrate the thresholds on real cases. Rules are versioned (N19), so a change shows in every flag |
@@ -101,7 +102,7 @@ The design's scale estimate is about 1.2 million submissions a day ([`DESIGN.md`
 
 In order, from [`BUILD.md`](BUILD.md#stretch-in-order) and the gaps above:
 
-1. The environment slice, milestones M13–M16 in [`BUILD.md`](BUILD.md#environment-milestones): briefs, versions, sandboxed checks, review, a catalog and quarantine (EC0–EC6, TO6). It covers the most posting lines the build doesn't.
+1. Training observability (TO1–TO7), starting with a training stand-in that runs the catalog's environments and reports episodes, so reward hacks can be flagged and traced back to versions and vendors.
 2. The audit sample and shadow mode (AB15, AB16), which measure what detection misses and keep a new rule from acting before it's proven. Escalation outcomes sent back to detection as labels.
 3. Broken-task flags and disagreement alerts (DC5).
 4. Vendor-level abuse rules and vendor actions (AB2, AB5).

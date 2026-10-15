@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api, pct, type Project, type Scorecard, type ScorePoint, type User, type VendorComparison, type WorkerQuality } from "./api";
+import { api, pct, type Project, type Scorecard, type ScorePoint, type User, type VendorComparison, type WorkerQuality, type EnvironmentWork } from "./api";
 import LineChart, { type Series } from "./LineChart";
 
 const WINDOW = 4; // periods in the rolling window
@@ -38,7 +38,10 @@ export default function Scorecards({ me }: { me: User }) {
   const vendorView = me.role === "vendor_admin";
 
   useEffect(() => {
-    api<Project[]>("/projects").then((list) => setProject(list.find((p) => !p.name.includes("(sample)")) ?? list[0] ?? null));
+    api<Project[]>("/projects").then((list) => {
+      const human = list.filter((p) => p.kind === "human_data");
+      setProject(human.find((p) => !p.name.includes("(sample)")) ?? human[0] ?? null);
+    });
   }, []);
 
   useEffect(() => {
@@ -157,6 +160,46 @@ export default function Scorecards({ me }: { me: User }) {
           </table>
         </>
       )}
+      <EnvironmentWorkTable />
     </section>
+  );
+}
+
+/** Environment work on the scorecard (VP3): how a vendor's versions fare in the sandbox and in review. */
+function EnvironmentWorkTable() {
+  const [rows, setRows] = useState<EnvironmentWork[]>([]);
+  useEffect(() => {
+    api<EnvironmentWork[]>("/vendors/environment-work").then(setRows);
+  }, []);
+  if (rows.length === 0) return null;
+  return (
+    <>
+      <h3>Environment work</h3>
+      <p className="muted">Across all briefs, computed the same way for every vendor.</p>
+      <table>
+        <thead>
+          <tr>
+            <th>Vendor</th>
+            <th>Versions submitted</th>
+            <th>Passed the sandbox's checks</th>
+            <th>Approved in review</th>
+            <th>Sent back</th>
+            <th>Quarantined</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.vendor_id}>
+              <td>{r.vendor_name}</td>
+              <td>{r.submitted}</td>
+              <td>{r.passed_checks} of {r.checked} ({pct(r.check_pass_rate)})</td>
+              <td>{r.approved} of {r.reviewed} ({pct(r.approval_rate)})</td>
+              <td>{r.sent_back}</td>
+              <td>{r.quarantined}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </>
   );
 }

@@ -203,3 +203,52 @@ async def vendor_workers(
             gold_accuracy=rate(r.gc, r.gn) if show_gold else None, gold_n=r.gn if show_gold else None,
         ))
     return sorted(out, key=lambda w: (w.gold_accuracy is None, w.gold_accuracy or 0))
+
+
+class EnvironmentWork(BaseModel):
+    vendor_id: uuid.UUID
+    vendor_name: str
+    submitted: int
+    checked: int
+    passed_checks: int
+    reviewed: int
+    approved: int
+    sent_back: int
+    quarantined: int
+    check_pass_rate: float | None
+    approval_rate: float | None
+
+
+ENVIRONMENT_WORK = """
+WITH v AS (
+    SELECT ev.id, ev.status, e.org_id,
+           EXISTS (SELECT 1 FROM validation_runs r WHERE r.version_id = ev.id) AS checked,
+           EXISTS (SELECT 1 FROM validation_runs r WHERE r.version_id = ev.id)
+             AND NOT EXISTS (SELECT 1 FROM validation_runs r WHERE r.version_id = ev.id AND NOT r.passed) AS passed_checks,
+           (SELECT decision FROM environment_reviews w WHERE w.version_id = ev.id ORDER BY w.created_at DESC LIMIT 1) AS decision
+    FROM environment_versions ev JOIN environments e ON e.id = ev.environment_id
+    WHERE ev.status <> 'draft' AND (CAST(:p AS uuid) IS NULL OR e.project_id = CAST(:p AS uuid))
+)
+SELECT o.id AS vendor_id, o.name AS vendor_name, count(v.id) AS submitted,
+       count(v.id) FILTER (WHERE v.checked) AS checked, count(v.id) FILTER (WHERE v.passed_checks) AS passed_checks,
+       count(v.id) FILTER (WHERE v.decision IS NOT NULL) AS reviewed, count(v.id) FILTER (WHERE v.decision = 'approve') AS approved,
+       count(v.id) FILTER (WHERE v.decision = 'send_back') AS sent_back, count(v.id) FILTER (WHERE v.status = 'quarantined') AS quarantined
+FROM orgs o JOIN v ON v.org_id = o.id
+GROUP BY o.id, o.name ORDER BY o.name
+"""
+
+
+@router.get("/vendors/environment-work")
+async def environment_work(
+    project_id: uuid.UUID | None = None, user: User = Depends(current_user), session: AsyncSession = Depends(get_session)
+) -> list[EnvironmentWork]:
+    """Environment work on the vendor scorecard (VP3): how often a vendor's versions pass the
+    sandbox's checks and the researcher's review, and how many were later quarantined. Computed
+    the same way for every vendor (N16); a vendor sees only its own row."""
+    out = []
+    for r in await session.execute(text(ENVIRONMENT_WORK), {"p": project_id}):
+        if not is_internal(user) and r.vendor_id != user.org_id:
+            continue
+        out.append(EnvironmentWork(**r._mapping, check_pass_rate=r.passed_checks / r.checked if r.checked else None,
+                                   approval_rate=r.approved / r.reviewed if r.reviewed else None))
+    return out

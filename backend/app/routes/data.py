@@ -108,6 +108,8 @@ async def cleanup(body: CleanupIn, user: User = Depends(require_roles(Role.DATA_
     case = (await session.execute(text("SELECT * FROM cases WHERE id = :c"), {"c": body.case_id})).first()
     if case is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Not found")
+    if case.subject_type != "worker":
+        raise HTTPException(status.HTTP_409_CONFLICT, "Clean-up removes a worker's answers; an environment is quarantined instead")
     if case.status != "decided" or case.decision not in ("suspend", "remove"):
         raise HTTPException(status.HTTP_409_CONFLICT, "Clean-up follows a decision to suspend or remove the worker")
     if await session.scalar(text("SELECT 1 FROM cleanups WHERE case_id = :c"), {"c": case.id}):
