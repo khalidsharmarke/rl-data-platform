@@ -2,8 +2,8 @@
 
 | | |
 |---|---|
-| Status | 0.1.0 (MVP): M0–M8. 0.2.0: integrity milestones M9–M12. 0.3.0: environment milestones M13–M16. 0.4.0: training observability milestones M17–M20. Oversight milestones: M21–M24 done. Known limitations in [`LIMITATIONS.md`](LIMITATIONS.md) |
-| Timebox | ~33 hours for 0.1.0 (M0–M8), ~15 for the integrity milestones (M9–M12), ~15 for the environment milestones (M13–M16), ~17 planned for the training observability milestones (M17–M20) |
+| Status | 0.1.0 (MVP): M0–M8. 0.2.0: integrity milestones M9–M12. 0.3.0: environment milestones M13–M16. 0.4.0: training observability milestones M17–M20. Oversight milestones: M21–M24 done. Vendor onboarding and code generation milestones M25–M28 planned. Known limitations in [`LIMITATIONS.md`](LIMITATIONS.md) |
+| Timebox | ~33 hours for 0.1.0 (M0–M8), ~15 for the integrity milestones (M9–M12), ~15 for the environment milestones (M13–M16), ~17 for the training observability milestones (M17–M20), ~17 for the oversight milestones (M21–M24), ~17 planned for vendor onboarding and code generation (M25–M28) |
 | Stack | Python (FastAPI, async) · Postgres · React + TypeScript (Vite) · Docker Compose |
 | Delivered as | This repo, runnable with `make demo`, plus a six-minute recorded walkthrough linked from the README |
 | Related | [`PRD.md`](PRD.md) · [`DESIGN.md`](DESIGN.md) · [`DECISIONS.md`](DECISIONS.md) · [`LIMITATIONS.md`](LIMITATIONS.md) · [`NOT-SOLVED.md`](NOT-SOLVED.md) · [`GLOSSARY.md`](GLOSSARY.md) |
@@ -68,12 +68,12 @@ These keep the boundaries from [`DESIGN.md`](DESIGN.md) but use simpler parts:
 
 | Left out | Requirements | Why |
 |---|---|---|
-| Parts of the environment pipeline | EC7, vendor-built images (A15, VM2) | The [environment milestones](#environment-milestones) build a thin slice; difficulty came with training results (M18); these come after it |
+| Parts of the environment pipeline | EC7, vendor-built images (A15, VM2) | EC7 is planned as [M27–M28](#vendor-onboarding-and-code-generation-milestones); vendor-built images stay out (B4), and with them registry credentials |
 | Real training and real models | none (A23) | Training is modeled by scripted agents; see the [training observability milestones](#training-observability-milestones) and [`NOT-SOLVED.md`](NOT-SOLVED.md) |
 | Vendor rules that need identities across vendors | Part of AB2 (removed workers returning, matching answers across vendors), AB10 | They need a cross-vendor worker match, which is P2 in the PRD |
 | The rest of the integrity layers | AB11 and AB12 beyond paste and time on task; AB14's extra overlap; DC11's aggregate view for vendors | Not needed to show the layers working |
 | Vendor-private rules, cross-vendor match | AB9, AB10 | P2 in the PRD |
-| Onboarding, API tokens, registry | VM2, VM3, N14 | Not needed to tell the story; vendors are seeded |
+| Onboarding and API tokens | VM2 (without registry credentials), VM3, N14 | Planned as [M25–M26](#vendor-onboarding-and-code-generation-milestones) |
 | Nice-to-haves | NH1–NH5 | Beyond the posting by definition |
 
 ### Detecting AI-pasted answers: an honest note
@@ -204,6 +204,20 @@ The rest of the integrity layers and vendor management: measuring what detection
 | M22 | Broken tasks and disagreement alerts | Workers flag a task as broken from the work view; two flags pause the task and queue it for researchers, who restore or retire it; each worker's flag count for Anthropic; a disagreement alert on a project's agreement; in the demo, a few broken tasks (two identical answers) are flagged and retired (DC5, D43) | A twice-flagged task is no longer routed; a flag changes nothing in the flagger's measures; gold tasks can be flagged like any other (tested); an agreement drop raises one alert (tested) | 3 | Done |
 | M23 | Vendor oversight and actions | Vendor rules as platform jobs: quality falling while volume rises, environment versions quarantined, and case handling (most cases cleared, suspended workers reinstated); vendor findings open vendor cases for data ops; the vendor admin sees and responds; data ops lowers allocation, pauses or offboards after the response or the window, and routing follows; data ops' view of how each vendor resolves its own cases (AB2, AB5, AB7, D13, D42) | No action on a vendor is accepted before its response or the window (tested); a paused vendor's workers get no new tasks (tested); in the demo, Brightline's fall opens a vendor case, Brightline responds, and data ops lowers its share | 5 | Done |
 | M24 | Vendor reviewer, demo and docs | Review switched on per allocation; answers wait for the vendor's reviewer, who accepts or corrects; corrections stored as new versions with the reviewer in lineage; detection, gold and grades on the original, scorecards and datasets on what the vendor submitted; the correction rate on the vendor's scorecard; the demo's vendor review on Northwind; README, walkthrough and [`NOT-SOLVED.md`](NOT-SOLVED.md) kept current (DC8, D44, A29) | A corrected answer exports corrected, with both versions in lineage; a worker's grade ignores corrections; a reviewer can't tell gold from other tasks (tested); `make demo` tells the new parts of the story | 4 | Done |
+| | | | **Total** | **17** | |
+
+### Vendor onboarding and code generation milestones
+
+The two lines of the posting the build doesn't yet answer at all: *"onboarding automation… Docker registry access, API token management, and environment validation"* and *"scalable code data generation pipelines, producing diverse programming tasks with robust reward signals"*. Tokens come first, because the code task generator signs in with one, like any vendor (D48).
+
+**What's real and what's left out.** Tokens, invites, the onboarding checklist and its gate, probe solutions, the generator as a platform client, sampled review and difficulty calibration are real. Registry credentials and vendor-built images stay out (B4): versions are bundles on a platform base image. Invites are links shown to data ops rather than emails. The generator's task families are hand-written templates in one language (Python), not tasks written by a model. [`NOT-SOLVED.md`](NOT-SOLVED.md) lists each choice.
+
+| # | Milestone | Delivers | Done when | Hours | Status |
+|---|---|---|---|---|---|
+| M25 | API tokens | A vendor admin creates, lists, rotates and revokes the vendor's tokens, each named and scoped (environments, read); tokens shown once, stored hashed, expiring, last use recorded; the API accepts a token on the routes its scopes cover, acting for the vendor, never for a person; every token action audited as the named token; a token page for vendor admins (VM2, N11, D45) | A token reaches only its vendor's data and its scopes, can't answer tasks or decide cases, and stops working when revoked or expired (tested); an environment version submitted with a token is attributed to the vendor and the token | 4 | Planned |
+| M26 | Self-serve onboarding | Data ops creates a vendor and invites its admin with a single-use link; the admin signs in and sees a checklist computed per capability: a worker invited and a sample task set answered correctly; one of the vendor's tokens used and a sample environment submitted with it passing the sandbox; samples in an onboarding project that feeds nothing; allocation of real work refused until the checklist is complete; time from invite to first accepted work shown to data ops; in the demo, a new vendor is onboarded through the API (VM1, VM3, N14, D46) | Real work can't be allocated to a vendor with an incomplete checklist, and samples never reach a scorecard, dataset or the catalog (tested); in the demo, the new vendor goes from invite to first accepted work in under a simulated day | 4 | Planned |
+| M27 | Probes and the code task generator | Probe solutions as a fourth part of a version and a fourth sandbox check; a probe for the weak grader that `return text` beats; the code task generator as a separate service in `generator/`: an internal org with its own token, task families with parameters, difficulty levels and probes, content dedup, and a family stopped after repeated failures (EC3, EC7, A21, D47, D48) | A version whose grader passes a probe fails the check, and the weak grader fixture is caught before review when it carries a probe (tested); the generator submits a batch through the public API, and every version is checked like a vendor's | 5 | Planned |
+| M28 | Generated tasks at scale, demo and docs | Batches reviewed by sample, with the family stopped on a send-back; generated tasks through the catalog to training; intended against measured difficulty per family once training has run; the demo's generated batch and a template bug its probes or sample catch; README, walkthrough and [`NOT-SOLVED.md`](NOT-SOLVED.md) kept current (EC7, D49) | Approving a batch's sample approves the batch and a send-back stops the family (tested); in `make demo`, a generated batch reaches training and its difficulty calibration shows | 4 | Planned |
 | | | | **Total** | **17** | |
 
 ## 5. Where the code lives

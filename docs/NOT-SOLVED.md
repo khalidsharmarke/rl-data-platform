@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Covers | Every place the project deliberately doesn't solve a problem, from 0.1.0 through the planned oversight milestones |
+| Covers | Every place the project deliberately doesn't solve a problem, from 0.1.0 through the planned vendor onboarding and code generation milestones |
 | Related | [`LIMITATIONS.md`](LIMITATIONS.md) (where what's built falls short) · [`BUILD.md`](BUILD.md) (scope and stand-ins) · [`DESIGN.md`](DESIGN.md) · [`DECISIONS.md`](DECISIONS.md) |
 
 This page lists choices, not shortfalls: problems the project decided not to solve, what it does instead, and why. Where the built part falls short of its own design, see [`LIMITATIONS.md`](LIMITATIONS.md).
@@ -53,7 +53,9 @@ Each entry is one of five kinds:
 | Problem | What the project does instead | Why | Where |
 |---|---|---|---|
 | Isolating untrusted code | Docker with strict limits (no network, read-only root, memory, CPU, process and time limits) instead of gVisor or Firecracker on dedicated hosts | Enough to show and test the boundary on a laptop | B5, D4 |
-| Vendors' own container images | Uploaded bundles on a base image the platform builds | Keeps the slice to the checks that protect the reward signal | B4, A15, VM2 |
+| Vendors' own container images | Uploaded bundles on a base image the platform builds, so there's no registry and no registry credentials; vendors' API tokens cover everything else (planned, M25) | Keeps the slice to the checks that protect the reward signal | B4, A15, VM2 |
+| Inviting a vendor | Data ops gets a single-use invite link to pass on, instead of the platform sending an email (planned, M26) | Email delivery is a standard part, not the hard problem | D46 |
+| Generating programming tasks | Hand-written task families in Python: a parameterized bug, its fix, tests and probes, at several difficulties. No model writes tasks (planned, M27) | Templates make every generated task explainable and its probes known; a model writing tasks is a research project of its own | D48, EC7 |
 | Sign-in and the API gateway | Seeded demo logins and a scoping module every route goes through | Standard parts, not the hard problem | [`BUILD.md`](BUILD.md#stand-ins) |
 | Message broker and durable log | Postgres tables: the job queue, the outbox read through a cursor feed, and the episodes table that stands in for the durable log in front of the analytics store | Volumes are low enough; the contracts would stay the same on Kafka | D2, D24, B7 |
 | Analytics store | Summary tables in Postgres | Same reason | [`BUILD.md`](BUILD.md#stand-ins), B7 |
@@ -71,6 +73,6 @@ These belong to the platform and come later. [`BUILD.md`](BUILD.md#not-in-the-bu
 | Scale: ~1.2 million submissions a day, ~1,000 episodes a second | Designed for, not load-tested; the build runs at demo volume | Scale estimate, D2, D5 |
 | Task types beyond comparing two answers, including agentic tasks | One task type is enough to show the platform | DC1 |
 | Vendor rules that need identities across vendors: removed workers returning, the same answers across vendors | They need a cross-vendor worker match, which is P2 | AB2, AB10 |
-| Vendor onboarding, API tokens, registry credentials | Vendors are seeded | VM2, VM3, N14 |
-| Generated programming tasks | Needs the environment pipeline first, which now exists | EC7 |
+| Vendor onboarding and API tokens | Vendors were seeded (planned, M25–M26) | VM2, VM3, N14 |
+| Generated programming tasks | Needed the environment pipeline first, which now exists (planned, M27–M28) | EC7 |
 | Vendor-private rules, matching workers across vendors | P2 in the PRD | AB9, AB10 |
