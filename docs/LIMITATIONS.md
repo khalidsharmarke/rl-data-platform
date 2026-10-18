@@ -112,8 +112,8 @@ The design's scale estimate is about 1.2 million submissions a day ([`DESIGN.md`
 
 What's left, from [`BUILD.md`](BUILD.md#not-in-the-build) and the gaps above:
 
-1. API tokens and self-serve onboarding (VM2, VM3, N14), planned as [M25–M26](BUILD.md#vendor-onboarding-and-code-generation-milestones).
-2. Probe solutions and generated programming tasks (EC7), planned as [M27–M28](BUILD.md#vendor-onboarding-and-code-generation-milestones).
-3. Agentic tasks: the posting's *"QA for complex agentic tasks"*. There is one task type (DC1).
-4. Vendor-built images and registry credentials (A15, VM2).
+1. API tokens, registry access and self-serve onboarding (VM2, VM3, N14, A15), planned as [M25–M27](BUILD.md#vendor-onboarding-and-code-generation-milestones).
+2. Probe solutions and generated programming tasks (EC7), planned as [M28–M29](BUILD.md#vendor-onboarding-and-code-generation-milestones).
+3. A vendor guide and an operations runbook, planned as M30.
+4. Agentic tasks: the posting's *"QA for complex agentic tasks"*. There is one task type (DC1).
 5. P2 in the PRD: vendor-private rules and a cross-vendor worker match (AB9, AB10), which would also allow the vendor rules that need identities across vendors.
