@@ -9,6 +9,7 @@ import Training from "./Training";
 import Scorecards from "./Scorecards";
 import Work from "./Work";
 import { api, saveToken, savedToken, type User } from "./api";
+import Tokens from "./Tokens";
 import Workspaces from "./Workspaces";
 
 export const ROLE_LABELS: Record<string, string> = {
@@ -59,6 +60,7 @@ function Views({ me }: { me: User }) {
     ...(["data_ops", "researcher"].includes(me.role) ? ["Training"] : []),
     ...(["data_ops", "vendor_admin"].includes(me.role) ? ["Cases"] : []),
     ...(["data_ops", "researcher"].includes(me.role) ? ["Detection"] : []),
+    ...(["data_ops", "vendor_admin"].includes(me.role) ? ["API tokens"] : []),
     "Workspaces",
   ];
   const [tab, setTab] = useState(tabs[0]);
@@ -80,6 +82,7 @@ function Views({ me }: { me: User }) {
       {tab === "Scorecards" && <Scorecards me={me} />}
       {tab === "Cases" && <Cases me={me} />}
       {tab === "Detection" && <Detection canChange={me.role === "data_ops"} />}
+      {tab === "API tokens" && <Tokens me={me} />}
       {tab === "Workspaces" && <Workspaces me={me} />}
     </>
   );

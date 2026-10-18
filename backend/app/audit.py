@@ -30,6 +30,7 @@ def record(
         AuditEvent(
             at=clock.now(),
             actor_id=actor.id if actor else None,
+            token_id=getattr(actor, "token_id", None),
             action=action,
             entity_type=entity_type,
             entity_id=str(entity_id),

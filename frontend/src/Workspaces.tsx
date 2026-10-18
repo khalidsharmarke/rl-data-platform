@@ -91,7 +91,7 @@ export default function Workspaces({ me }: { me: User }) {
                   <td>{new Date(e.at).toLocaleString()}</td>
                   <td className="mono">{e.action}</td>
                   <td>{orgName(e.org_id)}</td>
-                  <td>{e.actor_id ? (e.actor_id === me.id ? "You" : "Staff") : "System"}</td>
+                  <td>{e.token_id ? "API token" : e.actor_id ? (e.actor_id === me.id ? "You" : "Staff") : "System"}</td>
                 </tr>
               ))}
             </tbody>

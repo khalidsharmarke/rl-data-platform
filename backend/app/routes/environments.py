@@ -108,7 +108,7 @@ async def create_environment(
     if await session.scalar(select(Environment.id).where(
             Environment.project_id == project.id, Environment.org_id == user.org_id, Environment.name == body.name)):
         raise HTTPException(status.HTTP_409_CONFLICT, "Your vendor already has an environment with that name for this brief")
-    env = Environment(org_id=user.org_id, project_id=project.id, name=body.name, created_by=user.id, created_at=clock.now())
+    env = Environment(org_id=user.org_id, project_id=project.id, name=body.name, created_by=user.id, created_by_token=getattr(user, "token_id", None), created_at=clock.now())
     session.add(env)
     await session.flush()
     record(session, actor=user, action="environment.created", entity_type="environment", entity_id=env.id, org_id=user.org_id,
@@ -160,7 +160,7 @@ async def create_version(
     manifest = await environments.build_manifest(session, files, body.test_command, body.prepare_command)
     now = clock.now()
     version = EnvironmentVersion(environment_id=env.id, number=await environments.next_number(session, env.id), manifest=manifest,
-                                 status="draft", created_by=user.id, created_at=now, status_changed_at=now)
+                                 status="draft", created_by=user.id, created_by_token=getattr(user, "token_id", None), created_at=now, status_changed_at=now)
     session.add(version)
     await session.flush()
     record(session, actor=user, action="environment_version.created", entity_type="environment_version", entity_id=version.id,

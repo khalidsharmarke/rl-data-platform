@@ -68,6 +68,28 @@ class User(Base):
     org: Mapped[Org] = relationship(back_populates="users")
 
 
+class TokenScope(StrEnum):
+    ENVIRONMENTS = "environments"
+    READ = "read"
+
+
+class ApiToken(Base):
+    __tablename__ = "api_tokens"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid())
+    org_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("orgs.id"))
+    name: Mapped[str] = mapped_column(Text)
+    scopes: Mapped[list[str]] = mapped_column(ARRAY(Text))
+    prefix: Mapped[str] = mapped_column(Text)
+    secret_hash: Mapped[str] = mapped_column(Text, unique=True)
+    created_by: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    revoked_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
+
+
 class AuditEvent(Base):
     __tablename__ = "audit_events"
 
@@ -78,6 +100,7 @@ class AuditEvent(Base):
     entity_type: Mapped[str] = mapped_column(Text)
     entity_id: Mapped[str] = mapped_column(Text)
     org_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("orgs.id"))
+    token_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("api_tokens.id"))
     before: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     after: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
 
@@ -143,7 +166,8 @@ class Environment(Base):
     org_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("orgs.id"))
     project_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("projects.id"))
     name: Mapped[str] = mapped_column(Text)
-    created_by: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
+    created_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
+    created_by_token: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("api_tokens.id"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
@@ -155,7 +179,8 @@ class EnvironmentVersion(Base):
     number: Mapped[int] = mapped_column(Integer)
     manifest: Mapped[dict[str, Any]] = mapped_column(JSONB)
     status: Mapped[str] = mapped_column(Text, default="draft")
-    created_by: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
+    created_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
+    created_by_token: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("api_tokens.id"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     status_changed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 

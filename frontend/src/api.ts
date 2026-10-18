@@ -63,6 +63,21 @@ export type AuditEvent = {
   entity_type: string;
   entity_id: string;
   org_id: string | null;
+  token_id: string | null;
+};
+
+export type ApiToken = {
+  id: string;
+  org_id: string;
+  org_name: string;
+  name: string;
+  scopes: string[];
+  prefix: string;
+  created_at: string;
+  expires_at: string;
+  last_used_at: string | null;
+  revoked_at: string | null;
+  secret?: string;
 };
 
 export type Brief = {
