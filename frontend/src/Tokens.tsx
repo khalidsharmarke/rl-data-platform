@@ -4,6 +4,7 @@ import { api, type ApiToken, type AuditEvent, type User } from "./api";
 const SCOPES: Record<string, string> = {
   environments: "Environments: create environments and submit versions to your briefs",
   read: "Read: your scorecards, cases, briefs and versions",
+  registry: "Registry: docker login, then push and pull your own images",
 };
 
 const when = (t: string | null) => (t ? new Date(t).toLocaleString() : "—");
@@ -12,7 +13,7 @@ const when = (t: string | null) => (t ? new Date(t).toLocaleString() : "—");
 export default function Tokens({ me }: { me: User }) {
   const [tokens, setTokens] = useState<ApiToken[]>([]);
   const [name, setName] = useState("");
-  const [scopes, setScopes] = useState<string[]>(["environments", "read"]);
+  const [scopes, setScopes] = useState<string[]>(["environments", "read", "registry"]);
   const [created, setCreated] = useState<ApiToken | null>(null);
   const [activity, setActivity] = useState<{ token: ApiToken; events: AuditEvent[] } | null>(null);
   const [error, setError] = useState<string | null>(null);

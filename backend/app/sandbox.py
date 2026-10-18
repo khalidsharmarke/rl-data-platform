@@ -33,7 +33,8 @@ from dataclasses import dataclass
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app import clock, environments
+from app import clock, environments, registry
+from app.config import settings
 from app.models import EnvironmentVersion
 
 log = logging.getLogger("sandbox")
@@ -176,9 +177,28 @@ def ms(start: float) -> int:
     return int((time.monotonic() - start) * 1000)
 
 
+def connect_registry() -> None:
+    """Sign the runner's Docker CLI in to the registry, and publish the base image there for vendors to build on (D50)."""
+    host = settings.registry_host
+    for attempt in range(30):  # the API, which signs registry tokens, may still be starting
+        login = subprocess.run(["docker", "login", "-u", "platform", "--password-stdin", host],
+                               input=settings.registry_platform_secret.encode(), capture_output=True)
+        if login.returncode == 0:
+            break
+        time.sleep(2)
+    login.check_returncode()
+    base = f"{host}/{registry.BASE_REPO}:{settings.environment_base_image.rsplit(':', 1)[-1]}"
+    subprocess.run(["docker", "tag", settings.environment_base_image, base], check=True)
+    subprocess.run(["docker", "push", "-q", base], check=True, capture_output=True)
+
+
 def run_checks(manifest: dict, contents: dict[str, bytes]) -> list[CheckResult]:
     task, grader, solved = split(manifest, contents)
     image = manifest["base_image"]
+    if image.startswith(settings.registry_host + "/"):
+        # A vendor image, copied into the platform's namespace when the version was created.
+        # Pulled up front, so the pull doesn't count against a check's time limit.
+        subprocess.run(["docker", "pull", "-q", image], check=True, capture_output=True, timeout=600)
     return [
         check_reference(image, manifest, task, grader, solved),
         check_empty(image, manifest, task, grader),
@@ -249,6 +269,8 @@ async def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
     async with SessionLocal() as session:
         await clock.start(session)
+    if settings.registry_platform_secret:
+        connect_registry()
     log.info("sandbox runner started")
     while True:
         async with SessionLocal() as session:

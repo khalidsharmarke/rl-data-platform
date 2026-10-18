@@ -1,0 +1,19 @@
+# The platform's container registry (D50). Clients get tokens from the API's token endpoint,
+# which signs them with a key whose public half the API writes to /keys/jwks.json.
+version: 0.1
+log:
+  level: info
+storage:
+  delete:
+    enabled: true
+  filesystem:
+    rootdirectory: /var/lib/registry
+http:
+  addr: :5000
+auth:
+  token:
+    # Where the Docker daemon, on the host, reaches the API.
+    realm: http://localhost:8000/registry/token
+    service: rl-registry
+    issuer: rl-platform
+    jwks: /keys/jwks.json

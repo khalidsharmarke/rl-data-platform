@@ -92,7 +92,14 @@ function VersionView({ version, me, rubric, onReviewed }: { version: EnvVersion;
   return (
     <div className="version">
       <p className="muted">
-        Test command <code>{version.manifest.test_command}</code> on <code>{version.manifest.base_image}</code>
+        Test command <code>{version.manifest.test_command}</code> on{" "}
+        {version.manifest.vendor_image ? (
+          <>
+            the vendor's image <code>{version.manifest.vendor_image}</code>, pinned in the platform's registry
+          </>
+        ) : (
+          <code>{version.manifest.base_image}</code>
+        )}
       </p>
 
       <h4>Checks</h4>

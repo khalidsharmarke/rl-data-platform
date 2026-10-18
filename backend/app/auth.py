@@ -80,20 +80,25 @@ def hash_secret(secret: str) -> str:
     return hashlib.sha256(secret.encode()).hexdigest()
 
 
-async def token_principal(secret: str, request: Request, session: AsyncSession) -> TokenPrincipal:
-    unauthorized = HTTPException(status.HTTP_401_UNAUTHORIZED, "Token not recognized, revoked or expired")
+async def active_token(secret: str, session: AsyncSession) -> ApiToken:
+    """The live token with this secret, its last use recorded; 401 if it's unknown, revoked or expired."""
     token = await session.scalar(select(ApiToken).where(ApiToken.secret_hash == hash_secret(secret)))
     now = clock.now()
     if token is None or token.revoked_at is not None or token.expires_at <= now:
-        raise unauthorized
-    route = request.scope.get("route")
-    rule = TOKEN_ROUTES.get((request.method, getattr(route, "path", "")))
-    if rule is None or not rule[0] & set(token.scopes):
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "API tokens can't do this, or this token lacks the scope")
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Token not recognized, revoked or expired")
     # Recorded at most once a minute, so reads don't each cost a write.
     if token.last_used_at is None or now - token.last_used_at > timedelta(minutes=1):
         await session.execute(update(ApiToken).where(ApiToken.id == token.id).values(last_used_at=now))
         await session.commit()
+    return token
+
+
+async def token_principal(secret: str, request: Request, session: AsyncSession) -> TokenPrincipal:
+    token = await active_token(secret, session)
+    route = request.scope.get("route")
+    rule = TOKEN_ROUTES.get((request.method, getattr(route, "path", "")))
+    if rule is None or not rule[0] & set(token.scopes):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "API tokens can't do this, or this token lacks the scope")
     return TokenPrincipal(token_id=token.id, org=await session.get(Org, token.org_id), role=rule[1], display_name=token.name)
 
 

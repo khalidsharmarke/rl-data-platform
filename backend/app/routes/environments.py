@@ -5,6 +5,7 @@ their vendor supplies environments (VM6). Other vendors can't see a vendor's env
 (N9); Anthropic staff see all of them.
 """
 
+import asyncio
 import base64
 import binascii
 import json
@@ -17,7 +18,8 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app import clock, environments
+from app import clock, environments, registry
+from app.config import settings
 from app.audit import record
 from app.auth import current_user
 from app.db import get_session
@@ -54,6 +56,9 @@ class VersionIn(BaseModel):
     # Runs in the attempt step, before grading (for example, to build the task's code). Optional.
     prepare_command: str | None = Field(default=None, max_length=500)
     files: list[FileIn] = Field(min_length=1, max_length=200)
+    # The vendor's own runtime image, by digest, instead of the base image (D50). Task content
+    # still comes in `files`; the image holds only the runtime.
+    image: str | None = Field(default=None, max_length=300)
 
 
 class VersionOut(BaseModel):
@@ -143,6 +148,21 @@ async def list_environments(
     return await environment_rows(session, user, project_id=project_id)
 
 
+async def pin_vendor_image(ref: str, user: User, session: AsyncSession) -> str:
+    """Copy the vendor's image into the platform's namespace, so the version never depends on the vendor's copy (D50)."""
+    if not settings.registry_url:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "This platform has no registry; leave out image")
+    org = await session.get(Org, user.org_id)
+    match = registry.IMAGE_REF.match(ref)
+    if not match or not match.group(1).startswith(registry.namespace(org.name) + "/"):
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY,
+                            f"image must be {registry.namespace(org.name)}/<name>@sha256:<digest>, pinned by digest")
+    try:
+        return await asyncio.to_thread(registry.pin, ref)
+    except LookupError:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"{ref} isn't in the registry; push it first")
+
+
 @router.post("/environments/{environment_id}/versions", status_code=status.HTTP_201_CREATED)
 async def create_version(
     environment_id: uuid.UUID, body: VersionIn,
@@ -157,7 +177,12 @@ async def create_version(
             files.append((f.path, f.part, base64.b64decode(f.content_b64, validate=True)))
         except (binascii.Error, ValueError):
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"{f.path}: content isn't valid base64")
-    manifest = await environments.build_manifest(session, files, body.test_command, body.prepare_command)
+    base_image = settings.environment_base_image
+    if body.image:
+        base_image = await pin_vendor_image(body.image, user, session)
+    manifest = await environments.build_manifest(session, files, body.test_command, body.prepare_command, base_image)
+    if body.image:
+        manifest["vendor_image"] = body.image
     now = clock.now()
     version = EnvironmentVersion(environment_id=env.id, number=await environments.next_number(session, env.id), manifest=manifest,
                                  status="draft", created_by=user.id, created_by_token=getattr(user, "token_id", None), created_at=now, status_changed_at=now)

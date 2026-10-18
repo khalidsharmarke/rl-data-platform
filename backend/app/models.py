@@ -71,6 +71,7 @@ class User(Base):
 class TokenScope(StrEnum):
     ENVIRONMENTS = "environments"
     READ = "read"
+    REGISTRY = "registry"
 
 
 class ApiToken(Base):

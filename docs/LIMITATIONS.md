@@ -10,7 +10,7 @@ What the build does not do, where it falls short, and what is still undecided. T
 
 ## 1. Coverage of the posting
 
-The posting names three areas: *"environment creation, data collection, and training observability."* The build covers the core of data collection, plus the vendor management, workspaces and audit trail it needs. It covers 48 of the design's 56 functional requirements.
+The posting names three areas: *"environment creation, data collection, and training observability."* The build covers the core of data collection, plus the vendor management, workspaces and audit trail it needs. It covers 49 of the design's 56 functional requirements.
 
 | Posting line | Coverage in the build |
 |---|---|
@@ -20,7 +20,7 @@ The posting names three areas: *"environment creation, data collection, and trai
 | *"backend services and APIs that connect environment authoring tools, data collection systems, and RL training infrastructure"* | Partly. Datasets are exported as files, training pulls environments from the catalog, training sends episodes back to an intake (TO1, M17), and a quarantined version training used goes out as a recall that training answers with what it did (TO8, M19). Training is a stand-in that models it |
 | *"web platforms for RL environment creation, management, and quality review"* and *"vendor-facing interfaces… to create, submit, and iterate on training environments"* | Started. Researchers write briefs, data ops allocates them, and builders upload versions that never change, stored by hash in three parts (EC0, EC1, M13), every submitted version is checked in a sandbox (EC3 without difficulty, M14), builders see why a check failed and what changed between versions, researchers grade against the brief's rubric, training pulls approved versions from a catalog without the reference solution (EC2, EC4–EC6, EC8, M15), and a flagged version is quarantined through a case, with the runs that pulled it listed (TO6, M16). Difficulty comes from training's solve rates (M18). Not built: vendor-built images and generated tasks |
 | *"scalable code data generation pipelines"* | No (EC7) |
-| *"onboarding automation… Docker registry access, API token management, and environment validation"* | Started. Vendor admins manage their organization's API tokens: named, scoped, shown once, expiring, revocable by data ops, with everything a token did in the audit log (M25). Vendors and users are still seeded, and there is no registry yet (VM2, VM3) |
+| *"onboarding automation… Docker registry access, API token management, and environment validation"* | Started. Vendor admins manage their organization's API tokens: named, scoped, shown once, expiring, revocable by data ops, with everything a token did in the audit log (M25). A container registry gives each vendor a namespace; `docker login` takes a vendor token, and a version can name a vendor image by digest, which the platform copies into its own namespace and checks in the sandbox (M26). Vendors and users are still seeded (VM3) |
 
 [`BUILD.md`](BUILD.md#not-in-the-build) lists every requirement left out and why.
 

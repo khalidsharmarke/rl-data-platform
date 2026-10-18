@@ -106,7 +106,7 @@ export type EnvironmentRow = {
 export type VersionFile = { path: string; part: "task" | "grader" | "reference"; hash: string; size: number };
 export type EnvVersion = {
   id: string; environment_id: string; number: number; status: string; created_at: string; status_changed_at: string;
-  manifest: { base_image: string; test_command: string; prepare_command: string | null; files: VersionFile[] };
+  manifest: { base_image: string; vendor_image?: string; test_command: string; prepare_command: string | null; files: VersionFile[] };
 };
 export type VersionRow = {
   id: string; environment_id: string; environment_name: string; project_id: string; vendor_name: string;

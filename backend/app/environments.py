@@ -85,7 +85,7 @@ def clean_path(path: str) -> str:
 
 
 async def build_manifest(session: AsyncSession, files: list[tuple[str, str, bytes]], test_command: str,
-                         prepare_command: str | None = None) -> dict:
+                         prepare_command: str | None, base_image: str) -> dict:
     """files: (path, part, content). Stores each file and returns the version's manifest.
 
     Each part lives in its own directory: task/, grader/ and reference/. A reference file
@@ -111,7 +111,7 @@ async def build_manifest(session: AsyncSession, files: list[tuple[str, str, byte
     if missing:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"A version needs at least one {' and one '.join(missing)} file")
     return {
-        "base_image": settings.environment_base_image,
+        "base_image": base_image,
         "test_command": test_command,
         "prepare_command": prepare_command,
         "files": sorted(entries, key=lambda e: (PARTS.index(e["part"]), e["path"])),

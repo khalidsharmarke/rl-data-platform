@@ -30,6 +30,15 @@ class Settings(BaseSettings):
     content_dir: str = "/data/content"
     # The base image every environment version runs on (build decision B4).
     environment_base_image: str = "rl-env-python:1"
+    # The container registry (D50). Empty registry_url turns vendor images off.
+    registry_url: str = ""
+    # How the Docker daemon that runs checks names the registry.
+    registry_host: str = "localhost:5000"
+    registry_service: str = "rl-registry"
+    registry_issuer: str = "rl-platform"
+    registry_key_dir: str = "/registry-keys"
+    # The platform's own services (the sandbox) sign in to the registry with this. Empty disables it.
+    registry_platform_secret: str = ""
 
 
 settings = Settings()
