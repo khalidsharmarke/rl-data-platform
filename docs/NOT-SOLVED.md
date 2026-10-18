@@ -56,7 +56,8 @@ Each entry is one of five kinds:
 | Container registry | A registry with a namespace per vendor and token-based credentials, but no image scanning and no size quotas (planned, M26) | The sandbox's limits are the boundary that matters; scanning and quotas are standard registry features to turn on | D50, A15, VM2 |
 | Registry transport | The registry and its token endpoint speak plain HTTP on localhost; Docker trusts localhost registries without TLS | A real deployment puts both behind TLS; nothing else changes | D50 |
 | Registry activity in the audit log | Pushes and pulls are in the registry's own log, not the platform's audit log; the audit log records the token exchanges' effects that matter, a version naming an image | The registry can send notifications the platform could record; not needed to show the boundary | D45, D50 |
-| Inviting a vendor | Data ops gets a single-use invite link to pass on, instead of the platform sending an email (planned, M27) | Email delivery is a standard part, not the hard problem | D46 |
+| Qualifying a vendor's workers | One fixed set of five sample tasks, shared by every new vendor; four right passes. A real qualification would draw from a rotating pool, per domain, so answers can't be passed around | Shows the gate and the checklist; the pool is content work | D46 |
+| Inviting a vendor | Data ops gets a single-use invite link to pass on, instead of the platform sending an email | Email delivery is a standard part, not the hard problem | D46 |
 | Generating programming tasks | Hand-written task families in Python: a parameterized bug, its fix, tests and probes, at several difficulties. No model writes tasks (planned, M28) | Templates make every generated task explainable and its probes known; a model writing tasks is a research project of its own | D48, EC7 |
 | Sign-in and the API gateway | Seeded demo logins and a scoping module every route goes through | Standard parts, not the hard problem | [`BUILD.md`](BUILD.md#stand-ins) |
 | Message broker and durable log | Postgres tables: the job queue, the outbox read through a cursor feed, and the episodes table that stands in for the durable log in front of the analytics store | Volumes are low enough; the contracts would stay the same on Kafka | D2, D24, B7 |
@@ -75,6 +76,5 @@ These belong to the platform and come later. [`BUILD.md`](BUILD.md#not-in-the-bu
 | Scale: ~1.2 million submissions a day, ~1,000 episodes a second | Designed for, not load-tested; the build runs at demo volume | Scale estimate, D2, D5 |
 | Task types beyond comparing two answers, including agentic tasks | One task type is enough to show the platform | DC1 |
 | Vendor rules that need identities across vendors: removed workers returning, the same answers across vendors | They need a cross-vendor worker match, which is P2 | AB2, AB10 |
-| Vendor onboarding, API tokens and registry access | Vendors were seeded (planned, M25–M27) | VM2, VM3, N14 |
 | Generated programming tasks | Needed the environment pipeline first, which now exists (planned, M28–M29) | EC7 |
 | Vendor-private rules, matching workers across vendors | P2 in the PRD | AB9, AB10 |

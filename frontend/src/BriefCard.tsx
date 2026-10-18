@@ -24,7 +24,7 @@ export default function BriefCard({ project, me }: { project: Project; me: User 
   const mix = Object.entries(brief.difficulty_mix).map(([level, share]) => `${Math.round(share * 100)}% ${level}`).join(", ");
   return (
     <div className="card">
-      <h3>{project.name}</h3>
+      <h3>{project.name}{project.onboarding && <span className="chip">Onboarding sample: feeds nothing</span>}</h3>
       <p className="muted">
         Environment brief · {project.target_volume.toLocaleString()} environments wanted{mix && ` · ${mix}`}
         {brief.languages.length > 0 && ` · ${brief.languages.join(", ")}`}

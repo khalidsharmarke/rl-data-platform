@@ -16,11 +16,14 @@ import os
 import random
 import sys
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 
 import httpx
 
 import demo_content
+import oci
+import rlp
 
 API = os.environ.get("API_URL", "http://api:8000")
 SPEED = int(os.environ.get("DEMO_CLOCK_SPEED", "180"))
@@ -229,6 +232,75 @@ async def training_act(c: httpx.AsyncClient, brief_id: str) -> None:
 
 async def environments_and_training(c: httpx.AsyncClient) -> None:
     await training_act(c, await environment_act(c))
+
+
+HARBOR = "Harbor Labs"
+HARBOR_ADMIN, HARBOR_WORKER = "Ines Duarte", "Kai Mbeki"
+HARBOR_STARTS_AFTER_MINUTES = 30
+HARBOR_KIT = {"usr/local/lib/python3.12/site-packages/harbor_kit/__init__.py": b'"""Harbor\'s test helpers."""\n'}
+SAMPLE_ANSWERS = {g.payload["item"]: g.better for g in demo_content.generate(5, seed=101)}  # the onboarding sample set
+
+
+async def harbor_act(c: httpx.AsyncClient) -> None:
+    """A fourth vendor onboards itself (VM3, D46): invite, token, image, a failed sample and a fixed one, worker samples."""
+    await sim_sleep(HARBOR_STARTS_AFTER_MINUTES * 60)
+    _researcher, ops, _builder = await people(c)
+    org = (await c.post("/orgs", headers=ops, json={"name": HARBOR, "capabilities": ["human_work", "environments"]})).json()
+    invite = (await c.post(f"/orgs/{org['id']}/invites", headers=ops, json={"display_name": HARBOR_ADMIN})).json()
+    print(f"  Data ops creates {HARBOR} and sends its admin a single-use invite link", flush=True)
+    await sim_sleep(10 * 60)
+    admin = {"Authorization": "Bearer " + (await c.post("/auth/invites/accept", json={"code": invite["code"]})).json()["access_token"]}
+    token = (await c.post("/tokens", headers=admin, json={"name": "harbor-ci", "scopes": ["environments", "read", "registry"]})).json()
+    print(f"  {HARBOR_ADMIN} opens it, sees an empty checklist, and creates a token for Harbor's CI", flush=True)
+    await asyncio.gather(harbor_ci(c, token["secret"]), harbor_samples(c, org["id"], admin))
+
+    api = rlp.Api(API, token["secret"])
+    state = await until(lambda: asyncio.to_thread(lambda: (s := rlp.checklist(api))["complete"] and s), "Harbor's checklist", 600)
+    took = lambda at: (datetime.fromisoformat(at) - datetime.fromisoformat(state["invited_at"])).total_seconds() / 60  # noqa: E731
+    print(f"  Harbor's CI sees the checklist complete: {took(state['first_accepted_at']):.0f} simulated minutes from invite to "
+          f"first accepted work, {took(state['onboarded_at']):.0f} to ready", flush=True)
+    if AUTOPILOT:
+        brief = next(p for p in (await c.get("/projects", headers=ops)).json() if p["name"] == "Python bug fixes")
+        contract = (await c.post(f"/orgs/{org['id']}/contracts", headers=ops, json={
+            "kind": "environments", "price": "110", "price_unit": "environment", "effective_from": "2026-01-01"})).json()
+        (await c.post(f"/projects/{brief['id']}/allocations", headers=ops,
+                      json={"vendor_id": org["id"], "contract_id": contract["id"], "share": "1"})).raise_for_status()
+        print(f"  Data ops allocates {HARBOR} real work: the Python bug-fix brief", flush=True)
+
+
+async def harbor_ci(c: httpx.AsyncClient, secret: str) -> None:
+    """Harbor's CI, with nothing but its token: push a runtime image, submit a sample, fix it when a check fails."""
+    def push() -> str:
+        def token_for(scope: str) -> str:
+            r = httpx.get(f"{API}/registry/token", params={"service": "rl-registry", "scope": scope}, auth=("harbor-ci", secret))
+            r.raise_for_status()
+            return r.json()["token"]
+        registry = oci.Registry(os.environ.get("REGISTRY_URL", "http://registry:5000"), token_for)
+        repo = "vendors/harbor-labs/runtime"
+        return f"{repo}@{oci.extend(registry, 'platform/base', '1', HARBOR_KIT, repo, '1')}"
+
+    image = await asyncio.to_thread(push)
+    print(f"  Harbor's CI logs in to the registry with the token and pushes {image.split('@')[0]}:1", flush=True)
+    api = rlp.Api(API, secret)
+    version, checks = await asyncio.to_thread(rlp.submit, api, ENVIRONMENTS / "passes_anything", image=image)
+    failed = next(ch["detail"] for ch in checks if not ch["passed"])
+    print(f"  Harbor's first sample fails a check: {failed}", flush=True)
+    await sim_sleep(20 * 60)
+    version, _ = await asyncio.to_thread(rlp.submit, api, ENVIRONMENTS / "sound", image=image)
+    print(f"  Harbor's CI pushes a fix: version {version['number']} passes the sandbox's checks", flush=True)
+
+
+async def harbor_samples(c: httpx.AsyncClient, org_id: str, admin: dict) -> None:
+    await sim_sleep(15 * 60)
+    (await c.post(f"/orgs/{org_id}/members", headers=admin, json={"display_name": HARBOR_WORKER, "role": "worker"})).raise_for_status()
+    worker = await as_person(c, HARBOR_WORKER)
+    project = next(p for p in (await c.get("/projects", headers=admin)).json() if p["onboarding"] and p["kind"] == "human_data")
+    while (r := await c.post("/assignments/next", headers=worker, json={"project_id": project["id"]})).status_code == 200:
+        a = r.json()
+        await sim_sleep(90)
+        choice = SAMPLE_ANSWERS[a["task"]["payload"]["item"]]
+        (await c.post(f"/assignments/{a['id']}/submit", headers=worker, json={"answer": {"choice": choice}})).raise_for_status()
+    print(f"  Harbor's admin adds {HARBOR_WORKER}, who answers the {len(SAMPLE_ANSWERS)} sample tasks", flush=True)
 
 
 @dataclass
@@ -595,6 +667,7 @@ async def main() -> None:
         tick = asyncio.create_task(ticker())
         done = asyncio.Event()
         helpers = [asyncio.create_task(data_ops(c, project_id, progress, done)), asyncio.create_task(environments_and_training(c)),
+                   asyncio.create_task(harbor_act(c)),
                    asyncio.create_task(spot_checker(c, project_id, truth, done)),
                    asyncio.create_task(vendor_reviewer(c, project_id, truth, done))]
         if AUTOPILOT:

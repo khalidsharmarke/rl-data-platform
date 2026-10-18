@@ -280,6 +280,8 @@ async def list_versions_by_status(
         query = query.where(Environment.org_id == user.org_id)
     if project_id:
         query = query.where(Environment.project_id == project_id)
+    else:  # onboarding samples stay out of the review queue (D46)
+        query = query.where(Environment.project_id.not_in(select(Project.id).where(Project.onboarding)))
     if status_filter:
         query = query.where(EnvironmentVersion.status == status_filter)
     return [VersionRow(id=v.id, environment_id=e.id, environment_name=e.name, project_id=e.project_id, vendor_name=name,
@@ -355,7 +357,10 @@ async def review_version(
     version, env = await visible_version(version_id, user, session)
     if version.status != "in_review":
         raise HTTPException(status.HTTP_409_CONFLICT, "Only a version in review can be reviewed")
-    criteria = (await session.get(Project, env.project_id)).brief["review_rubric"]
+    project = await session.get(Project, env.project_id)
+    if project.onboarding:
+        raise HTTPException(status.HTTP_409_CONFLICT, "Onboarding samples aren't reviewed; passing the checks is the test (D46)")
+    criteria = project.brief["review_rubric"]
     if set(body.rubric) != set(criteria):
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Answer every criterion in the brief's rubric, and only those")
     if body.decision == "approve" and not all(body.rubric.values()):

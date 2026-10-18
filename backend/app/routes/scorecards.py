@@ -246,6 +246,7 @@ WITH v AS (
              AND NOT EXISTS (SELECT 1 FROM validation_runs r WHERE r.version_id = ev.id AND NOT r.passed) AS passed_checks,
            (SELECT decision FROM environment_reviews w WHERE w.version_id = ev.id ORDER BY w.created_at DESC LIMIT 1) AS decision
     FROM environment_versions ev JOIN environments e ON e.id = ev.environment_id
+    JOIN projects p ON p.id = e.project_id AND NOT p.onboarding
     WHERE ev.status <> 'draft' AND (CAST(:p AS uuid) IS NULL OR e.project_id = CAST(:p AS uuid))
 ),
 trained AS (SELECT version_id, sum(episodes) AS episodes, sum(passed) AS solved FROM training_stats GROUP BY version_id),

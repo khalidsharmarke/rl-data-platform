@@ -39,7 +39,7 @@ export default function Scorecards({ me }: { me: User }) {
 
   useEffect(() => {
     api<Project[]>("/projects").then((list) => {
-      const human = list.filter((p) => p.kind === "human_data");
+      const human = list.filter((p) => p.kind === "human_data" && !p.onboarding);
       setProject(human.find((p) => !p.name.includes("(sample)")) ?? human[0] ?? null);
     });
   }, []);

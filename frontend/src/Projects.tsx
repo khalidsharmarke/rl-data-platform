@@ -62,7 +62,7 @@ export default function Projects({ me }: { me: User }) {
       {projects.filter((p) => p.kind === "environment").map((p) => <BriefCard key={p.id} project={p} me={me} />)}
       {projects.filter((p) => p.kind === "human_data" && me.role !== "environment_builder").map((p) => (
         <div key={p.id} className="card">
-          <h3>{p.name}</h3>
+          <h3>{p.name}{p.onboarding && <span className="chip">Onboarding sample: feeds nothing</span>}</h3>
           <p className="muted">
             {p.task_type} · task design v{p.current_schema_version} · {p.overlap} answers per task · target{" "}
             {p.target_volume.toLocaleString()}

@@ -39,6 +39,8 @@ class Settings(BaseSettings):
     registry_key_dir: str = "/registry-keys"
     # The platform's own services (the sandbox) sign in to the registry with this. Empty disables it.
     registry_platform_secret: str = ""
+    # The vendor CLI (tools/rlp.py), served for vendors to download.
+    tools_dir: str = "/tools"
 
 
 settings = Settings()

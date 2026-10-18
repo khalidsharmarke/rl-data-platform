@@ -9,6 +9,7 @@ import Training from "./Training";
 import Scorecards from "./Scorecards";
 import Work from "./Work";
 import { api, saveToken, savedToken, type User } from "./api";
+import Onboarding from "./Onboarding";
 import Tokens from "./Tokens";
 import Workspaces from "./Workspaces";
 
@@ -25,7 +26,19 @@ export default function App() {
   const [me, setMe] = useState<User | null>(null);
   const [checked, setChecked] = useState(false);
 
+  const [inviteError, setInviteError] = useState<string | null>(null);
+
   useEffect(() => {
+    // An invite link signs its person in once (D46), then the code is gone from the address bar.
+    const code = new URLSearchParams(window.location.search).get("invite");
+    if (code) {
+      window.history.replaceState(null, "", window.location.pathname);
+      api<{ access_token: string; user: User }>("/auth/invites/accept", { method: "POST", body: JSON.stringify({ code }) }, null)
+        .then((r) => (saveToken(r.access_token), setMe(r.user)))
+        .catch((e) => setInviteError(String(e.message ?? e)))
+        .finally(() => setChecked(true));
+      return;
+    }
     if (!savedToken()) return setChecked(true);
     api<User>("/auth/me")
       .then(setMe)
@@ -34,7 +47,7 @@ export default function App() {
   }, []);
 
   if (!checked) return null;
-  if (!me) return <DemoLogin onSignedIn={setMe} />;
+  if (!me) return <DemoLogin onSignedIn={setMe} inviteError={inviteError} />;
 
   return (
     <main className="page">
@@ -45,13 +58,15 @@ export default function App() {
         </span>
         <button onClick={() => (saveToken(null), setMe(null))}>Sign out</button>
       </header>
-      <Views me={me} />
+      <Views key={me.id} me={me} />
     </main>
   );
 }
 
 function Views({ me }: { me: User }) {
+  const onboarding = me.role === "vendor_admin" && !me.org_onboarded;
   const tabs = [
+    ...(onboarding ? ["Onboarding"] : []),
     ...(me.role === "worker" ? ["Work", "Feedback"] : []),
     ...(me.role === "vendor_reviewer" ? ["Review before submitting"] : []),
     ...(me.role !== "worker" ? ["Projects"] : []),
@@ -60,6 +75,7 @@ function Views({ me }: { me: User }) {
     ...(["data_ops", "researcher"].includes(me.role) ? ["Training"] : []),
     ...(["data_ops", "vendor_admin"].includes(me.role) ? ["Cases"] : []),
     ...(["data_ops", "researcher"].includes(me.role) ? ["Detection"] : []),
+    ...(me.role === "data_ops" || (me.role === "vendor_admin" && !onboarding) ? ["Onboarding"] : []),
     ...(["data_ops", "vendor_admin"].includes(me.role) ? ["API tokens"] : []),
     "Workspaces",
   ];
@@ -82,13 +98,14 @@ function Views({ me }: { me: User }) {
       {tab === "Scorecards" && <Scorecards me={me} />}
       {tab === "Cases" && <Cases me={me} />}
       {tab === "Detection" && <Detection canChange={me.role === "data_ops"} />}
+      {tab === "Onboarding" && <Onboarding me={me} />}
       {tab === "API tokens" && <Tokens me={me} />}
       {tab === "Workspaces" && <Workspaces me={me} />}
     </>
   );
 }
 
-function DemoLogin({ onSignedIn }: { onSignedIn: (user: User) => void }) {
+function DemoLogin({ onSignedIn, inviteError }: { onSignedIn: (user: User) => void; inviteError: string | null }) {
   const [users, setUsers] = useState<User[]>([]);
   const [error, setError] = useState<string | null>(null);
 
@@ -124,7 +141,9 @@ function DemoLogin({ onSignedIn }: { onSignedIn: (user: User) => void }) {
         <li><strong>Rae</strong> → Training → the second run: one environment's solve rate leaps as attempts get shorter.</li>
         <li><strong>Sam</strong> → Cases → "slugify edge cases": the hack detector's case, the recall, and training's rollback.</li>
         <li><strong>Sam</strong> → Cases → Kestrel Labs: a vendor case, Kestrel's response and the pause; Scorecards: how each vendor handles its own cases.</li>
+        <li><strong>Sam</strong> → Onboarding: Harbor Labs, from invite to ready for real work. <strong>Ines Duarte</strong> (Harbor's admin) → Onboarding: the checklist and the commands for her own terminal.</li>
       </ol>
+      {inviteError && <p className="error">{inviteError}</p>}
       {error && <p className="error">Couldn't load demo users: {error}</p>}
       <div className="orgs">
         {orgs.map((org) => (

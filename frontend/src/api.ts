@@ -6,6 +6,7 @@ export type User = {
   org_id: string;
   org_name: string;
   org_kind: "internal" | "vendor";
+  org_onboarded: boolean;
 };
 
 const TOKEN_KEY = "rl-token";
@@ -97,6 +98,7 @@ export type Project = {
   target_volume: number;
   overlap: number;
   status: string;
+  onboarding: boolean;
 };
 
 export type EnvironmentRow = {
@@ -353,4 +355,18 @@ export type Recall = {
 export type HackCheck = {
   id: string; version_id: string; environment_name: string; run_label: string; observation: string; created_at: string;
   episodes: { episode_id: string; step: number; reward: number; length: number; transcript: string | null }[];
+};
+
+export type ChecklistItem = { key: string; label: string; done: boolean; detail: string; at: string | null };
+export type Onboarding = {
+  org_id: string;
+  org_name: string;
+  capabilities: string[];
+  items: ChecklistItem[];
+  complete: boolean;
+  invited_at: string | null;
+  first_accepted_at: string | null;
+  onboarded_at: string | null;
+  namespace: string;
+  registry_host: string | null;
 };

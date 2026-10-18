@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app import onboarding
 from app.audit import record, snapshot
 from app.auth import current_user
 from app.db import get_session
@@ -75,6 +76,7 @@ async def create_vendor(
     session.add(org)
     await session.flush()
     record(session, actor=user, action="org.created", entity_type="org", entity_id=org.id, org_id=org.id, after=snapshot(org))
+    await onboarding.start(session, org)
     await session.commit()
     return OrgOut.of(org)
 

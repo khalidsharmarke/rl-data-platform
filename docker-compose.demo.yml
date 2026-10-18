@@ -29,6 +29,9 @@ services:
     volumes:
       - ./backend/app/demo_content.py:/sim/demo_content.py:ro
       - ./backend/tests/fixtures/environments:/sim/environments:ro
+      # Harbor's CI uses the same vendor CLI and registry client a vendor would.
+      - ./tools/rlp.py:/sim/rlp.py:ro
+      - ./backend/app/oci.py:/sim/oci.py:ro
     depends_on:
       - api
 

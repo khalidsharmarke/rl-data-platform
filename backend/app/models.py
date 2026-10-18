@@ -49,6 +49,8 @@ class Org(Base):
     kind: Mapped[str] = mapped_column(Text)
     capabilities: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list)
     domains: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list)
+    # When the vendor's onboarding checklist was first complete; real work waits for it (D46).
+    onboarded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     users: Mapped[list["User"]] = relationship(back_populates="org")
@@ -89,6 +91,21 @@ class ApiToken(Base):
     last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     revoked_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
+
+
+class Invite(Base):
+    __tablename__ = "invites"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid())
+    org_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("orgs.id"))
+    role: Mapped[str] = mapped_column(Text)
+    display_name: Mapped[str] = mapped_column(Text)
+    code_hash: Mapped[str] = mapped_column(Text, unique=True)
+    created_by: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    user_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
 
 
 class AuditEvent(Base):
@@ -157,6 +174,8 @@ class Project(Base):
     # difficulty mix, review rubric) lives in `brief`; the human-data fields stay at neutral values.
     kind: Mapped[str] = mapped_column(Text, default="human_data")
     brief: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    # Onboarding samples run on the real path but feed nothing: no scorecard, dataset or catalog (D46).
+    onboarding: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 

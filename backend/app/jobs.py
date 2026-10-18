@@ -46,7 +46,7 @@ async def enqueue(session: AsyncSession, kind: str, dedupe_key: str, payload: di
 
 
 async def schedule(session: AsyncSession) -> None:
-    for (project_id,) in (await session.execute(text("SELECT id FROM projects WHERE status = 'active'"))).all():
+    for (project_id,) in (await session.execute(text("SELECT id FROM projects WHERE status = 'active' AND NOT onboarding"))).all():
         await enqueue(session, "scorecards", f"scorecards:{project_id}", {"project_id": str(project_id)})
     await enqueue(session, "escalations", "escalations", {})
     await enqueue(session, "training_stats", "training_stats", {})

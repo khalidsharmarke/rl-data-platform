@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field, model_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app import clock
+from app import clock, onboarding
 from app.audit import record
 from app.auth import current_user
 from app.db import get_session
@@ -82,6 +82,7 @@ class ProjectOut(BaseModel):
     overlap: int
     quality_bar: Decimal
     status: str
+    onboarding: bool
 
 
 class TaskIn(BaseModel):
@@ -270,6 +271,9 @@ async def allocate(
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"That contract isn't a {work} contract with this vendor")
     if not contract.in_effect(clock.now().date()):
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "That contract isn't in effect today")
+    # Real work waits for a complete onboarding checklist (D46).
+    if not project.onboarding and vendor.onboarded_at is None and not (await onboarding.checklist(session, vendor))["complete"]:
+        raise HTTPException(status.HTTP_409_CONFLICT, f"{vendor.name} hasn't finished onboarding yet")
     if await session.scalar(select(Allocation.id).where(Allocation.project_id == project.id, Allocation.vendor_id == vendor.id)):
         raise HTTPException(status.HTTP_409_CONFLICT, "This vendor is already allocated; change its allocation instead")
     allocation = Allocation(project_id=project.id, vendor_id=vendor.id, contract_id=contract.id, share=body.share)

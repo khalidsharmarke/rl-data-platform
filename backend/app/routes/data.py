@@ -188,6 +188,8 @@ async def export(
 ) -> DatasetOut:
     """Write released answers to a dataset file, each row with its lineage and tier (DC6, DC10, D14, D31)."""
     project: Project = await get_visible_project(project_id, user, session)
+    if project.onboarding:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Onboarding samples are never exported (D46)")
     view = await release.evaluate(session, project)
     tiers = {d.submission_id: d.state for d in view.released()}
     snapshots = {d.submission_id: view.grades[d.worker_id].snapshot() for d in view.released()}

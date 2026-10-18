@@ -41,7 +41,7 @@ _READ = [
     ("GET", "/projects/{project_id}/my-allocation"), ("GET", "/environments"), ("GET", "/environments/{environment_id}/versions"),
     ("GET", "/versions"), ("GET", "/versions/{version_id}"), ("GET", "/versions/{version_id}/checks"),
     ("GET", "/versions/{version_id}/diff"), ("GET", "/versions/{version_id}/reviews"),
-    ("GET", "/versions/{version_id}/files/{path:path}"),
+    ("GET", "/versions/{version_id}/files/{path:path}"), ("GET", "/orgs"), ("GET", "/orgs/{org_id}/onboarding"),
 ]
 _VENDOR_READ = [
     ("GET", "/vendors/{vendor_id}/scorecard"), ("GET", "/vendors/{vendor_id}/workers"), ("GET", "/vendors/environment-work"),

@@ -43,6 +43,14 @@ Three fictional vendors work on one project, *"Which of these two answers is mor
 23. **Data ops retires the version.** Kestrel's scorecard shows its environment work, from versions submitted to quarantines, and what happened in training: episodes, solve rate, flagged attempts and recalls.
 24. **A vendor-level rule notices.** Two of Kestrel's environments quarantined within 30 days opens a vendor case for data ops. Kestrel doesn't see it until data ops asks it to respond. Kestrel answers, and only then may data ops act: it pauses Kestrel on the brief. The same kind of rule can catch Brightline's fall (accuracy down while volume rose), but on some runs one worker isn't enough to move a whole vendor; data ops clears that case after Brightline's response.
 
+### The fourth act: a vendor onboards itself
+
+25. **Data ops creates a fourth vendor, Harbor Labs, and gets a single-use invite link** for its admin. Harbor's checklist starts empty, and no real work can be allocated to it until it's complete.
+26. **Harbor's admin opens the link and creates an API token** for Harbor's CI. The token belongs to Harbor, not to a person: everything it does is recorded under its name.
+27. **Harbor's CI does the rest with that token.** It logs in to the platform's container registry, pushes a runtime image to Harbor's own namespace, and submits a sample environment naming it by digest. The first sample fails a check (its grader accepts an empty answer), the checklist says why, and the CI's fix passes. The platform copied the image into its own namespace, so Harbor can't change what was checked.
+28. **Harbor's admin adds a worker, who answers the sample tasks.** Samples run on the real path but feed nothing: no scorecard, dataset, review queue or catalog.
+29. **The checklist completes itself**, computed from what happened rather than what Harbor reports: 33 simulated minutes from invite to first accepted work and about an hour to ready, in one run. Data ops gives Harbor the bug-fix brief Kestrel was paused on.
+
 ![A builder's view of a brief: one environment quarantined, three stopped by the sandbox's checks, with the reason and logs](docs/media/environment-checks.png)
 
 | Brightline's admin: the case | Data ops: lineage and clean-up |
@@ -58,7 +66,7 @@ Needs Docker with Compose. The sandbox runner starts a container for every envir
 ```sh
 make demo    # fresh database, then the scripted scenario above (about 4 minutes)
 make up      # start Postgres, the API, the background worker and the web app on real time
-make test    # 187 backend tests, 38 detection-service tests, and 16 sandbox tests on real containers and the registry
+make test    # 192 backend tests, 38 detection-service tests, and 16 sandbox tests on real containers and the registry
 make down    # stop (make reset also deletes the database)
 ```
 
@@ -100,7 +108,7 @@ Each of these was found by testing or by looking at the demo's output, fixed, an
 ## Where things are
 
 ```
-backend/     FastAPI app, migrations, background worker (app/jobs.py), the detection contract (app/routes/detection.py), rule modes, the audit sample and detection's measures (app/detection_quality.py, app/routes/detectors.py), broken tasks and agreement alerts (app/routes/task_health.py), vendor rules and vendor cases (app/vendor_oversight.py, app/routes/cases.py), vendor review (app/routes/vendor_review.py), the release stage (app/release.py), contributor grades (app/grades.py), discreet escalation (app/escalation.py), environments and versions (app/environments.py), the sandbox runner (app/sandbox.py), API tokens (app/routes/tokens.py), the registry's token endpoint and image pinning (app/registry.py, app/oci.py), the catalog (app/routes/catalog.py), episode intake and training dashboards (app/routes/training.py), training statistics (app/training_stats.py), the hack-detection contract and recalls (app/routes/hacks.py, app/environment_cases.py), fixture environments (tests/fixtures/environments), 187 tests
+backend/     FastAPI app, migrations, background worker (app/jobs.py), the detection contract (app/routes/detection.py), rule modes, the audit sample and detection's measures (app/detection_quality.py, app/routes/detectors.py), broken tasks and agreement alerts (app/routes/task_health.py), vendor rules and vendor cases (app/vendor_oversight.py, app/routes/cases.py), vendor review (app/routes/vendor_review.py), the release stage (app/release.py), contributor grades (app/grades.py), discreet escalation (app/escalation.py), environments and versions (app/environments.py), the sandbox runner (app/sandbox.py), API tokens (app/routes/tokens.py), the registry's token endpoint and image pinning (app/registry.py, app/oci.py), the catalog (app/routes/catalog.py), episode intake and training dashboards (app/routes/training.py), training statistics (app/training_stats.py), the hack-detection contract and recalls (app/routes/hacks.py, app/environment_cases.py), fixture environments (tests/fixtures/environments), 192 tests
 sandbox/     the sandbox runner's image and the base image environment checks run on
 registry/    the container registry's configuration (vendor images, D50)
 detection/   the separate detection services: abuse rules and severity (rules.py), their state (detector.py), the reward-hack detector (hacks.py, hack_service.py), 38 tests

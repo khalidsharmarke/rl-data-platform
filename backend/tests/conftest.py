@@ -65,6 +65,8 @@ async def client(session: AsyncSession, monkeypatch) -> AsyncIterator[AsyncClien
     monkeypatch.setattr(settings, "demo_logins", True)
     monkeypatch.setattr(settings, "detection_token", "test-detection-token")
     monkeypatch.setattr(settings, "training_token", "test-training-token")
+    # The registry is off unless a test turns it on; the API's tests don't need it running.
+    monkeypatch.setattr(settings, "registry_url", "")
 
     async def override() -> AsyncIterator[AsyncSession]:
         yield session

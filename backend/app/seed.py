@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit import record, snapshot
 from app.db import SessionLocal
-from app import clock, demo_content
+from app import clock, demo_content, onboarding
 from app.config import settings
 from app.models import Allocation, Capability, Contract, GoldAnswer, Org, OrgKind, PriceUnit, Project, Role, Task, TaskSchema, User
 from app.work import route_tasks
@@ -33,7 +33,9 @@ async def seed(session: AsyncSession) -> None:
     for org_name, kind, capabilities, people in SEED:
         org = await session.scalar(select(Org).where(Org.name == org_name))
         if org is None:
-            org = Org(name=org_name, kind=kind, capabilities=sorted(capabilities))
+            # The seeded vendors predate self-serve onboarding, so they count as onboarded (D46).
+            org = Org(name=org_name, kind=kind, capabilities=sorted(capabilities),
+                      onboarded_at=clock.now() if kind == OrgKind.VENDOR else None)
             session.add(org)
             await session.flush()
             record(session, actor=None, action="org.created", entity_type="org", entity_id=org.id, org_id=org.id, after=snapshot(org))
@@ -45,6 +47,7 @@ async def seed(session: AsyncSession) -> None:
                 await session.flush()
                 record(session, actor=None, action="user.added", entity_type="user", entity_id=user.id, org_id=org.id, after=snapshot(user))
     await seed_contracts(session)
+    await onboarding.ensure_projects(session)
     await seed_project(session)
     await session.commit()
 

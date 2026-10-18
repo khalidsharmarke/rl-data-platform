@@ -22,6 +22,8 @@ class UserOut(BaseModel):
     org_id: uuid.UUID
     org_name: str
     org_kind: str
+    # False while a vendor is still onboarding (D46).
+    org_onboarded: bool
 
     @classmethod
     def of(cls, user: User) -> "UserOut":
@@ -33,6 +35,7 @@ class UserOut(BaseModel):
             org_id=user.org_id,
             org_name=user.org.name,
             org_kind=user.org.kind,
+            org_onboarded=user.org.kind != "vendor" or user.org.onboarded_at is not None,
         )
 
 

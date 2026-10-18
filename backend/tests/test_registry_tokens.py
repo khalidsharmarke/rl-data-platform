@@ -17,7 +17,7 @@ from tests.test_tokens import bearer, make_token
 
 
 @pytest.fixture(autouse=True)
-def registry_on(monkeypatch, tmp_path):
+def registry_on(client, monkeypatch, tmp_path):
     monkeypatch.setattr(settings, "registry_url", "http://registry.invalid:5000")
     monkeypatch.setattr(settings, "registry_key_dir", str(tmp_path))
     monkeypatch.setattr(settings, "registry_platform_secret", "test-platform-secret")
