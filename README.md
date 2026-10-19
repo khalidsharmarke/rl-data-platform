@@ -4,7 +4,7 @@ A working slice of a platform for sourcing AI training data through many vendors
 
 Built in response to Anthropic's [Full-Stack Software Engineer, Reinforcement Learning](docs/POSTING.md) posting. It builds the data-collection core of the design and thin slices of environment creation and training observability, with training itself played by a stand-in. [Limitations](docs/LIMITATIONS.md) says what it doesn't do and where it falls short.
 
-**[Watch the eight-minute walkthrough](docs/media/walkthrough.mp4)** · [Product requirements](docs/PRD.md) · [Design](docs/DESIGN.md) · [Decisions](docs/DECISIONS.md) · [Build plan](docs/BUILD.md) · [Limitations](docs/LIMITATIONS.md) · [What we chose not to solve](docs/NOT-SOLVED.md) · [Vendor guide](docs/VENDOR-GUIDE.md) · [Operations runbook](docs/OPERATIONS.md)
+**[Watch the ten-minute walkthrough](docs/media/walkthrough.mp4)** · [Product requirements](docs/PRD.md) · [Design](docs/DESIGN.md) · [Decisions](docs/DECISIONS.md) · [Build plan](docs/BUILD.md) · [Limitations](docs/LIMITATIONS.md) · [What we chose not to solve](docs/NOT-SOLVED.md) · [Vendor guide](docs/VENDOR-GUIDE.md) · [Operations runbook](docs/OPERATIONS.md)
 
 ![Scorecards: three vendors compared on identical measures, with Brightline's dip](docs/media/scorecards.png)
 
@@ -161,7 +161,7 @@ registry/    the container registry's configuration (vendor images, D50)
 detection/   the separate detection services: abuse rules and severity (rules.py), their state (detector.py), the reward-hack detector (hacks.py, hack_service.py), 39 tests
 frontend/    React + TypeScript: one app, a view per role
 generator/   the code task generator: task families with probes, and the service that submits them through the API (D48)
-tools/       rlp.py, the vendor command-line client
+tools/       rlp.py, the vendor command-line client; walkthrough/, which records docs/media/walkthrough.mp4
 simulator/   the scripted scenario, driving the public API, and the training stand-in (training.py)
 docs/        posting, glossary, PRD, design, decisions, build plan, vendor guide, operations runbook, diagrams, media
 ```
