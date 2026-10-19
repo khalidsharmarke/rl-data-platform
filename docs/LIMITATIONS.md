@@ -10,7 +10,7 @@ What the build does not do, where it falls short, and what is still undecided. T
 
 ## 1. Coverage of the posting
 
-The posting names three areas: *"environment creation, data collection, and training observability."* The build covers the core of data collection, plus the vendor management, workspaces and audit trail it needs. It covers 51 of the design's 56 functional requirements.
+The posting names three areas: *"environment creation, data collection, and training observability."* The build covers the core of data collection, plus the vendor management, workspaces and audit trail it needs. Of the design's 56 functional requirements, it covers 48 fully, 6 in part and 2 not at all; the eight are listed below.
 
 | Posting line | Coverage in the build |
 |---|---|
@@ -22,7 +22,20 @@ The posting names three areas: *"environment creation, data collection, and trai
 | *"scalable code data generation pipelines"* | Started. A separate code task generator signs in with its own API token and fills the briefs allocated to it from hand-written task families, each task with probes (known-wrong answers that must fail the grader, D47); every version gets the same checks as a vendor's, duplicates are never resubmitted, and a family whose versions keep failing is stopped (M28). Researchers review a random sample of each batch: approving it approves the batch, a send-back stops the family; each family shows the difficulty it intended beside the one training measured (M29). The families are hand-written templates in one language (EC7) |
 | *"onboarding automation… Docker registry access, API token management, and environment validation"* | Started. Vendor admins manage their organization's API tokens: named, scoped, shown once, expiring, revocable by data ops, with everything a token did in the audit log (M25). A container registry gives each vendor a namespace; `docker login` takes a vendor token, and a version can name a vendor image by digest, which the platform copies into its own namespace and checks in the sandbox (M26). Data ops creates a vendor and invites its admin with a single-use link; the vendor proves its setup on samples that feed nothing, against a checklist the platform computes, and real work can't be allocated until it's complete. A vendor can do it all from its own terminal or CI with a small command-line client, and data ops sees the time from invite to first accepted work (M27) |
 
-[`BUILD.md`](BUILD.md#not-in-the-build) lists every requirement left out and why.
+### Requirements not fully covered
+
+| Requirement | Built | Missing |
+|---|---|---|
+| DC1: project task types (rate, compare, write, trajectory review) | Compare: pick the more helpful of two answers, with a reason | Rate, write and trajectory review, the last being the posting's *"complex agentic tasks"* |
+| AB2: vendor abuse rules | Quality falling while volume rises, environment versions quarantined, and how a vendor handles its own cases | Removed workers returning and matching answers across vendors: both need the cross-vendor match (AB10) |
+| AB11: client signals | Whether the answer was pasted | Time to first input, focus changes, whether the task content was opened |
+| AB12: API signals and rate limits | Server-measured time on task | Claim and submit rates, concurrent sessions per worker, workers per session or device, and rate limits |
+| AB14: discreet escalation | A watched worker meets gold sooner and more of their answers go to spot checks | Extra overlap on their tasks, and gold added rather than reordered (D26) |
+| DC11: contributor grades | Quality and integrity grades for every worker, shown to Anthropic and setting how much evidence release needs | The aggregate view of its own workers' grades for each vendor |
+| AB9: vendor-private abuse rules | Nothing (P2 in the PRD) | Rules a vendor adds that open cases only inside its own workspace |
+| AB10: cross-vendor worker match | Nothing (P2 in the PRD) | Keyed hashes of a stable identifier, with matches as case evidence |
+
+[`BUILD.md`](BUILD.md#not-in-the-build) lists what was left out of the build and why.
 
 ## 2. Technical limitations
 
