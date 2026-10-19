@@ -126,8 +126,7 @@ The design's scale estimate is about 1.2 million submissions a day ([`DESIGN.md`
 
 What's left, from [`BUILD.md`](BUILD.md#not-in-the-build) and the gaps above:
 
-1. Agentic tasks: the posting's *"QA for complex agentic tasks"*. There is one task type (DC1).
+1. The eight requirements above, planned as [M31–M35](BUILD.md#coverage-milestones): signals, rate limits and the vendor grades view; extra overlap; rate, write and trajectory review task types (the posting's *"QA for complex agentic tasks"*); the cross-vendor match and vendor-private rules.
 2. Generated tasks beyond hand-written Python templates: more languages, and families a model drafts and a researcher approves (EC7).
-3. Retrying crashed validation jobs, so a version never waits in validating forever.
+3. Retrying crashed validation jobs, so a version never waits in validating forever (planned with M31).
 4. The registry behind TLS, with image scanning and quotas (D50).
-5. P2 in the PRD: vendor-private rules and a cross-vendor worker match (AB9, AB10), which would also allow the vendor rules that need identities across vendors.

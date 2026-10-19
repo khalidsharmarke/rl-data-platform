@@ -29,6 +29,8 @@ Every product and design decision made so far, sorted by how hard it would be to
 | D44 | A vendor reviewer's correction is stored as a new version of the answer; the original is never overwritten | An overwritten original can't be recovered, so the worker's own accuracy and any abuse in it are lost for good | Store both versions from the first correction |
 | N22 | Versions training has pulled are kept for good | A deleted version can't be recovered, and nobody can then reproduce or explain what training used | Keep every pulled version, including quarantined ones |
 | D45 | Vendor API tokens belong to the vendor org: named, scoped, hashed, expiring | The first vendor integrates with a token. After that, the token format, scopes and expiry are a contract | Keep scopes coarse and few; version the token prefix |
+| D54 | Trajectory review answers record the first wrong step and the outcome | Answers are recorded. An answer stored without the step can't be scored per step later | Record the step from the first trajectory answer |
+| D55 | The cross-vendor match stores only keyed hashes, never identifiers | Once identifiers are stored, the platform holds identities PD1 says it doesn't | Store hashes from the first match; rotate the key if it leaks |
 | D50 | Vendor images are pinned by digest and copied into the platform's registry namespace when a version is submitted | A version that points at a vendor's own tag can't be reproduced once the vendor changes or deletes it, and training may already have used it | Copy and pin from the first vendor image accepted; keep image content to the runtime, with task content stored apart (D34) |
 | D47 | Probe solutions are a fourth part of a version, stored apart from the task files | Versions with probes are stored. A probe that reached the task files could teach the model a shortcut, and that can't be untaught | Store probes with the grader and reference from the first version that has one |
 | D40 | Every spot check records whether the answer looks like abuse, as well as whether it's accepted | Spot checks pile up. A spot check recorded without the abuse judgement can't be labeled afterwards, so it can't measure precision or misses | Ask for the judgement on every spot check from the start |
@@ -82,6 +84,10 @@ Every product and design decision made so far, sorted by how hard it would be to
 | D46 | Onboarding is a computed checklist, and real work waits for it | Changing the checks |
 | D48 | The code task generator is a client of the platform, like a vendor | Moving it inside the platform; its versions are stored like any other |
 | D49 | Generated batches are reviewed by sample | Changing the sample size, or reviewing every task |
+| D51 | Session ids on every claim; a claim rate limit the same for everyone, never a refused submission | Changing the limit |
+| D52 | A watched worker's tasks get one extra answer each | Changing how many, or routing them elsewhere |
+| D53 | Task types are a registry | Adding or changing types |
+| D56 | Vendor-private rules are thresholds on existing signals, kept out of shared measures | A richer rule language |
 | D39 | Observability is computed by the platform, independent of detection | Moving roll-ups into the analytics store; nothing about detection changes |
 | | Three planes (control, execution, ingestion); Postgres, an analytics store and object storage | Replacing a store means a data migration, which is costly but loses nothing |
 | | Web app in React and TypeScript | A rewrite of the front end; the API (VM5) is unaffected |

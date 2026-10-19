@@ -75,6 +75,6 @@ These belong to the platform and come later. [`BUILD.md`](BUILD.md#not-in-the-bu
 | Problem | Why it waits | Where |
 |---|---|---|
 | Scale: ~1.2 million submissions a day, ~1,000 episodes a second | Designed for, not load-tested; the build runs at demo volume | Scale estimate, D2, D5 |
-| Task types beyond comparing two answers, including agentic tasks | One task type is enough to show the platform | DC1 |
-| Vendor rules that need identities across vendors: removed workers returning, the same answers across vendors | They need a cross-vendor worker match, which is P2 | AB2, AB10 |
-| Vendor-private rules, matching workers across vendors | P2 in the PRD | AB9, AB10 |
+| Task types beyond comparing two answers, including agentic tasks | One task type was enough to show the platform (planned, M33–M34) | DC1 |
+| Vendor rules that need identities across vendors: removed workers returning, the same answers across vendors | They need a cross-vendor worker match (planned, M35) | AB2, AB10 |
+| Vendor-private rules, matching workers across vendors | P2 in the PRD (planned, M35) | AB9, AB10 |
