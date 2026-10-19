@@ -11,6 +11,8 @@ clock speed, so the platform's own time-on-task measurement sees realistic durat
 
 import asyncio
 import base64
+import hashlib
+import hmac
 import json
 import os
 import random
@@ -230,8 +232,12 @@ async def training_act(c: httpx.AsyncClient, brief_id: str) -> None:
     print("  Data ops retires the version; Kestrel's scorecard shows what happened in training", flush=True)
 
 
+TRAINING_DONE = asyncio.Event()  # the vendor rules' last findings come after the training act
+
+
 async def environments_and_training(c: httpx.AsyncClient) -> None:
     await training_act(c, await environment_act(c))
+    TRAINING_DONE.set()
 
 
 HARBOR = "Harbor Labs"
@@ -292,7 +298,11 @@ async def harbor_ci(c: httpx.AsyncClient, secret: str) -> None:
 
 async def harbor_samples(c: httpx.AsyncClient, org_id: str, admin: dict) -> None:
     await sim_sleep(15 * 60)
-    (await c.post(f"/orgs/{org_id}/members", headers=admin, json={"display_name": HARBOR_WORKER, "role": "worker"})).raise_for_status()
+    kai = (await c.post(f"/orgs/{org_id}/members", headers=admin, json={"display_name": HARBOR_WORKER, "role": "worker"})).json()
+    await identify(c, admin, org_id, kai["id"], email(HARBOR_WORKER))
+    if SWITCHER:  # the worker Brightline is about to suspend joins Harbor under another name
+        returning = (await c.post(f"/orgs/{org_id}/members", headers=admin, json={"display_name": f"{SWITCHER[0][0]}. {SWITCHER[0].split()[-1]}", "role": "worker"})).json()
+        await identify(c, admin, org_id, returning["id"], email(SWITCHER[0]))
     worker = await as_person(c, HARBOR_WORKER)
     project = next(p for p in (await c.get("/projects", headers=admin)).json() if p["onboarding"] and p["kind"] == "human_data")
     while (r := await c.post("/assignments/next", headers=worker, json={"project_id": project["id"]})).status_code == 200:
@@ -514,8 +524,25 @@ async def setup(c: httpx.AsyncClient) -> tuple[str, dict, list[tuple[str, str, s
             name = next(names)
             r = await c.post(f"/orgs/{orgs[vendor]}/members", headers=admin, json={"display_name": name, "role": "worker"})
             r.raise_for_status()
+            await identify(c, admin, orgs[vendor], r.json()["id"], email(name))
             workers.append((vendor, name, profile))
+            if profile == "switcher":
+                SWITCHER.append(name)
     return project["id"], truth, workers
+
+
+SWITCHER: list[str] = []  # the Brightline worker who turns, once setup has named her
+
+
+def email(name: str) -> str:
+    return name.lower().replace(" ", ".") + "@example.com"
+
+
+async def identify(c, admin: dict, org_id: str, worker_id: str, address: str) -> None:
+    """What a vendor's HR tooling does (D55): send the keyed hash of a worker's email, never the email."""
+    key = (await c.get("/match-key", headers=admin)).json()["key"]
+    digest = hmac.new(key.encode(), address.strip().lower().encode(), hashlib.sha256).hexdigest()
+    (await c.put(f"/orgs/{org_id}/members/{worker_id}/identity", headers=admin, json={"hash": digest})).raise_for_status()
 
 
 async def run_worker(c, project_id, truth, vendor, name, profile, progress: Progress, rng: random.Random) -> None:
@@ -686,6 +713,7 @@ async def vendor_reviewer(c, project_id, truth, done: asyncio.Event) -> None:
 
 # Vendor oversight (AB2, AB5): how each vendor answers a vendor case, and what data ops does next.
 VENDOR_RESPONSES = {
+    "Harbor Labs": "She joined us last week under a different name; we've ended her contract.",
     "Brightline Annotation": "One worker caused the drop; we suspended her after reviewing her case and are re-checking how we onboard.",
     "Kestrel Labs": "We've retired both environments and now have a second builder review every grader before we submit.",
 }
@@ -701,12 +729,17 @@ async def vendor_oversight(c, project_id, done: asyncio.Event) -> None:
     ops = await as_person(c, next(u["display_name"] for u in users if u["role"] == "data_ops"))
     admins = {u["org_name"]: u["display_name"] for u in users if u["role"] == "vendor_admin"}
     handled = set()
-    while not done.is_set():
+    rounds_after = 4  # vendor rules run every few simulated minutes: give the last findings time to land
+    while rounds_after:
+        if done.is_set() and TRAINING_DONE.is_set():
+            rounds_after -= 1
         await sim_sleep(VENDOR_CASE_DELAY_MINUTES * 60)
         for case in (await c.get("/cases", headers=ops, params={"status": "open"})).json():
             if case["subject_type"] != "vendor" or case["id"] in handled:
                 continue
             vendor = case["vendor_name"]
+            if vendor not in admins:  # a vendor that joined since
+                admins = {u["org_name"]: u["display_name"] for u in (await c.get("/auth/demo-users")).json() if u["role"] == "vendor_admin"}
             print(f"  Vendor rule: {vendor}: {case['observations'][0]}", flush=True)
             await c.post(f"/cases/{case['id']}/share", headers=ops)
             print(f"  Data ops asks {vendor} to respond", flush=True)

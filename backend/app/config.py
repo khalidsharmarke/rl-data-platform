@@ -41,6 +41,9 @@ class Settings(BaseSettings):
     registry_platform_secret: str = ""
     # The code task generator signs in with this API token (D48); the seed registers it. Empty: no generator.
     generator_token: str = ""
+    # The key vendors hash workers' identifiers with for the cross-vendor match (D55), and its version.
+    match_key: str = "dev-only-match-key"
+    match_key_version: int = 1
     # Claims a worker may make per minute, the same for everyone (AB12, D51). Well above a careful reader's pace.
     claims_per_minute: int = 20
     # The vendor CLI (tools/rlp.py), served for vendors to download.

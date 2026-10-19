@@ -344,7 +344,7 @@ SELECT o.id AS vendor_id, o.name AS vendor_name, count(c.id) AS opened,
        count(c.id) FILTER (WHERE c.status = 'open' AND c.opened_at < :stale) AS open_over_3_days,
        percentile_cont(0.5) WITHIN GROUP (ORDER BY extract(epoch FROM c.decided_at - c.opened_at) / 3600)
          FILTER (WHERE c.decided_at IS NOT NULL) AS median_hours_to_decide
-FROM orgs o LEFT JOIN cases c ON c.vendor_id = o.id AND c.subject_type = 'worker'
+FROM orgs o LEFT JOIN cases c ON c.vendor_id = o.id AND c.subject_type = 'worker' AND NOT c.private
 WHERE o.kind = 'vendor'
 GROUP BY o.id, o.name ORDER BY o.name
 """

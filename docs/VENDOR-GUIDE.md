@@ -40,6 +40,8 @@ Your admin adds people under **Workspaces**, each with one role:
 
 Anthropic sees your workers by handle only. You keep their identities.
 
+**The cross-vendor match.** So that a person suspended at one vendor can't simply rejoin through another, every vendor sends, for each worker, a keyed hash of their email address: HMAC-SHA256 with the key from `GET /match-key`, of the address trimmed and lowercased, as 64 hex digits, to `PUT /orgs/<your org>/members/<worker>/identity`. The platform stores only the hash, so it can't recover who anyone is. A match is evidence for a person at Anthropic to weigh, never an action on its own, and you're never told which vendor a match involves.
+
 ## 3. API tokens
 
 Tokens are for your organization's tools: a CI that submits environments, a script that reads your scorecard. A token acts for your vendor, never for a person, and everything it does is recorded under its name in your audit log.
@@ -125,5 +127,7 @@ If a problem is found later, by a researcher or by Anthropic's reward-hack detec
 **Your scorecard** is computed by the platform, the same way for every vendor: volume, acceptance, gold accuracy, agreement, cost per accepted answer and turnaround for human work, and checks, review, quarantines and training outcomes for environments. Gold-based numbers are shown up to the last daily refresh, and you never see which tasks were gold.
 
 **Cases about your workers.** When detection finds abuse signals that agree, the worker's answers are held back from training and a case opens for your admin. It shows what was observed, with examples, but never the rules' thresholds. Your admin decides: clear, warn, suspend or remove, with a reason on record.
+
+**Your own rules.** Under Cases, your admin can add rules of your own: a threshold on a signal the platform already records (median time on task, share of answers pasted, focus changes per answer, time to first input) over a worker's latest answers. A worker who crosses one gets a case only you see. It holds nothing, and it never counts toward your scorecard or Anthropic's rules.
 
 **Cases about your vendor.** Some patterns are only visible across a vendor, for example quality falling while volume rises, or several environment versions quarantined in a month. Anthropic's data ops may ask you to respond to such a case. Nothing is done to your allocation before your response, or before three days pass without one.

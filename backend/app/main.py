@@ -7,7 +7,7 @@ from app import registry as registry_keys
 from app.config import settings
 from app.db import SessionLocal
 
-from app.routes import audit, auth, cases, catalog, contracts, data, detection, detectors, environments, generated, hacks, health, onboarding, orgs, projects, quality, registry, scorecards, task_health, tokens, training, vendor_review, work
+from app.routes import audit, auth, cases, catalog, contracts, data, detection, detectors, environments, generated, hacks, health, identity, onboarding, orgs, projects, quality, registry, scorecards, task_health, tokens, training, vendor_review, work
 
 
 
@@ -44,3 +44,4 @@ app.include_router(tokens.router)
 app.include_router(registry.router)
 app.include_router(onboarding.router)
 app.include_router(generated.router)
+app.include_router(identity.router)

@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Covers | Every place the project deliberately doesn't solve a problem, from 0.1.0 through the planned vendor onboarding and code generation milestones |
+| Covers | Every place the project deliberately doesn't solve a problem, from 0.1.0 through the coverage milestones (M31–M35) |
 | Related | [`LIMITATIONS.md`](LIMITATIONS.md) (where what's built falls short) · [`BUILD.md`](BUILD.md) (scope and stand-ins) · [`DESIGN.md`](DESIGN.md) · [`DECISIONS.md`](DECISIONS.md) |
 
 This page lists choices, not shortfalls: problems the project decided not to solve, what it does instead, and why. Where the built part falls short of its own design, see [`LIMITATIONS.md`](LIMITATIONS.md).
@@ -62,6 +62,8 @@ Each entry is one of five kinds:
 | Generating programming tasks | Hand-written task families in Python: a parameterized bug, its fix, tests and probes, at several difficulties. No model writes tasks | Templates make every generated task explainable and its probes known; a model writing tasks is a research project of its own | D48, EC7 |
 | Telling devices apart | A random id the browser keeps and sends with each request, so clearing its storage looks like a new device; reported by the browser, so untrusted like the other client signals | Device fingerprinting is a specialist field with its own privacy questions; the count is evidence for a person, never a finding | D51, AB12 |
 | Measuring written answers | Writing tasks have no gold and no agreement; researchers' spot checks (accept or reject, with a reason) are their quality measure, and vendor reviewers can accept them but not rewrite them | Comparing free text automatically is unreliable, and a rubric-scored gold sample needs a rubric per project | D53, DC1 |
+| The cross-vendor match key | One key for every vendor, from a setting, with a version number on each hash; no rotation flow, and the demo's vendors hash made-up email addresses | Rotation is re-hashing under a new version, an operational task; whether the match is worth its privacy cost is still open | D55, AB10 |
+| Vendors' own rules | Four signals with a threshold and a window (time on task, share pasted, focus changes, time to first input), not a rule language | Shows private rules working end to end; a language waits for vendors asking for one | D56, AB9 |
 | Sign-in and the API gateway | Seeded demo logins and a scoping module every route goes through | Standard parts, not the hard problem | [`BUILD.md`](BUILD.md#stand-ins) |
 | Message broker and durable log | Postgres tables: the job queue, the outbox read through a cursor feed, and the episodes table that stands in for the durable log in front of the analytics store | Volumes are low enough; the contracts would stay the same on Kafka | D2, D24, B7 |
 | Analytics store | Summary tables in Postgres | Same reason | [`BUILD.md`](BUILD.md#stand-ins), B7 |
@@ -77,5 +79,3 @@ These belong to the platform and come later. [`BUILD.md`](BUILD.md#not-in-the-bu
 | Problem | Why it waits | Where |
 |---|---|---|
 | Scale: ~1.2 million submissions a day, ~1,000 episodes a second | Designed for, not load-tested; the build runs at demo volume | Scale estimate, D2, D5 |
-| Vendor rules that need identities across vendors: removed workers returning, the same answers across vendors | They need a cross-vendor worker match (planned, M35) | AB2, AB10 |
-| Vendor-private rules, matching workers across vendors | P2 in the PRD (planned, M35) | AB9, AB10 |

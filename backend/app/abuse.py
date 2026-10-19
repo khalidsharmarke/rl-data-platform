@@ -30,7 +30,7 @@ class Observation:
 async def open_or_join_case(session, *, worker_id, vendor_id, project_id, findings: list[Observation]) -> tuple[uuid.UUID, int]:
     now = clock.now()
     case_id = await session.scalar(
-        text("SELECT id FROM cases WHERE subject_type = 'worker' AND subject_id = :w AND status = 'open'"), {"w": worker_id}
+        text("SELECT id FROM cases WHERE subject_type = 'worker' AND subject_id = :w AND status = 'open' AND NOT private"), {"w": worker_id}
     )
     opened = 0
     if case_id is None:

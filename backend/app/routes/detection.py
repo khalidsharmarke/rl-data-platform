@@ -94,7 +94,7 @@ async def labels(after: int = Query(0, ge=0), session: AsyncSession = Depends(ge
             SELECT a.seq, c.subject_id AS worker_id, c.project_id, a.action, a.created_at,
                    (SELECT max(e.id) FROM submission_events e WHERE e.created_at <= a.created_at) AS through_event
             FROM case_actions a JOIN cases c ON c.id = a.case_id
-            WHERE a.seq > :after AND c.subject_type = 'worker'
+            WHERE a.seq > :after AND c.subject_type = 'worker' AND NOT c.private  -- a vendor's own rules aren't detection's (D56)
               AND a.action IN ('clear', 'warn', 'suspend', 'remove', 'reverse')
             ORDER BY a.seq
             """

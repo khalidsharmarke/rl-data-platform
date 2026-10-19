@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { summary } from "./TaskView";
-import { api, type CaseDetail, type CaseSummary, type Lineage, type Recall, type User } from "./api";
+import { api, type CaseDetail, type CaseSummary, type VendorRule, type Lineage, type Recall, type User } from "./api";
 
 const DECISIONS = [
   { value: "suspend", label: "Suspend worker" },
@@ -90,6 +90,7 @@ export default function Cases({ me }: { me: User }) {
   }
 
   return (
+    <>
     <section>
       <h2>Cases</h2>
       <p className="muted">
@@ -120,7 +121,10 @@ export default function Cases({ me }: { me: User }) {
               <td>
                 {isEnvironment(c) || isVendor(c) ? c.subject_handle : <>{c.subject_name ?? ""} <span className="mono muted">{c.subject_handle}</span></>}
               </td>
-              <td>{isEnvironment(c) ? (c.by_person ? "Flagged by a person" : "Flagged by the hack detector") : `${c.observations.length} signal${c.observations.length === 1 ? "" : "s"}`}</td>
+              <td>
+                {isEnvironment(c) ? (c.by_person ? "Flagged by a person" : "Flagged by the hack detector") : `${c.observations.length} signal${c.observations.length === 1 ? "" : "s"}`}
+                {c.private && <span className="chip">Your own rule: only you see this</span>}
+              </td>
               <td>
                 {c.status === "open" ? (
                   <span className="badge warn">
@@ -248,6 +252,23 @@ export default function Cases({ me }: { me: User }) {
               </p>
             </>
           )}
+          {open.matches.length > 0 && (
+            <>
+              <h4>The same person at another vendor</h4>
+              <p className="muted small">
+                From the keyed hashes vendors submit; the platform never sees who the person is. Evidence for a person to weigh,
+                never an action, and the vendor is never told which vendor matched.
+              </p>
+              <ul>
+                {open.matches.map((m, i) => (
+                  <li key={i}>
+                    <span className="mono">{m.handle}</span> at {m.vendor_name} is <span className="mono">{m.matched_handle}</span> at{" "}
+                    {m.matched_vendor}{m.matched_suspended && ", who was suspended or removed there"}
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
           <h4>History</h4>
           <ul className="history">
             {open.actions.map((a, i) => (
@@ -306,6 +327,9 @@ export default function Cases({ me }: { me: User }) {
         </div>
       )}
     </section>
+    {me.role === "vendor_admin" && <OwnRules />}
+    </>
+
   );
 }
 
@@ -367,5 +391,71 @@ function VendorCase({ c, me, onChange, onError }: {
         </div>
       )}
     </>
+  );
+}
+
+const SIGNALS: Record<string, string> = {
+  fast: "Median time on task (seconds) is below",
+  pasted: "Share of answers pasted (0 to 1) is above",
+  focus_changes: "Focus changes per answer are above",
+  quick_start: "Median seconds before the first input are below",
+};
+
+/** A vendor's own rules (AB9, D56): its thresholds on signals the platform records, opening cases only it sees. */
+function OwnRules() {
+  const [rules, setRules] = useState<VendorRule[]>([]);
+  const [name, setName] = useState("");
+  const [signal, setSignal] = useState("fast");
+  const [threshold, setThreshold] = useState("");
+  const [windowSize, setWindowSize] = useState("20");
+  const load = () => api<VendorRule[]>("/vendor-rules").then(setRules);
+  useEffect(() => {
+    load();
+  }, []);
+
+  async function create() {
+    await api("/vendor-rules", { method: "POST", body: JSON.stringify({ name, signal, threshold: Number(threshold), window: Number(windowSize) }) });
+    setName("");
+    setThreshold("");
+    load();
+  }
+
+  return (
+    <section>
+      <h2>Your own rules</h2>
+      <p className="muted">
+        Look at a worker sooner than the platform's shared rules would. Your rules run on your workers' latest answers; a worker
+        who crosses one gets a case only you see. It holds nothing, and never counts toward your scorecard or Anthropic's rules.
+      </p>
+      {rules.length > 0 && (
+        <table>
+          <thead><tr><th>Rule</th><th>Fires when</th><th>Over the last</th><th /></tr></thead>
+          <tbody>
+            {rules.map((r) => (
+              <tr key={r.id} className={r.retired_at ? "muted" : undefined}>
+                <td>{r.name}</td>
+                <td>{SIGNALS[r.signal]} {r.threshold}</td>
+                <td>{r.window} answers</td>
+                <td>{r.retired_at ? "Retired" : <button onClick={() => api(`/vendor-rules/${r.id}/retire`, { method: "POST" }).then(load)}>Retire</button>}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      <div className="review-form">
+        <label className="field">Name<input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Too quick" /></label>
+        <label className="field">
+          Signal
+          <select value={signal} onChange={(e) => setSignal(e.target.value)}>
+            {Object.entries(SIGNALS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+          </select>
+        </label>
+        <label className="field">Threshold<input inputMode="decimal" value={threshold} onChange={(e) => setThreshold(e.target.value)} /></label>
+        <label className="field">Answers to look at<input inputMode="numeric" value={windowSize} onChange={(e) => setWindowSize(e.target.value)} /></label>
+        <div className="row">
+          <button className="primary" disabled={!name || threshold === "" || Number.isNaN(Number(threshold))} onClick={create}>Add rule</button>
+        </div>
+      </div>
+    </section>
   );
 }

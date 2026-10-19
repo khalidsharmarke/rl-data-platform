@@ -10,14 +10,18 @@ every vendor (N16):
   last 30 days.
 - case-handling-v1: how the vendor handles its own workers' cases: most of its decided cases
   cleared, suspended workers reinstated, or cases left open for days.
+- returning-worker-v1: one of the vendor's workers matches (D55) a worker another vendor
+  suspended or removed.
+- cross-vendor-answers-v1: one of the vendor's workers wrote the same reasons, word for word,
+  as a worker at another vendor, on several answers.
 
 A finding opens (or joins) a vendor case owned by data ops. The vendor doesn't see it until data
 ops has read it and asks the vendor to respond, so a rule's mistake never reaches a vendor
 without a person. Actions on the vendor (lower allocation, pause, offboard) wait for the
 vendor's response, or for the response window to pass.
 
-Vendors read what was observed, never the rules or thresholds (N17). Rules that need
-identities across vendors (removed workers returning, matching answers) wait for AB10.
+Vendors read what was observed, never the rules or thresholds (N17), and never which other
+vendor a match involves.
 """
 
 import json
@@ -126,7 +130,7 @@ async def case_handling(session: AsyncSession) -> list[tuple]:
                    count(*) FILTER (WHERE c.status = 'open' AND c.opened_at < :stale) AS left_open,
                    count(*) FILTER (WHERE c.decision IN ('suspend', 'remove')
                                     AND EXISTS (SELECT 1 FROM case_actions a WHERE a.case_id = c.id AND a.action = 'reverse')) AS reinstated
-            FROM cases c WHERE c.subject_type = 'worker' GROUP BY c.vendor_id
+            FROM cases c WHERE c.subject_type = 'worker' AND NOT c.private GROUP BY c.vendor_id
         """), {"stale": now - timedelta(days=OPEN_DAYS)})
     hits = []
     for r in rows:
@@ -144,7 +148,41 @@ async def case_handling(session: AsyncSession) -> list[tuple]:
     return hits
 
 
-RULES = [quality_volume, quarantines, case_handling]
+SAME_REASONS = 3  # answers whose reasons match another vendor's worker's, word for word
+REASON_WORDS = 8  # only reasons this long count: short ones ("Clearer.") match by chance
+
+
+async def returning_workers(session: AsyncSession) -> list[tuple]:
+    rows = await session.execute(text("""
+        SELECT u.org_id AS vendor_id, array_agg(u.id::text) AS ids, array_agg(u.handle) AS handles
+        FROM worker_identities i JOIN users u ON u.id = i.worker_id AND u.suspended_at IS NULL
+        WHERE EXISTS (SELECT 1 FROM worker_identities m JOIN users mu ON mu.id = m.worker_id
+                      WHERE m.hash = i.hash AND mu.org_id <> u.org_id AND mu.suspended_at IS NOT NULL)
+        GROUP BY u.org_id
+    """))
+    return [(r.vendor_id, None, "returning-worker", "returning-worker-v1",
+             f"{len(r.ids)} of the vendor's workers ({', '.join(r.handles)}) match a worker another vendor suspended or removed.",
+             {"worker_handles": r.handles, "matched_worker_ids": r.ids}) for r in rows]
+
+
+async def cross_vendor_answers(session: AsyncSession) -> list[tuple]:
+    rows = await session.execute(text("""
+        WITH r AS (
+            SELECT s.worker_id, s.vendor_id, lower(trim(s.answer->>'rationale')) AS reason FROM submissions s
+            WHERE array_length(regexp_split_to_array(trim(s.answer->>'rationale'), '\s+'), 1) >= :words
+        ), same AS (
+            SELECT a.vendor_id, a.worker_id, count(*) AS n FROM r a JOIN r b ON a.reason = b.reason AND a.vendor_id <> b.vendor_id
+            GROUP BY a.vendor_id, a.worker_id HAVING count(*) >= :k
+        )
+        SELECT same.vendor_id, array_agg(u.id::text) AS ids, array_agg(u.handle) AS handles, sum(n) AS answers
+        FROM same JOIN users u ON u.id = same.worker_id GROUP BY same.vendor_id
+    """), {"words": REASON_WORDS, "k": SAME_REASONS})
+    return [(r.vendor_id, None, "cross-vendor-answers", "cross-vendor-answers-v1",
+             f"Workers here ({', '.join(r.handles)}) wrote the same reasons, word for word, as a worker at another vendor.",
+             {"worker_handles": r.handles, "matched_worker_ids": r.ids, "matching_answers": int(r.answers)}) for r in rows]
+
+
+RULES = [quality_volume, quarantines, case_handling, returning_workers, cross_vendor_answers]
 
 
 async def run(session: AsyncSession) -> int:

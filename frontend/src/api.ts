@@ -270,6 +270,7 @@ export type CaseSummary = {
   observations: string[];
   by_person: boolean;
   shared_at: string | null;
+  private: boolean;
 };
 
 export type CaseDetail = CaseSummary & {
@@ -288,6 +289,12 @@ export type CaseDetail = CaseSummary & {
   } | null;
   respond_by: string | null;
   can_act: boolean;
+  matches: { vendor_name: string; handle: string; matched_vendor: string; matched_handle: string; matched_suspended: boolean }[];
+};
+
+export type VendorRule = {
+  id: string; name: string; signal: string; fires: "above" | "below"; threshold: number; window: number;
+  created_at: string; retired_at: string | null;
 };
 
 export type CaseHandling = {

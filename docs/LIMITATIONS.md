@@ -10,7 +10,7 @@ What the build does not do, where it falls short, and what is still undecided. T
 
 ## 1. Coverage of the posting
 
-The posting names three areas: *"environment creation, data collection, and training observability."* The build covers the core of data collection, plus the vendor management, workspaces and audit trail it needs. Of the design's 56 functional requirements, it covers 53 fully, 1 in part and 2 not at all; the three are listed below.
+The posting names three areas: *"environment creation, data collection, and training observability."* The build covers the core of data collection, plus the vendor management, workspaces and audit trail it needs. It covers all 56 of the design's functional requirements. Where a requirement is met with a simpler stand-in (adding gold for a watched worker is one), [`NOT-SOLVED.md`](NOT-SOLVED.md) says so.
 
 | Posting line | Coverage in the build |
 |---|---|
@@ -21,14 +21,6 @@ The posting names three areas: *"environment creation, data collection, and trai
 | *"web platforms for RL environment creation, management, and quality review"* and *"vendor-facing interfaces… to create, submit, and iterate on training environments"* | Started. Researchers write briefs, data ops allocates them, and builders upload versions that never change, stored by hash in three parts (EC0, EC1, M13), every submitted version is checked in a sandbox (EC3 without difficulty, M14), builders see why a check failed and what changed between versions, researchers grade against the brief's rubric, training pulls approved versions from a catalog without the reference solution (EC2, EC4–EC6, EC8, M15), and a flagged version is quarantined through a case, with the runs that pulled it listed (TO6, M16). Difficulty comes from training's solve rates (M18). Not built: vendor-built images and generated tasks |
 | *"scalable code data generation pipelines"* | Started. A separate code task generator signs in with its own API token and fills the briefs allocated to it from hand-written task families, each task with probes (known-wrong answers that must fail the grader, D47); every version gets the same checks as a vendor's, duplicates are never resubmitted, and a family whose versions keep failing is stopped (M28). Researchers review a random sample of each batch: approving it approves the batch, a send-back stops the family; each family shows the difficulty it intended beside the one training measured (M29). The families are hand-written templates in one language (EC7) |
 | *"onboarding automation… Docker registry access, API token management, and environment validation"* | Started. Vendor admins manage their organization's API tokens: named, scoped, shown once, expiring, revocable by data ops, with everything a token did in the audit log (M25). A container registry gives each vendor a namespace; `docker login` takes a vendor token, and a version can name a vendor image by digest, which the platform copies into its own namespace and checks in the sandbox (M26). Data ops creates a vendor and invites its admin with a single-use link; the vendor proves its setup on samples that feed nothing, against a checklist the platform computes, and real work can't be allocated until it's complete. A vendor can do it all from its own terminal or CI with a small command-line client, and data ops sees the time from invite to first accepted work (M27) |
-
-### Requirements not fully covered
-
-| Requirement | Built | Missing |
-|---|---|---|
-| AB2: vendor abuse rules | Quality falling while volume rises, environment versions quarantined, and how a vendor handles its own cases | Removed workers returning and matching answers across vendors: both need the cross-vendor match (AB10) |
-| AB9: vendor-private abuse rules | Nothing (P2 in the PRD) | Rules a vendor adds that open cases only inside its own workspace |
-| AB10: cross-vendor worker match | Nothing (P2 in the PRD) | Keyed hashes of a stable identifier, with matches as case evidence |
 
 [`BUILD.md`](BUILD.md#not-in-the-build) lists what was left out of the build and why.
 
@@ -120,6 +112,7 @@ The design's scale estimate is about 1.2 million submissions a day ([`DESIGN.md`
 
 What's left, from [`BUILD.md`](BUILD.md#not-in-the-build) and the gaps above:
 
-1. The three requirements above, planned as [M35](BUILD.md#coverage-milestones): the cross-vendor match, the vendor rules it enables, and vendor-private rules.
-2. Generated tasks beyond hand-written Python templates: more languages, and families a model drafts and a researcher approves (EC7).
-3. The registry behind TLS, with image scanning and quotas (D50).
+1. Generated tasks beyond hand-written Python templates: more languages, and families a model drafts and a researcher approves (EC7).
+2. The registry behind TLS, with image scanning and quotas (D50).
+3. Load tests at the design's scale (about 1.2 million submissions and 1,000 episodes a second), which the build is designed for but has never run at.
+4. CI, frontend tests and an end-to-end test of `make demo` (section 2).

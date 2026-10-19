@@ -63,6 +63,9 @@ Adding a family: write a function in `families.py` that returns the task, grader
 | Workers flag a broken task | Projects → Task health | A researcher | Two flags pause the task. Restore it, or retire it so its answers count nowhere |
 | An agreement alert | Projects → Task health | A researcher | A batch where the same workers agree much less than elsewhere. Look for broken tasks in it |
 | A vendor case opens | Cases | Data ops | Read the evidence, then ask the vendor to respond. Act only after its response or three days without one: lower its allocation, pause it, or offboard it. Or clear the case |
+| A worker matches someone another vendor suspended | Cases → the vendor case → "The same person at another vendor" | Data ops | The match is evidence, never a verdict: ask the vendor to respond (it isn't told which vendor matched), then decide. Matching reasons, word for word, across vendors open a case on each vendor |
 | A dataset is needed | Projects → Release, then export | A researcher | Exports hold only released answers, each tagged verified or provisional, with lineage |
+
+Vendors can also run rules of their own on their workers. Their cases are private to the vendor: they don't appear in Cases, hold nothing and never reach a scorecard or detection's labels.
 
 Spot checks (Review) ask two questions of every answer: accept or reject, and does it look like abuse. Answer both: the second is how detection's precision and misses are measured, and a random audit sample is mixed in so reviewers can't tell audits apart.

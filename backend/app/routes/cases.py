@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app import clock, environments
+from app import clock, environments, identity
 from app.abuse import add_action
 from app.environment_cases import flag_version
 from app.audit import record
@@ -45,6 +45,7 @@ class CaseSummary(BaseModel):
     observations: list[str]
     by_person: bool  # every flag was raised by a person, not a detector
     shared_at: datetime | None  # vendor cases: when data ops asked the vendor to respond
+    private: bool = False  # opened by the vendor's own rule; Anthropic never sees it (D56)
 
 
 class Flag(BaseModel):
@@ -106,6 +107,7 @@ class CaseDetail(CaseSummary):
     respond_by: datetime | None = None  # vendor cases: actions are allowed after a response, or after this
     can_act: bool = False
     api_signals: ApiSignals | None = None  # worker cases
+    matches: list[dict] = []  # Anthropic only: cross-vendor matches behind the case (AB10, D55)
 
 
 class EnvironmentCaseIn(BaseModel):
@@ -157,7 +159,7 @@ def summary(row, viewer: User) -> dict:
                         else row.vendor_name if row.subject_type == "vendor" else (row.handle or "—")),
         subject_name=name, owner=row.owner, status=row.status, opened_at=row.opened_at, decision=row.decision,
         decided_at=row.decided_at, held=row.held, observations=list(row.observations), by_person=row.by_person,
-        shared_at=row.shared_at,
+        shared_at=row.shared_at, private=row.private,
     )
 
 
@@ -168,7 +170,7 @@ VENDOR_SEES = "(c.subject_type <> 'vendor' OR c.shared_at IS NOT NULL)"
 async def visible_case(session: AsyncSession, case_id: uuid.UUID, user: User):
     row = (await session.execute(text(CASES + " WHERE c.id = :id"), {"id": case_id})).first()
     vendor_may = row is not None and row.vendor_id == user.org_id and (row.subject_type != "vendor" or row.shared_at is not None)
-    if row is None or not (is_internal(user) or vendor_may):
+    if row is None or not ((is_internal(user) and not row.private) or vendor_may):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Not found")
     return row
 
@@ -187,7 +189,9 @@ async def list_cases(
 ) -> list[CaseSummary]:
     """Vendor admins see their own vendor's cases; data ops sees every case and its outcome (AB7)."""
     where, params = [], {}
-    if not is_internal(user):
+    if is_internal(user):
+        where.append("NOT c.private")
+    else:
         where.append("c.vendor_id = :v AND " + VENDOR_SEES)
         params["v"] = user.org_id
     if status_:
@@ -236,7 +240,15 @@ async def case_detail(
     return CaseDetail(**summary(row, user), subject_id=row.subject_id, project_id=row.project_id, decision_reason=row.decision_reason,
                       flags=flags, samples=samples, actions=actions, environment=environment, respond_by=respond_by,
                       can_act=user.role == Role.DATA_OPS and row.status == "open" and await may_act(session, row),
-                      api_signals=await api_signals(session, row.subject_id) if row.subject_type == "worker" else None)
+                      api_signals=await api_signals(session, row.subject_id) if row.subject_type == "worker" else None,
+                      matches=await case_matches(session, row, flags) if internal else [])
+
+
+async def case_matches(session: AsyncSession, row, flags: list[Flag]) -> list[dict]:
+    """The workers behind a case who match a worker at another vendor, for data ops only (D55)."""
+    workers = [row.subject_id] if row.subject_type == "worker" else [
+        uuid.UUID(w) for f in flags for w in f.evidence.get("matched_worker_ids", [])]
+    return [m for w in workers for m in await identity.matches(session, w)]
 
 
 API_SIGNALS = text("""
