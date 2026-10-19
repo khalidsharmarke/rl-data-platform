@@ -3,6 +3,7 @@
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -47,3 +48,17 @@ async def resume_family(stop_id: int, user: User = Depends(require_roles(Role.RE
     record(session, actor=user, action="task_family.resumed", entity_type="task_family", entity_id=row.family, org_id=row.org_id)
     await session.commit()
     return {"family": row.family, "resumed": True}
+
+
+class StopIn(BaseModel):
+    reason: str = Field(min_length=3, max_length=500)
+
+
+@router.post("/projects/{project_id}/task-families/{family}/stop", status_code=status.HTTP_201_CREATED)
+async def stop_family(project_id: uuid.UUID, family: str, body: StopIn, user: User = Depends(require_roles(Role.ENVIRONMENT_BUILDER)),
+                      session: AsyncSession = Depends(get_session)) -> dict:
+    """The generator stops one of its own families, so the stop shows on the brief and a researcher resumes it."""
+    await require_brief_for_builder(project_id, user, session)
+    await generated.stop_family(session, user.org_id, family, body.reason, user)
+    await session.commit()
+    return {"family": family, "stopped": True}

@@ -96,3 +96,15 @@ async def test_each_family_shows_intended_against_measured_difficulty(client, lo
                                    "VALUES (:r, :v, 0, :e, :p, :f, :f, 3000)"), {"r": run, "v": version_id, "e": episodes, "p": passed, "f": float(passed)})
     families = (await client.get(f"/projects/{brief}/generated", headers=await login(RESEARCHER))).json()["families"]
     assert [(f["intended"], f["measured"]) for f in families] == [("easy", "too easy"), ("medium", "medium"), ("hard", "easy")]
+
+
+async def test_the_generator_records_the_families_it_stops(client, login, session, monkeypatch):
+    brief = await setup(client, login, session, monkeypatch)
+    r = await client.post(f"/projects/{brief}/task-families/parse_duration/stop", headers=GENERATOR,
+                          json={"reason": "its last 2 versions failed the sandbox's checks"})
+    assert r.status_code == 201, r.text
+    await batch(client, session, brief, "b4", family="parse_duration", n=1, failing=1)  # so the stop shows on this brief
+    stopped = (await client.get(f"/projects/{brief}/generated", headers=await login(RESEARCHER))).json()["stopped"]
+    assert [(s["family"], s["reason"]) for s in stopped] == [("parse_duration", "its last 2 versions failed the sandbox's checks")]
+    stopper = await session.scalar(text("SELECT stopped_by_token IS NOT NULL FROM family_stops WHERE family = 'parse_duration'"))
+    assert stopper

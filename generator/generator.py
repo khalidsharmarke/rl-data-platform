@@ -35,13 +35,21 @@ def content_name(family: str, difficulty: str, task: families.Task) -> str:
 
 
 def stopped_families(api: rlp.Api, brief_id: str) -> set[str]:
-    """Families a researcher stopped, and those whose last STOP_AFTER checked versions on this brief all failed."""
+    """Families stopped on the platform. A family whose last STOP_AFTER checked versions all failed is stopped
+    there first, with the failing check as the reason, so a researcher sees it and resumes it once fixed."""
     stopped = {s["family"] for s in api.call("GET", f"/projects/{brief_id}/generated")["stopped"]}
-    outcomes: dict[str, list[bool]] = {}
+    failures: dict[str, list[str | None]] = {}
     for v in api.call("GET", f"/versions?project_id={brief_id}"):  # oldest first
         if v["status"] in FINISHED:
-            outcomes.setdefault(v["environment_name"].split("-")[0], []).append(FINISHED[v["status"]])
-    return stopped | {f for f, results in outcomes.items() if len(results) >= STOP_AFTER and not any(results[-STOP_AFTER:])}
+            failures.setdefault(v["environment_name"].split("-")[0], []).append(None if FINISHED[v["status"]] else v["id"])
+    for family, results in failures.items():
+        last = results[-STOP_AFTER:]
+        if family not in stopped and len(last) == STOP_AFTER and all(last):
+            detail = next((c["detail"] for c in api.call("GET", f"/versions/{last[-1]}/checks") if not c["passed"]), "they failed the checks")
+            api.call("POST", f"/projects/{brief_id}/task-families/{family}/stop",
+                     {"reason": f"its last {STOP_AFTER} versions failed the sandbox's checks. {detail}"})
+            stopped.add(family)
+    return stopped
 
 
 def body(task: families.Task, family: str, difficulty: str, batch: str) -> dict:

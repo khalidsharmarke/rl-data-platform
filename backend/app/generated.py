@@ -57,9 +57,7 @@ async def after_review(session: AsyncSession, version: EnvironmentVersion, decis
     family, org_id = version.manifest["generated"]["family"], rows[0].org_id
     if decision == "send_back":
         await settle(session, rows, "failed", user, f"Sent back with its batch: a sampled version of {family} was sent back")
-        await session.execute(text("INSERT INTO family_stops (org_id, family, reason, stopped_by, stopped_at) VALUES (:o, :f, :r, :u, :now) "
-                                   "ON CONFLICT (org_id, family) WHERE resumed_at IS NULL DO NOTHING"),
-                              {"o": org_id, "f": family, "r": f"A sampled version from {b} was sent back", "u": user.id, "now": clock.now()})
+        await stop_family(session, org_id, family, f"A sampled version from {b} was sent back", user)
         await decide_batch(session, p, b, "sent_back", user, org_id, family_stopped=family)
         return
     pending = await session.scalar(text("SELECT count(*) FROM batch_samples s JOIN environment_versions ev ON ev.id = s.version_id "
@@ -67,6 +65,15 @@ async def after_review(session: AsyncSession, version: EnvironmentVersion, decis
     if pending == 0:
         await settle(session, rows, "approved", user, "Approved with its batch: every sampled version was approved (D49)")
         await decide_batch(session, p, b, "approved", user, org_id)
+
+
+async def stop_family(session: AsyncSession, org_id: uuid.UUID, family: str, reason: str, actor) -> None:
+    """Stop a family until a researcher resumes it: by a researcher's send-back, or by the generator itself."""
+    token_id = getattr(actor, "token_id", None)
+    await session.execute(text("INSERT INTO family_stops (org_id, family, reason, stopped_by, stopped_by_token, stopped_at) "
+                               "VALUES (:o, :f, :r, :u, :t, :now) ON CONFLICT (org_id, family) WHERE resumed_at IS NULL DO NOTHING"),
+                          {"o": org_id, "f": family, "r": reason, "u": None if token_id else actor.id, "t": token_id, "now": clock.now()})
+    record(session, actor=actor, action="task_family.stopped", entity_type="task_family", entity_id=family, org_id=org_id, after={"reason": reason})
 
 
 async def settle(session: AsyncSession, rows, to: str, user: User, note: str) -> None:

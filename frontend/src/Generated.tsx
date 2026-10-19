@@ -34,7 +34,7 @@ export default function Generated({ projectId, me }: { projectId: string; me: Us
       </p>
       {summary.stopped.map((s) => (
         <p key={s.id} className="alert">
-          <strong>{s.family}</strong> is stopped: {s.reason}.{" "}
+          <strong>{s.family}</strong> is stopped: {s.reason.replace(/\.$/, "")}.{" "}
           {me.role === "researcher" && (
             <button onClick={() => api(`/family-stops/${s.id}/resume`, { method: "POST" }).then(load)}>Template fixed: resume</button>
           )}
