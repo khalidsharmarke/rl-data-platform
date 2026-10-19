@@ -7,10 +7,10 @@ from typing import Any
 import jsonschema
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field, model_validator
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app import clock, onboarding, task_types
+from app import clock, environments, onboarding, task_types
 from app.audit import record
 from app.auth import current_user
 from app.db import get_session
@@ -210,15 +210,57 @@ async def add_tasks(
     project = await get_visible_project(project_id, user, session)
     if project.kind != "human_data":
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Tasks belong to human-data projects; vendors build environments against a brief")
-    if project.task_type in task_types.WITHOUT_GOLD and any(t.gold_answer is not None for t in body.tasks):
+    return await insert_tasks(session, project, body.tasks, user)
+
+
+class EpisodeTaskIn(BaseModel):
+    episode_id: str
+    gold_answer: dict[str, Any] | None = None
+
+
+class EpisodeTasksIn(BaseModel):
+    episodes: list[EpisodeTaskIn] = Field(min_length=1, max_length=500)
+
+
+@router.post("/{project_id}/tasks/from-episodes", status_code=status.HTTP_201_CREATED)
+async def add_episode_tasks(
+    project_id: uuid.UUID, body: EpisodeTasksIn, user: User = Depends(require_roles(Role.RESEARCHER)),
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, int]:
+    """Trajectory review tasks from training's episodes (D54, TO5): each transcript becomes numbered steps,
+    with what the grader said; the episode's id stays in the task, so a review traces back to the run."""
+    project = await get_visible_project(project_id, user, session)
+    if project.task_type != "trajectory_review":
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Episodes become tasks only in a trajectory review project")
+    tasks = []
+    for e in body.episodes:
+        row = (await session.execute(text(
+            "SELECT e.episode_id, e.passed, e.transcript_hash, env.name AS environment_name FROM episodes e "
+            "JOIN environment_versions v ON v.id = e.version_id JOIN environments env ON env.id = v.environment_id "
+            "WHERE e.episode_id = :id"), {"id": e.episode_id})).first()
+        if row is None or row.transcript_hash is None:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"{e.episode_id}: no such episode, or it has no transcript")
+        steps = [line for line in environments.read(row.transcript_hash).decode(errors="replace").splitlines() if line.strip()]
+        if e.gold_answer and not 0 <= e.gold_answer.get("first_wrong_step", -1) <= len(steps):
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"{e.episode_id}: the gold answer's step isn't in the transcript")
+        tasks.append(TaskIn(gold_answer=e.gold_answer, payload={
+            "item": row.episode_id, "episode_id": row.episode_id, "environment": row.environment_name, "steps": steps,
+            "graded": "passed" if row.passed else "failed",
+            "prompt": f"An agent worked on \"{row.environment_name}\". Find the first step that goes wrong, if any, and judge the outcome."}))
+    return await insert_tasks(session, project, tasks, user, source="episodes")
+
+
+async def insert_tasks(session: AsyncSession, project: Project, tasks: list[TaskIn], user: User, **audit) -> dict[str, int]:
+    """Add tasks to a project, gold stored apart, shuffled and routed."""
+    if project.task_type in task_types.WITHOUT_GOLD and any(t.gold_answer is not None for t in tasks):
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Writing tasks have no gold answers; researchers' spot checks measure them")
     schema = await session.get(TaskSchema, (project.id, project.current_schema_version))
     validator = jsonschema.Draft202012Validator(schema.answer_schema)
-    for i, t in enumerate(body.tasks):
+    for i, t in enumerate(tasks):
         if t.gold_answer is not None and not validator.is_valid(t.gold_answer):
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"Task {i}: gold answer doesn't fit the answer schema")
     # Shuffle so a task's position (and so its claim order) says nothing about whether it's gold.
-    items = list(body.tasks)
+    items = list(tasks)
     random.shuffle(items)
     gold = 0
     batch_id = uuid.uuid4()  # one per upload: a batch with low agreement points at a problem in how it was made (D43)
@@ -232,7 +274,7 @@ async def add_tasks(
     await session.flush()
     routing = await route_tasks(session, project)
     record(session, actor=user, action="tasks.added", entity_type="project", entity_id=project.id, org_id=user.org_id,
-           after={"tasks": len(items), "gold": gold, "schema_version": project.current_schema_version, **routing})
+           after={"tasks": len(items), "gold": gold, "schema_version": project.current_schema_version, **routing, **audit})
     await session.commit()
     return {"tasks": len(items), "gold": gold}
 

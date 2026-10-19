@@ -10,12 +10,12 @@ What the build does not do, where it falls short, and what is still undecided. T
 
 ## 1. Coverage of the posting
 
-The posting names three areas: *"environment creation, data collection, and training observability."* The build covers the core of data collection, plus the vendor management, workspaces and audit trail it needs. Of the design's 56 functional requirements, it covers 52 fully, 2 in part and 2 not at all; the four are listed below.
+The posting names three areas: *"environment creation, data collection, and training observability."* The build covers the core of data collection, plus the vendor management, workspaces and audit trail it needs. Of the design's 56 functional requirements, it covers 53 fully, 1 in part and 2 not at all; the three are listed below.
 
 | Posting line | Coverage in the build |
 |---|---|
 | *"platforms for human data collection at scale, including labeling workflows, quality assurance systems, and feedback mechanisms that surface reward signal integrity issues early"* | Yes. Labeling, gold QA, agreement, spot checks and worker feedback are built, workers flag broken tasks, which two flags pause for researchers, and a drop in agreement raises an alert (DC5, M22) |
-| *"a unified platform for human data collection that integrates labeling workflows, vendor management, and QA for complex agentic tasks"* | Except for agentic tasks. There are three task types: compare two answers (pick the more helpful, with a reason), rate an answer from 1 to 5, and write an answer |
+| *"a unified platform for human data collection that integrates labeling workflows, vendor management, and QA for complex agentic tasks"* | Yes. Four task types: compare two answers, rate one from 1 to 5, write one, and review an agent's transcript step by step, marking the first step that goes wrong and judging the outcome. Transcript tasks can be drawn from training's own episodes, so people check what training rewarded (M34) |
 | *"evaluation dashboards and observability UIs that give researchers real-time insight into environment quality, training run health, and reward hacking"* | Partly. Vendor scorecards and drop alerts exist, environment work is on the scorecard, and researchers watch each training run's solve rate, reward variance and attempt length per environment, with drill-down to episode transcripts (TO2, TO4, TO5, M18). A separate hack detector reads the episodes: a watch finding asks a researcher to read transcripts, and a case finding quarantines the version without waiting for a person (TO3, M19). Each vendor's training outcomes are on its scorecard: episodes, solve rate, flagged attempts and recalls (TO7, M20) |
 | *"backend services and APIs that connect environment authoring tools, data collection systems, and RL training infrastructure"* | Partly. Datasets are exported as files, training pulls environments from the catalog, training sends episodes back to an intake (TO1, M17), and a quarantined version training used goes out as a recall that training answers with what it did (TO8, M19). Training is a stand-in that models it |
 | *"web platforms for RL environment creation, management, and quality review"* and *"vendor-facing interfaces… to create, submit, and iterate on training environments"* | Started. Researchers write briefs, data ops allocates them, and builders upload versions that never change, stored by hash in three parts (EC0, EC1, M13), every submitted version is checked in a sandbox (EC3 without difficulty, M14), builders see why a check failed and what changed between versions, researchers grade against the brief's rubric, training pulls approved versions from a catalog without the reference solution (EC2, EC4–EC6, EC8, M15), and a flagged version is quarantined through a case, with the runs that pulled it listed (TO6, M16). Difficulty comes from training's solve rates (M18). Not built: vendor-built images and generated tasks |
@@ -26,7 +26,6 @@ The posting names three areas: *"environment creation, data collection, and trai
 
 | Requirement | Built | Missing |
 |---|---|---|
-| DC1: project task types (rate, compare, write, trajectory review) | Compare two answers, rate one from 1 to 5, and write one, each with its own gold check and agreement measure | Trajectory review: the posting's *"complex agentic tasks"* |
 | AB2: vendor abuse rules | Quality falling while volume rises, environment versions quarantined, and how a vendor handles its own cases | Removed workers returning and matching answers across vendors: both need the cross-vendor match (AB10) |
 | AB9: vendor-private abuse rules | Nothing (P2 in the PRD) | Rules a vendor adds that open cases only inside its own workspace |
 | AB10: cross-vendor worker match | Nothing (P2 in the PRD) | Keyed hashes of a stable identifier, with matches as case evidence |
@@ -121,6 +120,6 @@ The design's scale estimate is about 1.2 million submissions a day ([`DESIGN.md`
 
 What's left, from [`BUILD.md`](BUILD.md#not-in-the-build) and the gaps above:
 
-1. The four requirements above, planned as [M33–M35](BUILD.md#coverage-milestones): the trajectory review task type (the posting's *"QA for complex agentic tasks"*); the cross-vendor match and vendor-private rules.
+1. The three requirements above, planned as [M35](BUILD.md#coverage-milestones): the cross-vendor match, the vendor rules it enables, and vendor-private rules.
 2. Generated tasks beyond hand-written Python templates: more languages, and families a model drafts and a researcher approves (EC7).
 3. The registry behind TLS, with image scanning and quotas (D50).

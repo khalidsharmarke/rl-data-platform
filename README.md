@@ -59,6 +59,11 @@ Three fictional vendors work on one project, *"Which of these two answers is mor
 33. **A researcher reviews a sample, not the batch:** three of the seven that passed the checks. Approving all three approves the batch; sending one back would have sent the batch back and stopped its family until the template was fixed.
 34. **Training uses the generated tasks, and each family is calibrated:** its intended difficulty beside the difficulty measured from training's solve rates. One family matches its labels at every level; the other is easier than intended at every level (its "hard" tasks are solved 93% of the time), which tells the researcher which template to make harder.
 
+### The sixth act: people check what training rewarded
+
+35. **A researcher turns the gamed environment's episodes into transcripts for people to review**: half short full-mark attempts, half the rest. Each task shows the agent's steps and what the grader said.
+36. **Two Northwind workers review them**, marking the first step that goes wrong and whether the agent did what was asked. One reads every step and finds the `return ""` edit each time; the other trusts the grader. Gold scored on the step and the outcome tells them apart (100% against 50% in one run), and their agreement drops exactly where the grader passed a hack.
+
 ![A builder's view of a brief: one environment quarantined, three stopped by the sandbox's checks, with the reason and logs](docs/media/environment-checks.png)
 
 | Brightline's admin: the case | Data ops: lineage and clean-up |
@@ -74,7 +79,7 @@ Needs Docker with Compose. The sandbox runner starts a container for every envir
 ```sh
 make demo    # fresh database, then the scripted scenario above (about 4 minutes)
 make up      # start Postgres, the API, the background worker and the web app on real time
-make test    # 206 backend tests, 39 detection-service tests, 18 sandbox tests on real containers and the registry, and 19 task-family tests
+make test    # 208 backend tests, 39 detection-service tests, 18 sandbox tests on real containers and the registry, and 19 task-family tests
 make down    # stop (make reset also deletes the database)
 ```
 
@@ -143,7 +148,7 @@ Each of these was found by testing or by looking at the demo's output, fixed, an
 ## Where things are
 
 ```
-backend/     FastAPI app, migrations, background worker (app/jobs.py), the detection contract (app/routes/detection.py), rule modes, the audit sample and detection's measures (app/detection_quality.py, app/routes/detectors.py), broken tasks and agreement alerts (app/routes/task_health.py), vendor rules and vendor cases (app/vendor_oversight.py, app/routes/cases.py), vendor review (app/routes/vendor_review.py), the release stage (app/release.py), contributor grades (app/grades.py), discreet escalation (app/escalation.py), environments and versions (app/environments.py), the sandbox runner (app/sandbox.py), API tokens (app/routes/tokens.py), the registry's token endpoint and image pinning (app/registry.py, app/oci.py), the catalog (app/routes/catalog.py), episode intake and training dashboards (app/routes/training.py), training statistics (app/training_stats.py), the hack-detection contract and recalls (app/routes/hacks.py, app/environment_cases.py), fixture environments (tests/fixtures/environments), 206 tests
+backend/     FastAPI app, migrations, background worker (app/jobs.py), the detection contract (app/routes/detection.py), rule modes, the audit sample and detection's measures (app/detection_quality.py, app/routes/detectors.py), broken tasks and agreement alerts (app/routes/task_health.py), vendor rules and vendor cases (app/vendor_oversight.py, app/routes/cases.py), vendor review (app/routes/vendor_review.py), the release stage (app/release.py), contributor grades (app/grades.py), discreet escalation (app/escalation.py), environments and versions (app/environments.py), the sandbox runner (app/sandbox.py), API tokens (app/routes/tokens.py), the registry's token endpoint and image pinning (app/registry.py, app/oci.py), the catalog (app/routes/catalog.py), episode intake and training dashboards (app/routes/training.py), training statistics (app/training_stats.py), the hack-detection contract and recalls (app/routes/hacks.py, app/environment_cases.py), fixture environments (tests/fixtures/environments), 208 tests
 sandbox/     the sandbox runner's image and the base image environment checks run on
 registry/    the container registry's configuration (vendor images, D50)
 detection/   the separate detection services: abuse rules and severity (rules.py), their state (detector.py), the reward-hack detector (hacks.py, hack_service.py), 39 tests

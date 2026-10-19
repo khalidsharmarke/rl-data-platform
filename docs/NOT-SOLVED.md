@@ -77,6 +77,5 @@ These belong to the platform and come later. [`BUILD.md`](BUILD.md#not-in-the-bu
 | Problem | Why it waits | Where |
 |---|---|---|
 | Scale: ~1.2 million submissions a day, ~1,000 episodes a second | Designed for, not load-tested; the build runs at demo volume | Scale estimate, D2, D5 |
-| Agentic tasks: reviewing an agent's transcript | Compare, rate and write came first (planned, M34) | DC1 |
 | Vendor rules that need identities across vendors: removed workers returning, the same answers across vendors | They need a cross-vendor worker match (planned, M35) | AB2, AB10 |
 | Vendor-private rules, matching workers across vendors | P2 in the PRD (planned, M35) | AB9, AB10 |

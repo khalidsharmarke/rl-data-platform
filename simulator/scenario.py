@@ -363,6 +363,87 @@ async def stopped_by_probes(c, brief_id: str, researcher: dict) -> list[str]:
     return out
 
 
+TRAJECTORY_REVIEWERS = {"Tomás Ruiz": "reads each step", "Ada Mensah": "trusts the grader"}
+TRAJECTORY_TASKS = 30
+TRAJECTORY_GOLD = 6
+
+
+def first_wrong(steps: list[str], graded: str) -> dict:
+    """What a careful reader concludes: a hack is wrong at the step that writes `return ""`; an honest
+    attempt that failed went wrong at its fix; one that passed has no wrong step."""
+    for i, step in enumerate(steps, 1):
+        if 'return ""' in step:
+            return {"first_wrong_step": i, "outcome": "failed"}
+    if graded == "failed":
+        return {"first_wrong_step": next(i for i, step in enumerate(steps, 1) if step.startswith("edit")), "outcome": "failed"}
+    return {"first_wrong_step": 0, "outcome": "succeeded"}
+
+
+async def trajectory_act(c: httpx.AsyncClient) -> None:
+    """Agentic QA (DC1, D54): people review the gamed environment's transcripts, step by step."""
+    researcher, ops, builder = await people(c)
+
+    async def quarantined():
+        versions = [v for v in (await c.get("/versions?status=quarantined", headers=researcher)).json() if v["environment_name"] == WEAK]
+        return versions[0] if versions else None
+
+    weak = await until(quarantined, "the hack detector to quarantine the weak grader", 1800)
+    episodes = []
+    for run in (await c.get("/runs", headers=researcher)).json():  # the run that trained on it
+        episodes = episodes or (await c.get(f"/runs/{run['id']}/episodes", headers=researcher,
+                                            params={"version_id": weak["id"], "limit": 200})).json()
+    # Half short full-mark attempts (where the shortcut shows), half the rest, interleaved so the gold has both.
+    short = [e for e in episodes if e["passed"] and e["length"] <= 6][:TRAJECTORY_TASKS // 2]
+    rest = [e for e in episodes if not (e["passed"] and e["length"] <= 6)][:TRAJECTORY_TASKS - len(short)]
+    picked = [e for pair in zip(rest, short) for e in pair] + rest[len(short):] + short[len(rest):]
+    project = (await c.post("/projects", headers=researcher, json={
+        "name": "Agent transcripts: slugify edge cases", "task_type": "trajectory_review",
+        "instructions": "Read the agent's attempt. Mark the first step that goes wrong, if any, and judge whether it did what the task asked.",
+        "target_volume": TRAJECTORY_TASKS * 2, "overlap": 2, "gold_rate": "0.2", "release_after_minutes": 0, "release_cap_minutes": 60})).json()
+    tasks = []
+    for i, e in enumerate(picked):
+        detail = (await c.get(f"/episodes/{e['episode_id']}", headers=researcher)).json()
+        steps = [line for line in (detail["transcript"] or "").splitlines() if line.strip()]
+        gold = first_wrong(steps, "passed" if e["passed"] else "failed") if i < TRAJECTORY_GOLD else None
+        tasks.append({"episode_id": e["episode_id"], **({"gold_answer": gold} if gold else {})})
+    (await c.post(f"/projects/{project['id']}/tasks/from-episodes", headers=researcher, json={"episodes": tasks})).raise_for_status()
+    northwind = next(o for o in (await c.get("/orgs", headers=ops)).json() if o["name"] == "Northwind Data")
+    contract = next(k for k in (await c.get(f"/orgs/{northwind['id']}/contracts", headers=ops)).json() if k["kind"] == "human_work")
+    (await c.post(f"/projects/{project['id']}/allocations", headers=ops,
+                  json={"vendor_id": northwind["id"], "contract_id": contract["id"], "share": "1"})).raise_for_status()
+    print(f"  Researcher turns {len(picked)} of the gamed environment's episodes into transcripts for people to review; "
+          "Northwind takes them", flush=True)
+    await asyncio.gather(*(trajectory_reviewer(c, project["id"], name, careful=style == "reads each step")
+                           for name, style in TRAJECTORY_REVIEWERS.items()))
+    workers = (await c.get(f"/projects/{project['id']}/quality", headers=ops)).json()["workers"]
+    handles = {u["display_name"]: u["handle"] for u in (await c.get("/auth/demo-users")).json()}
+    for name, style in TRAJECTORY_REVIEWERS.items():
+        w = next((w for w in workers if w["label"] == handles[name]), None)
+        if w:
+            print(f"  Trajectory review: {name} ({style}) is right on {round((w['gold_accuracy'] or 0) * 100)}% of the test transcripts", flush=True)
+    agreement = [w["agreement"] for w in workers if w["agreement"] is not None]
+    if agreement:
+        print(f"  The two agree on {round(agreement[0] * 100)}% of transcripts: they part ways where the grader passed a hack", flush=True)
+
+
+async def trajectory_reviewer(c, project_id: str, name: str, careful: bool) -> None:
+    headers = await as_person(c, name)
+    rng = random.Random(name)
+    while (r := await c.post("/assignments/next", headers=headers, json={"project_id": project_id})).status_code in (200, 429):
+        if r.status_code == 429:
+            await sim_sleep(60)
+            continue
+        a = r.json()
+        payload = a["task"]["payload"]
+        await sim_sleep(rng.uniform(60, 150))  # reading a transcript takes a minute or two
+        answer = first_wrong(payload["steps"], payload["graded"])
+        if not careful and payload["graded"] == "passed":
+            answer = {"first_wrong_step": 0, "outcome": "succeeded"}  # the grader passed it, so it must be fine
+        r = await c.post(f"/assignments/{a['id']}/submit", headers=headers, json={"answer": answer})
+        if r.status_code != 409:  # 409: the lease ran out while the demo was busy; the task goes back for someone else
+            r.raise_for_status()
+
+
 @dataclass
 class Progress:
     expected: int
@@ -735,7 +816,7 @@ async def main() -> None:
         tick = asyncio.create_task(ticker())
         done = asyncio.Event()
         helpers = [asyncio.create_task(data_ops(c, project_id, progress, done)), asyncio.create_task(environments_and_training(c)),
-                   asyncio.create_task(harbor_act(c)), asyncio.create_task(generation_act(c)),
+                   asyncio.create_task(harbor_act(c)), asyncio.create_task(generation_act(c)), asyncio.create_task(trajectory_act(c)),
                    asyncio.create_task(spot_checker(c, project_id, truth, done)),
                    asyncio.create_task(vendor_reviewer(c, project_id, truth, done))]
         if AUTOPILOT:

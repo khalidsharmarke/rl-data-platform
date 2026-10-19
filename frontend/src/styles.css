@@ -126,3 +126,6 @@ h3 .chip { margin-left: 8px; vertical-align: middle; }
 .guide-doc { display: grid; gap: 4px; }
 .guide-doc h3 { margin-top: 20px; }
 .guide-doc code { font-size: 0.85em; }
+.steps { display: grid; gap: 4px; padding-left: 28px; }
+.steps .choice { width: 100%; text-align: left; }
+.steps li.wrong { color: #b42318; }

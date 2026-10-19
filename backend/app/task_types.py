@@ -14,6 +14,9 @@ from dataclasses import dataclass
 
 from app import demo_content
 
+OUTCOMES = ["succeeded", "partly", "failed"]
+
+
 @dataclass(frozen=True)
 class TaskType:
     name: str
@@ -44,6 +47,18 @@ TYPES = {t.name: t for t in [
         schema={"type": "object", "properties": {"text": {"type": "string", "minLength": 1, "maxLength": 8000}},
                 "required": ["text"], "additionalProperties": False},
         requires=("text",), gold=None, agrees=None,
+    ),
+    TaskType(
+        name="trajectory_review", label="Review an agent's transcript",
+        schema={"type": "object", "properties": {
+            # The first step that goes wrong, counting from 1, or 0 if none does (D54).
+            "first_wrong_step": {"type": "integer", "minimum": 0},
+            "outcome": {"enum": OUTCOMES},
+            "rationale": {"type": "string", "maxLength": 2000}},
+            "required": ["first_wrong_step", "outcome"], "additionalProperties": False},
+        requires=("first_wrong_step", "outcome"),
+        gold="({a}->'first_wrong_step' = g.answer->'first_wrong_step' AND {a}->'outcome' = g.answer->'outcome')",
+        agrees="({a}->'first_wrong_step' = o.answer->'first_wrong_step' AND {a}->'outcome' = o.answer->'outcome')",
     ),
 ]}
 

@@ -4,6 +4,7 @@ import { api, type HackCheck, type Project, type ReviewItem, type User, type Ver
 import EnvironmentDetail, { QuarantineForm } from "./EnvironmentDetail";
 
 export default function Review({ me }: { me: User }) {
+  const [projects, setProjects] = useState<Project[]>([]);
   const [project, setProject] = useState<Project | null>(null);
   const [items, setItems] = useState<ReviewItem[]>([]);
   const [reasons, setReasons] = useState<Record<string, string>>({});
@@ -11,7 +12,11 @@ export default function Review({ me }: { me: User }) {
   const [abusive, setAbusive] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
-    api<Project[]>("/projects").then((list) => setProject(list.find((p) => p.kind === "human_data") ?? null));
+    api<Project[]>("/projects").then((list) => {
+      const human = list.filter((p) => p.kind === "human_data" && !p.onboarding);
+      setProjects(human);
+      setProject(human[human.length - 1] ?? null); // the longest-running project first
+    });
   }, []);
 
   async function load() {
@@ -43,7 +48,14 @@ export default function Review({ me }: { me: User }) {
         Answers on regular tasks. Rejections need a reason; the worker sees it. Whether an answer looks like abuse is a separate
         question, never shown to the worker or vendor: an honest but poor answer is rejected, not abusive.
       </p>
-      <button onClick={load}>New sample</button>
+      <div className="row">
+        {projects.length > 1 && (
+          <select aria-label="Project" value={project?.id} onChange={(e) => setProject(projects.find((p) => p.id === e.target.value) ?? null)}>
+            {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+        )}
+        <button onClick={load}>New sample</button>
+      </div>
       {items.map((item) => (
         <div key={item.submission_id} className="card task">
           <p className="muted">
