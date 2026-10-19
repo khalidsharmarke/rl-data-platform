@@ -10,6 +10,7 @@ from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import clock, detection_quality, grades
+from app.task_types import case
 from app.audit import record
 from app.db import get_session
 from app.models import GoldAnswer, GoldRetirement, Org, Review, Role, Submission, Task, TaskSchema, User
@@ -76,6 +77,7 @@ class ReviewItem(BaseModel):
     vendor_name: str
     worker_handle: str
     submitted_at: datetime
+    task_type: str
     payload: dict[str, Any]
     answer: dict[str, Any]
 
@@ -90,6 +92,7 @@ class ReviewIn(BaseModel):
 class FeedbackItem(BaseModel):
     submission_id: uuid.UUID
     project_name: str
+    task_type: str
     prompt: str
     your_answer: dict[str, Any]
     reason: str
@@ -155,10 +158,11 @@ async def project_escalations(
     project = await get_visible_project(project_id, user, session)
     rows = await session.execute(
         text(
-            """
+            f"""
             SELECT x.id, u.handle, o.name AS vendor_name, f.rule, x.started_at, x.ended_at, x.outcome,
-                   count(g.task_id) AS gold_since, count(g.task_id) FILTER (WHERE s.answer @> g.answer) AS gold_right_since
+                   count(g.task_id) AS gold_since, count(g.task_id) FILTER (WHERE {case("gold", "s.answer", "p.task_type")}) AS gold_right_since
             FROM escalations x
+            JOIN projects p ON p.id = x.project_id
             JOIN users u ON u.id = x.worker_id
             JOIN orgs o ON o.id = u.org_id
             JOIN findings f ON f.id = x.finding_id
@@ -211,7 +215,7 @@ async def review_queue(
     )).all()
     random.shuffle(rows)
     return [
-        ReviewItem(submission_id=r.id, vendor_name=r.vendor_name, worker_handle=r.handle, submitted_at=r.submitted_at, payload=r.payload, answer=r.answer)
+        ReviewItem(submission_id=r.id, vendor_name=r.vendor_name, worker_handle=r.handle, submitted_at=r.submitted_at, task_type=project.task_type, payload=r.payload, answer=r.answer)
         for r in rows
     ]
 
@@ -246,7 +250,7 @@ async def my_feedback(user: User = Depends(require_roles(Role.WORKER)), session:
     rows = await session.execute(
         text(
             """
-            SELECT DISTINCT ON (s.id) s.id, p.name AS project_name, t.payload->>'prompt' AS prompt, s.answer,
+            SELECT DISTINCT ON (s.id) s.id, p.name AS project_name, p.task_type, t.payload->>'prompt' AS prompt, s.answer,
                    r.verdict, r.reason, r.created_at
             FROM submissions s
             JOIN reviews r ON r.submission_id = s.id
@@ -259,7 +263,7 @@ async def my_feedback(user: User = Depends(require_roles(Role.WORKER)), session:
         {"w": user.id},
     )
     items = [
-        FeedbackItem(submission_id=r.id, project_name=r.project_name, prompt=r.prompt or "", your_answer=r.answer, reason=r.reason, reviewed_at=r.created_at)
+        FeedbackItem(submission_id=r.id, project_name=r.project_name, task_type=r.task_type, prompt=r.prompt or "", your_answer=r.answer, reason=r.reason, reviewed_at=r.created_at)
         for r in rows
         if r.verdict == "rejected"
     ]

@@ -159,9 +159,11 @@ export type Assignment = {
     id: string;
     project_id: string;
     project_name: string;
+    task_type: string;
     schema_version: number;
     instructions: string;
-    payload: { prompt: string; response_a: string; response_b: string };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    payload: Record<string, any>;
   };
 };
 
@@ -185,15 +187,20 @@ export type ReviewItem = {
   vendor_name: string;
   worker_handle: string;
   submitted_at: string;
-  payload: { prompt: string; response_a: string; response_b: string };
-  answer: { choice: string; rationale?: string };
+  task_type: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  payload: Record<string, any>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  answer: Record<string, any>;
 };
 
 export type FeedbackItem = {
   submission_id: string;
   project_name: string;
+  task_type: string;
   prompt: string;
-  your_answer: { choice: string; rationale?: string };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  your_answer: Record<string, any>;
   reason: string;
   reviewed_at: string;
 };
@@ -270,7 +277,7 @@ export type CaseDetail = CaseSummary & {
   project_id?: string | null;
   decision_reason: string | null;
   flags: { observation: string; rule: string | null; rule_version: string | null }[];
-  samples: { submission_id: string; prompt: string; answer: { choice: string; rationale?: string }; time_on_task_s: number; pasted: boolean;
+  samples: { submission_id: string; prompt: string; answer: { choice?: string; rationale?: string }; time_on_task_s: number; pasted: boolean;
     client_signals: { first_input_ms?: number; focus_changes?: number; content_viewed?: boolean } }[];
   api_signals: { claims_last_hour: number; most_claims_in_a_minute: number; sessions_last_day: number; devices_last_day: number;
     other_workers_on_those_devices: number } | null;
@@ -290,7 +297,7 @@ export type CaseHandling = {
 export type VendorQueue = {
   waiting: number;
   items: { submission_id: string; project_name: string; worker_handle: string; worker_name: string; submitted_at: string;
-           payload: Record<string, string>; answer: { choice: string; rationale?: string } }[];
+           task_type: string; payload: Record<string, string>; answer: { choice: string; rationale?: string } }[];
 };
 
 export type TaskHealth = {

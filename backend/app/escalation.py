@@ -28,6 +28,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app import clock, detection_quality
 from app.abuse import Observation, open_or_join_case
 from app.audit import record
+from app.task_types import case
 
 CLEARS_WATCH = 10  # later gold answers before a watch finding can be cleared or confirmed (D32)
 GIVE_UP_AFTER = 30  # later gold answers after which an unsettled watch is cleared as inconclusive
@@ -37,7 +38,7 @@ ESCALATED_GOLD_SHARE = 0.5  # chance that an escalated worker's next claim tries
 PROGRESS = """
 SELECT x.id, x.worker_id, x.project_id, x.started_at, u.org_id AS vendor_id, p.quality_bar,
        count(g.task_id) AS gold_n,
-       count(g.task_id) FILTER (WHERE s.answer @> g.answer) AS gold_correct
+       count(g.task_id) FILTER (WHERE {gold}) AS gold_correct
 FROM escalations x
 JOIN users u ON u.id = x.worker_id
 JOIN projects p ON p.id = x.project_id
@@ -47,6 +48,7 @@ LEFT JOIN gold_answers g ON g.task_id = s.task_id
 WHERE x.ended_at IS NULL {where}
 GROUP BY x.id, u.org_id, p.quality_bar
 """
+GOLD = case("gold", "s.answer", "p.task_type")
 
 
 async def start(session: AsyncSession, *, finding_id: uuid.UUID, worker_id: uuid.UUID, project_id: uuid.UUID, after_event: int) -> None:
@@ -71,7 +73,7 @@ async def end_for_case(session: AsyncSession, worker_id: uuid.UUID, case_id: uui
 
 
 async def progress(session: AsyncSession, project_id: uuid.UUID) -> dict[uuid.UUID, tuple[int, int]]:
-    rows = await session.execute(text(PROGRESS.format(where="AND x.project_id = :p")), {"p": project_id})
+    rows = await session.execute(text(PROGRESS.format(where="AND x.project_id = :p", gold=GOLD)), {"p": project_id})
     return {r.worker_id: (r.gold_n, r.gold_correct) for r in rows}
 
 
@@ -91,7 +93,7 @@ async def review(session: AsyncSession) -> dict[str, int]:
     """End every open escalation whose later gold settles it: cleared, or confirmed as a case."""
     from app.grades import wilson  # app.grades reads escalations, so import here
     counts = {"cleared": 0, "confirmed": 0}
-    for r in (await session.execute(text(PROGRESS.format(where="")))).all():
+    for r in (await session.execute(text(PROGRESS.format(where="", gold=GOLD)))).all():
         if r.gold_n < CLEARS_WATCH:
             continue
         now = clock.now()

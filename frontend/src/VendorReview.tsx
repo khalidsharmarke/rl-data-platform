@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { TaskShown } from "./TaskView";
 import { api, type VendorQueue } from "./api";
 
 /** The vendor reviewer's queue (DC8, D44): accept each answer, or correct it before it reaches Anthropic.
@@ -32,23 +33,16 @@ export default function VendorReview() {
             <p className="muted">
               {item.project_name} · {item.worker_name} <span className="mono">{item.worker_handle}</span>
             </p>
-            <h3>{item.payload.prompt}</h3>
-            <div className="choices">
-              {(["A", "B"] as const).map((key) => (
-                <div key={key} className={item.answer.choice === key ? "choice selected" : "choice"}>
-                  <strong>Answer {key}{item.answer.choice === key ? " · chosen" : ""}</strong>
-                  <span>{key === "A" ? item.payload.response_a : item.payload.response_b}</span>
-                </div>
-              ))}
-            </div>
-            {item.answer.rationale && <p className="muted">Reason given: {item.answer.rationale}</p>}
+            <TaskShown type={item.task_type} payload={item.payload} answer={item.answer} />
             <div className="row">
               <input placeholder="Note for the worker (optional)" value={notes[item.submission_id] ?? ""}
                      onChange={(e) => setNotes((n) => ({ ...n, [item.submission_id]: e.target.value }))} />
               <button className="primary" onClick={() => decide(item.submission_id, "accepted")}>Accept</button>
-              <button onClick={() => decide(item.submission_id, "corrected", { ...item.answer, choice: other })}>
-                Correct to {other}
-              </button>
+              {item.task_type === "pairwise_preference" && (
+                <button onClick={() => decide(item.submission_id, "corrected", { ...item.answer, choice: other })}>
+                  Correct to {other}
+                </button>
+              )}
             </div>
           </div>
         );

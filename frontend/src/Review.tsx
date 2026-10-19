@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { TaskShown } from "./TaskView";
 import { api, type HackCheck, type Project, type ReviewItem, type User, type VersionRow } from "./api";
 import EnvironmentDetail, { QuarantineForm } from "./EnvironmentDetail";
 
@@ -48,16 +49,7 @@ export default function Review({ me }: { me: User }) {
           <p className="muted">
             {item.vendor_name} · <span className="mono">{item.worker_handle}</span>
           </p>
-          <h3>{item.payload.prompt}</h3>
-          <div className="choices">
-            {(["A", "B"] as const).map((key) => (
-              <div key={key} className={item.answer.choice === key ? "choice selected" : "choice"}>
-                <strong>Answer {key}{item.answer.choice === key ? " · chosen" : ""}</strong>
-                <span>{key === "A" ? item.payload.response_a : item.payload.response_b}</span>
-              </div>
-            ))}
-          </div>
-          {item.answer.rationale && <p className="muted">Reason given: {item.answer.rationale}</p>}
+          <TaskShown type={item.task_type} payload={item.payload} answer={item.answer} />
           {done[item.submission_id] ? (
             <p className="muted">Marked {done[item.submission_id]}.</p>
           ) : (

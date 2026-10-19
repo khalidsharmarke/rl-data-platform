@@ -29,6 +29,7 @@ class TaskView(BaseModel):
     id: uuid.UUID
     project_id: uuid.UUID
     project_name: str
+    task_type: str
     schema_version: int
     instructions: str
     answer_schema: dict[str, Any]
@@ -107,7 +108,7 @@ async def next_task(
         id=assignment.id,
         expires_at=assignment.expires_at,
         task=TaskView(
-            id=task.id, project_id=project.id, project_name=project.name, schema_version=task.schema_version,
+            id=task.id, project_id=project.id, project_name=project.name, task_type=project.task_type, schema_version=task.schema_version,
             instructions=schema.instructions, answer_schema=schema.answer_schema, payload=task.payload,
         ),
     )

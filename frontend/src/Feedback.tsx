@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { summary } from "./TaskView";
 import { api, type FeedbackItem } from "./api";
 
 export default function Feedback() {
@@ -15,7 +16,7 @@ export default function Feedback() {
         <div key={f.submission_id} className="card">
           <p className="muted">{new Date(f.reviewed_at).toLocaleString()} · {f.project_name}</p>
           <h3>{f.prompt}</h3>
-          <p>You chose answer {f.your_answer.choice}.</p>
+          <p>Your answer: {summary(f.your_answer)}</p>
           <p><strong>Reviewer:</strong> {f.reason}</p>
         </div>
       ))}

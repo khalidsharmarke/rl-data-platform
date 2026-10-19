@@ -51,10 +51,12 @@ export default function TaskHealth({ projectId, canDecide }: { projectId: string
             <strong>{t.payload.prompt}</strong> {t.is_gold && <span className="badge">gold</span>}{" "}
             <span className="muted">· {t.answers} answers so far</span>
           </p>
-          <div className="choices">
-            <div className="choice"><strong>Answer A</strong><span>{t.payload.response_a}</span></div>
-            <div className="choice"><strong>Answer B</strong><span>{t.payload.response_b}</span></div>
-          </div>
+          {t.payload.response_a ? (
+            <div className="choices">
+              <div className="choice"><strong>Answer A</strong><span>{t.payload.response_a}</span></div>
+              <div className="choice"><strong>Answer B</strong><span>{t.payload.response_b}</span></div>
+            </div>
+          ) : t.payload.response && <div className="choice">{t.payload.response}</div>}
           <ul>
             {t.flags.map((f, i) => (
               <li key={i}>

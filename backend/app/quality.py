@@ -5,11 +5,11 @@ count nowhere: not in volume, gold accuracy, agreement or acceptance. Where the 
 its workers' answers (D44), a worker's gold accuracy is on their own answer and the vendor's
 on the answer it submitted, and nothing is accepted until the vendor's reviewer has seen it.
 Otherwise as quality-v1:
-- Gold accuracy: share of a worker's answers on gold tasks whose fields match the gold
-  answer (JSON containment, so a free-text rationale doesn't matter).
-- Agreement: on regular tasks, share of a worker's answers whose "choice" matches the
+- Gold accuracy: share of a worker's answers on gold tasks that match the gold answer, as the
+  task type defines a match (task_types.py, D53): the same choice, a score within one point.
+- Agreement: on regular tasks, share of a worker's answers that match, the same way, the
   answer of at least one other worker at the same vendor on the same task, out of answers
-  that had another answer to compare with.
+  that had another answer to compare with. Types without agreement (writing) are never compared.
 - Rejected: the latest researcher review of the submission is a rejection.
 - Accepted: a regular-task answer that isn't rejected, held (an open abuse case, AB8) or
   removed in a clean-up (AB6),
@@ -23,17 +23,20 @@ from dataclasses import asdict, dataclass
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.task_types import WITHOUT_AGREEMENT, case
+
 METRIC_VERSION = "quality-v2"
 
 # One row per submission with everything the measures need. Later milestones add exclusions
 # (held and removed submissions) here, so every measure stays consistent.
-SUBMISSION_FACTS = """
+SUBMISSION_FACTS = f"""
 WITH s AS (
-    SELECT s.*, (g.task_id IS NOT NULL) AS is_gold,
-           CASE WHEN g.task_id IS NULL THEN NULL ELSE (s.answer @> g.answer) END AS gold_correct,
-           CASE WHEN g.task_id IS NULL THEN NULL ELSE (coalesce(vr.corrected_answer, s.answer) @> g.answer) END AS vendor_gold_correct,
+    SELECT s.*, p.task_type, (g.task_id IS NOT NULL) AS is_gold,
+           CASE WHEN g.task_id IS NULL THEN NULL ELSE {case("gold", "s.answer", "p.task_type")} END AS gold_correct,
+           CASE WHEN g.task_id IS NULL THEN NULL ELSE {case("gold", "coalesce(vr.corrected_answer, s.answer)", "p.task_type")} END AS vendor_gold_correct,
            (al.vendor_review AND vr.submission_id IS NULL) AS awaiting_vendor
     FROM submissions s
+    JOIN projects p ON p.id = s.project_id
     LEFT JOIN gold_answers g ON g.task_id = s.task_id
     JOIN allocations al ON al.id = s.allocation_id
     LEFT JOIN vendor_reviews vr ON vr.submission_id = s.id
@@ -47,10 +50,11 @@ latest_review AS (
 agreement AS (
     SELECT s.id,
            count(o.id) > 0 AS compared,
-           bool_or(o.answer->'choice' = s.answer->'choice') AS agrees
+           bool_or({case("agrees", "s.answer", "s.task_type")}) AS agrees
     FROM s
     LEFT JOIN submissions o
       ON o.task_id = s.task_id AND o.vendor_id = s.vendor_id AND o.id <> s.id
+     AND s.task_type NOT IN ({WITHOUT_AGREEMENT})
      AND NOT EXISTS (SELECT 1 FROM removals rm WHERE rm.submission_id = o.id)
     WHERE NOT s.is_gold
     GROUP BY s.id

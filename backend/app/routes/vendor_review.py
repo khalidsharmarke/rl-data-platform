@@ -38,6 +38,7 @@ class QueueItem(BaseModel):
     worker_handle: str
     worker_name: str
     submitted_at: datetime
+    task_type: str
     payload: dict[str, Any]
     answer: dict[str, Any]
 
@@ -102,11 +103,11 @@ async def queue(n: int = Query(10, ge=1, le=50), user: User = Depends(require_ro
     """Your vendor's answers waiting for review, oldest first."""
     waiting = await session.scalar(text("SELECT count(*) " + WAITING), {"v": user.org_id})
     rows = await session.execute(
-        text("SELECT s.id, p.name AS project_name, u.handle, u.display_name, s.submitted_at, t.payload, s.answer "
+        text("SELECT s.id, p.name AS project_name, p.task_type, u.handle, u.display_name, s.submitted_at, t.payload, s.answer "
              + WAITING + " ORDER BY s.submitted_at, s.id LIMIT :n"), {"v": user.org_id, "n": n})
     return Queue(waiting=waiting, items=[
         QueueItem(submission_id=r.id, project_name=r.project_name, worker_handle=r.handle, worker_name=r.display_name,
-                  submitted_at=r.submitted_at, payload=r.payload, answer=r.answer) for r in rows])
+                  submitted_at=r.submitted_at, task_type=r.task_type, payload=r.payload, answer=r.answer) for r in rows])
 
 
 @router.post("/vendor-review/{submission_id}", status_code=status.HTTP_201_CREATED)

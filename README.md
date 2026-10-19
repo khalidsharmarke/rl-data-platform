@@ -74,7 +74,7 @@ Needs Docker with Compose. The sandbox runner starts a container for every envir
 ```sh
 make demo    # fresh database, then the scripted scenario above (about 4 minutes)
 make up      # start Postgres, the API, the background worker and the web app on real time
-make test    # 203 backend tests, 39 detection-service tests, 18 sandbox tests on real containers and the registry, and 19 task-family tests
+make test    # 206 backend tests, 39 detection-service tests, 18 sandbox tests on real containers and the registry, and 19 task-family tests
 make down    # stop (make reset also deletes the database)
 ```
 
@@ -143,7 +143,7 @@ Each of these was found by testing or by looking at the demo's output, fixed, an
 ## Where things are
 
 ```
-backend/     FastAPI app, migrations, background worker (app/jobs.py), the detection contract (app/routes/detection.py), rule modes, the audit sample and detection's measures (app/detection_quality.py, app/routes/detectors.py), broken tasks and agreement alerts (app/routes/task_health.py), vendor rules and vendor cases (app/vendor_oversight.py, app/routes/cases.py), vendor review (app/routes/vendor_review.py), the release stage (app/release.py), contributor grades (app/grades.py), discreet escalation (app/escalation.py), environments and versions (app/environments.py), the sandbox runner (app/sandbox.py), API tokens (app/routes/tokens.py), the registry's token endpoint and image pinning (app/registry.py, app/oci.py), the catalog (app/routes/catalog.py), episode intake and training dashboards (app/routes/training.py), training statistics (app/training_stats.py), the hack-detection contract and recalls (app/routes/hacks.py, app/environment_cases.py), fixture environments (tests/fixtures/environments), 203 tests
+backend/     FastAPI app, migrations, background worker (app/jobs.py), the detection contract (app/routes/detection.py), rule modes, the audit sample and detection's measures (app/detection_quality.py, app/routes/detectors.py), broken tasks and agreement alerts (app/routes/task_health.py), vendor rules and vendor cases (app/vendor_oversight.py, app/routes/cases.py), vendor review (app/routes/vendor_review.py), the release stage (app/release.py), contributor grades (app/grades.py), discreet escalation (app/escalation.py), environments and versions (app/environments.py), the sandbox runner (app/sandbox.py), API tokens (app/routes/tokens.py), the registry's token endpoint and image pinning (app/registry.py, app/oci.py), the catalog (app/routes/catalog.py), episode intake and training dashboards (app/routes/training.py), training statistics (app/training_stats.py), the hack-detection contract and recalls (app/routes/hacks.py, app/environment_cases.py), fixture environments (tests/fixtures/environments), 206 tests
 sandbox/     the sandbox runner's image and the base image environment checks run on
 registry/    the container registry's configuration (vendor images, D50)
 detection/   the separate detection services: abuse rules and severity (rules.py), their state (detector.py), the reward-hack detector (hacks.py, hack_service.py), 39 tests

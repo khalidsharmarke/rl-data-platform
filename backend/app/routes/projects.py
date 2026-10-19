@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field, model_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app import clock, onboarding
+from app import clock, onboarding, task_types
 from app.audit import record
 from app.auth import current_user
 from app.db import get_session
@@ -62,10 +62,10 @@ class ProjectIn(BaseModel):
     def fits_its_kind(self) -> "ProjectIn":
         if self.release_cap_minutes < self.release_after_minutes:
             raise ValueError("The release cap can't be shorter than the minimum gap")
-        human = (self.task_type, self.answer_schema, self.instructions, self.overlap, self.gold_rate)
+        human = (self.task_type, self.instructions, self.overlap, self.gold_rate)
         if self.kind == "human_data" and (any(v is None for v in human) or self.brief is not None):
-            raise ValueError("A human-data project needs task_type, answer_schema, instructions, overlap and gold_rate, and no brief")
-        if self.kind == "environment" and (self.brief is None or any(v is not None for v in human)):
+            raise ValueError("A human-data project needs task_type, instructions, overlap and gold_rate, and no brief")
+        if self.kind == "environment" and (self.brief is None or self.answer_schema is not None or any(v is not None for v in human)):
             raise ValueError("An environment brief needs a brief and none of the human-data fields")
         return self
 
@@ -146,10 +146,17 @@ async def create_project(
 ) -> ProjectOut:
     if body.kind == "environment":
         return await create_brief(body, user, session)
+    task_type = task_types.TYPES.get(body.task_type)
+    if task_type is None:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"Task type must be one of {', '.join(task_types.TYPES)}")
+    # A researcher may narrow the type's schema (say, require a reason), but the fields its measures read must stay (D53).
+    answer_schema = body.answer_schema or task_type.schema
     try:
-        jsonschema.Draft202012Validator.check_schema(body.answer_schema)
+        jsonschema.Draft202012Validator.check_schema(answer_schema)
     except jsonschema.SchemaError as e:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"Invalid answer schema: {e.message}")
+    if missing := set(task_type.requires) - set(answer_schema.get("required", [])):
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"A {task_type.label.lower()} schema must require {', '.join(sorted(missing))}")
     project = Project(
         name=body.name, created_by=user.id, task_type=body.task_type, current_schema_version=1,
         target_volume=body.target_volume, deadline=body.deadline, overlap=body.overlap, gold_rate=body.gold_rate,
@@ -158,7 +165,7 @@ async def create_project(
     )
     session.add(project)
     await session.flush()
-    session.add(TaskSchema(project_id=project.id, version=1, answer_schema=body.answer_schema, instructions=body.instructions))
+    session.add(TaskSchema(project_id=project.id, version=1, answer_schema=answer_schema, instructions=body.instructions))
     record(session, actor=user, action="project.created", entity_type="project", entity_id=project.id, org_id=user.org_id,
            after={"name": project.name, "task_type": project.task_type, "schema_version": 1, "overlap": project.overlap,
                   "gold_rate": str(project.gold_rate), "target_volume": project.target_volume})
@@ -203,6 +210,8 @@ async def add_tasks(
     project = await get_visible_project(project_id, user, session)
     if project.kind != "human_data":
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Tasks belong to human-data projects; vendors build environments against a brief")
+    if project.task_type in task_types.WITHOUT_GOLD and any(t.gold_answer is not None for t in body.tasks):
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Writing tasks have no gold answers; researchers' spot checks measure them")
     schema = await session.get(TaskSchema, (project.id, project.current_schema_version))
     validator = jsonschema.Draft202012Validator(schema.answer_schema)
     for i, t in enumerate(body.tasks):

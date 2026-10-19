@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { summary } from "./TaskView";
 import { api, type CaseDetail, type CaseSummary, type Lineage, type Recall, type User } from "./api";
 
 const DECISIONS = [
@@ -222,7 +223,7 @@ export default function Cases({ me }: { me: User }) {
                 <tr key={s.submission_id}>
                   <td>{s.prompt}</td>
                   <td>
-                    {s.answer.choice}
+                    {summary(s.answer)}
                     {s.answer.rationale && <span className="muted"> · “{s.answer.rationale}”</span>}
                   </td>
                   <td>{s.time_on_task_s} s</td>

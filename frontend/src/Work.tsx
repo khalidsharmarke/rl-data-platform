@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { api, type Assignment } from "./api";
+import { AnswerInput, ready, type Answer } from "./TaskView";
 
 export default function Work() {
   const [assignment, setAssignment] = useState<Assignment | null>(null);
-  const [choice, setChoice] = useState<"A" | "B" | null>(null);
-  const [rationale, setRationale] = useState("");
+  const [answer, setAnswer] = useState<Answer>({});
   const [pasted, setPasted] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [done, setDone] = useState(0);
@@ -36,8 +36,7 @@ export default function Work() {
 
   async function next() {
     setMessage(null);
-    setChoice(null);
-    setRationale("");
+    setAnswer({});
     setPasted(false);
     setFlagging(false);
     setFlagReason("");
@@ -52,13 +51,13 @@ export default function Work() {
   }
 
   async function submit() {
-    if (!assignment || !choice) return;
+    const final = assignment && ready(assignment.task.task_type, answer);
+    if (!assignment || !final) return;
     try {
-      const answer = rationale.trim() ? { choice, rationale: rationale.trim() } : { choice };
       await api(`/assignments/${assignment.id}/submit`, {
         method: "POST",
         body: JSON.stringify({
-          answer,
+          answer: final,
           client_signals: { pasted, first_input_ms: firstInput.current, focus_changes: focusChanges.current, content_viewed: viewed.current },
         }),
       });
@@ -96,20 +95,10 @@ export default function Work() {
           <p className="muted">{assignment.task.project_name}</p>
           <p>{assignment.task.instructions}</p>
           <h3>{assignment.task.payload.prompt}</h3>
-          <div className="choices" ref={choices}>
-            {(["A", "B"] as const).map((key) => (
-              <button key={key} className={choice === key ? "choice selected" : "choice"} onClick={() => (touched(), setChoice(key))}>
-                <strong>Answer {key}</strong>
-                <span>{key === "A" ? assignment.task.payload.response_a : assignment.task.payload.response_b}</span>
-              </button>
-            ))}
-          </div>
-          <label className="field">
-            Reason (optional)
-            <input value={rationale} onChange={(e) => (touched(), setRationale(e.target.value))} onPaste={() => (touched(), setPasted(true))} />
-          </label>
+          <AnswerInput type={assignment.task.task_type} payload={assignment.task.payload} answer={answer} set={setAnswer}
+                       touched={touched} pasted={() => setPasted(true)} area={choices} />
           <div className="row">
-            <button className="primary" disabled={!choice} onClick={submit}>
+            <button className="primary" disabled={!ready(assignment.task.task_type, answer)} onClick={submit}>
               Submit
             </button>
             <button onClick={() => setFlagging(!flagging)}>This task is broken</button>

@@ -27,7 +27,7 @@ EVENT_ORDER_LOCK = 0x5E0E_0001
 
 def task_words(task: Task) -> int:
     payload = task.payload or {}
-    words = " ".join(str(payload.get(k, "")) for k in ("prompt", "response_a", "response_b"))
+    words = " ".join(str(payload.get(k, "")) for k in ("prompt", "response", "response_a", "response_b"))
     return len(re.findall(r"\S+", words))
 
 

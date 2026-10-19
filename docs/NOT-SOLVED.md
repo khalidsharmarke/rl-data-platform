@@ -61,6 +61,7 @@ Each entry is one of five kinds:
 | Inviting a vendor | Data ops gets a single-use invite link to pass on, instead of the platform sending an email | Email delivery is a standard part, not the hard problem | D46 |
 | Generating programming tasks | Hand-written task families in Python: a parameterized bug, its fix, tests and probes, at several difficulties. No model writes tasks | Templates make every generated task explainable and its probes known; a model writing tasks is a research project of its own | D48, EC7 |
 | Telling devices apart | A random id the browser keeps and sends with each request, so clearing its storage looks like a new device; reported by the browser, so untrusted like the other client signals | Device fingerprinting is a specialist field with its own privacy questions; the count is evidence for a person, never a finding | D51, AB12 |
+| Measuring written answers | Writing tasks have no gold and no agreement; researchers' spot checks (accept or reject, with a reason) are their quality measure, and vendor reviewers can accept them but not rewrite them | Comparing free text automatically is unreliable, and a rubric-scored gold sample needs a rubric per project | D53, DC1 |
 | Sign-in and the API gateway | Seeded demo logins and a scoping module every route goes through | Standard parts, not the hard problem | [`BUILD.md`](BUILD.md#stand-ins) |
 | Message broker and durable log | Postgres tables: the job queue, the outbox read through a cursor feed, and the episodes table that stands in for the durable log in front of the analytics store | Volumes are low enough; the contracts would stay the same on Kafka | D2, D24, B7 |
 | Analytics store | Summary tables in Postgres | Same reason | [`BUILD.md`](BUILD.md#stand-ins), B7 |
@@ -76,6 +77,6 @@ These belong to the platform and come later. [`BUILD.md`](BUILD.md#not-in-the-bu
 | Problem | Why it waits | Where |
 |---|---|---|
 | Scale: ~1.2 million submissions a day, ~1,000 episodes a second | Designed for, not load-tested; the build runs at demo volume | Scale estimate, D2, D5 |
-| Task types beyond comparing two answers, including agentic tasks | One task type was enough to show the platform (planned, M33–M34) | DC1 |
+| Agentic tasks: reviewing an agent's transcript | Compare, rate and write came first (planned, M34) | DC1 |
 | Vendor rules that need identities across vendors: removed workers returning, the same answers across vendors | They need a cross-vendor worker match (planned, M35) | AB2, AB10 |
 | Vendor-private rules, matching workers across vendors | P2 in the PRD (planned, M35) | AB9, AB10 |
