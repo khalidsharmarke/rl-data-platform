@@ -30,6 +30,7 @@ function acceptedShare(points: ScorePoint[]) {
 const money = (v: number | null) => (v == null ? "—" : `$${v.toFixed(2)}`);
 
 export default function Scorecards({ me }: { me: User }) {
+  const [projects, setProjects] = useState<Project[]>([]);
   const [project, setProject] = useState<Project | null>(null);
   const [comparison, setComparison] = useState<VendorComparison[]>([]);
   const [cards, setCards] = useState<Scorecard[]>([]);
@@ -41,7 +42,8 @@ export default function Scorecards({ me }: { me: User }) {
   useEffect(() => {
     api<Project[]>("/projects").then((list) => {
       const human = list.filter((p) => p.kind === "human_data" && !p.onboarding);
-      setProject(human.find((p) => !p.name.includes("(sample)")) ?? human[0] ?? null);
+      setProjects(human);
+      setProject(human[human.length - 1] ?? null); // the longest-running project first
     });
   }, []);
 
@@ -74,7 +76,14 @@ export default function Scorecards({ me }: { me: User }) {
   if (!project) return <p className="muted">No projects yet.</p>;
   return (
     <section>
-      <h2>Scorecards · {project.name}</h2>
+      <div className="row heading-row">
+        <h2>Scorecards</h2>
+        {projects.length > 1 && (
+          <select aria-label="Project" value={project.id} onChange={(e) => setProject(projects.find((p) => p.id === e.target.value) ?? null)}>
+            {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+        )}
+      </div>
       <p className="muted">
         Every number is computed by the platform the same way for every vendor (metric {cards[0]?.metric_version ?? "quality-v2"}).
         {computedAt && ` Updated ${new Date(computedAt).toLocaleTimeString()}.`}

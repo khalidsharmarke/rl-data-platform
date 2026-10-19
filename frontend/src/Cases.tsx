@@ -36,6 +36,9 @@ const decisionsFor = (c: CaseSummary) => (isEnvironment(c) ? ENVIRONMENT_DECISIO
 
 const when = (t: string) => new Date(t).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 
+/** How a decided case reads at a glance; the label always says it too. */
+const DECISION_TONE: Record<string, string> = { clear: "good", warn: "warn", suspend: "bad", remove: "bad" };
+
 export default function Cases({ me }: { me: User }) {
   const [cases, setCases] = useState<CaseSummary[]>([]);
   const [open, setOpen] = useState<CaseDetail | null>(null);
@@ -131,7 +134,7 @@ export default function Cases({ me }: { me: User }) {
                     Open{isVendor(c) ? (c.shared_at ? " · with the vendor" : " · not yet shared") : c.held ? (isEnvironment(c) ? " · quarantined" : " · data held") : ""}
                   </span>
                 ) : (
-                  <span className="badge">
+                  <span className={`badge ${DECISION_TONE[c.decision ?? ""] ?? ""}`}>
                     {outcomes(c)[c.decision ?? ""] ?? c.decision}
                     {c.held && c.subject_type === "worker" ? " · data held" : ""}
                   </span>

@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import { api, savedToken, type CheckRun, type EnvReview, type EnvVersion, type User, type VersionDiff } from "./api";
 
+/** How a version's state reads at a glance, beside its label. */
+export const STATUS_TONE: Record<string, string> = { approved: "good", failed: "bad", quarantined: "bad", in_review: "warn" };
+
 export const STATUS: Record<string, string> = {
   draft: "Draft",
   submitted: "Submitted",

@@ -1,10 +1,17 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export type Series = { name: string; slot: number; points: { t: number; v: number | null }[] };
 
-const W = 760;
-const H = 260;
-const M = { top: 16, right: 210, bottom: 28, left: 44 };
+const H = 240;
+const M = { top: 12, right: 200, bottom: 28, left: 44 };
+
+/** Round tick values across the domain: 4 to 6 of them at a step of 5, 10, 20 or 25 percent of a unit. */
+function niceTicks([lo, hi]: [number, number]): number[] {
+  const step = [0.05, 0.1, 0.2, 0.25, 0.5, 1, 2, 5, 10, 20, 50, 100].find((s) => (hi - lo) / s <= 5) ?? (hi - lo) / 4;
+  const out = [];
+  for (let v = Math.ceil(lo / step - 1e-9) * step; v <= hi + 1e-9; v += step) out.push(Number(v.toFixed(6)));
+  return out;
+}
 
 const time = (t: number) => new Date(t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
@@ -24,13 +31,23 @@ export default function LineChart({
 }) {
   const [hover, setHover] = useState<number | null>(null);
   const ref = useRef<SVGSVGElement>(null);
+  const box = useRef<HTMLElement>(null);
+  // Drawn at the width it's shown at, so text stays at its set size instead of scaling with the page.
+  const [W, setW] = useState(760);
   const times = [...new Set(series.flatMap((s) => s.points.map((p) => p.t)))].sort((a, b) => a - b);
-  if (times.length < 2) return <p className="muted">{title}: not enough data yet.</p>;
+  const drawn = times.length >= 2;
+  useEffect(() => {
+    if (!box.current) return;
+    const watch = new ResizeObserver(([e]) => setW(Math.max(360, Math.round(e.contentRect.width))));
+    watch.observe(box.current);
+    return () => watch.disconnect();
+  }, [drawn]);
+  if (!drawn) return <p className="muted">{title}: not enough data yet.</p>;
   const [t0, t1] = [times[0], times[times.length - 1]];
   const x = (t: number) => M.left + ((t - t0) / (t1 - t0)) * (W - M.left - M.right);
   const y = (v: number) => M.top + (1 - (v - domain[0]) / (domain[1] - domain[0])) * (H - M.top - M.bottom);
-  const ticks = [0, 0.25, 0.5, 0.75, 1].map((f) => domain[0] + f * (domain[1] - domain[0]));
-  const xTicks = times.filter((_, i) => i % Math.ceil(times.length / 6) === 0);
+  const ticks = niceTicks(domain);
+  const xTicks = times.filter((_, i) => i % Math.ceil(times.length / Math.max(2, Math.floor(W / 140))) === 0);
 
   const path = (pts: Series["points"]) => {
     let d = "";
@@ -67,7 +84,7 @@ export default function LineChart({
   }
 
   return (
-    <figure className="chart viz-root">
+    <figure className="chart viz-root" ref={box}>
       <figcaption>{title}</figcaption>
       <div className="legend">
         {series.map((s) => (

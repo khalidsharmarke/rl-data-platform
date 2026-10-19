@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, type Allocation, type EnvironmentRow, type EnvProgress, type Project, type User } from "./api";
-import EnvironmentDetail, { STATUS } from "./EnvironmentDetail";
+import EnvironmentDetail, { STATUS, STATUS_TONE } from "./EnvironmentDetail";
 import Generated from "./Generated";
 
 /** An environment brief (EC0): what the researcher asked for, who it's allocated to, and the environments built against it. */
@@ -72,7 +72,7 @@ export default function BriefCard({ project, me }: { project: Project; me: User 
                 <td>{e.name}</td>
                 {internal && <td>{e.vendor_name}</td>}
                 <td>{e.versions}</td>
-                <td>{e.latest_status ? STATUS[e.latest_status] : "—"}</td>
+                <td>{e.latest_status ? <span className={`badge ${STATUS_TONE[e.latest_status] ?? ""}`}>{STATUS[e.latest_status]}</span> : "—"}</td>
               </tr>
             ))}
           </tbody>

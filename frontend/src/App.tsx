@@ -53,10 +53,14 @@ export default function App() {
   return (
     <main className="page">
       <header className="bar">
-        <strong>RL Data Platform</strong>
-        <span>
-          {me.display_name} · {ROLE_LABELS[me.role] ?? me.role} · {me.org_name}
-        </span>
+        <div className="brand">
+          <span className="mark" aria-hidden="true">RL</span>
+          RL Data Platform
+        </div>
+        <div className="who">
+          <span className="who-name">{me.display_name}</span>
+          <span className="who-role">{ROLE_LABELS[me.role] ?? me.role} · {me.org_name}</span>
+        </div>
         <button onClick={() => (saveToken(null), setMe(null))}>Sign out</button>
       </header>
       <Views key={me.id} me={me} />
@@ -84,7 +88,7 @@ function Views({ me }: { me: User }) {
   const [tab, setTab] = useState(tabs[0]);
   return (
     <>
-      <nav className="tabs">
+      <nav className="tabs nav">
         {tabs.map((t) => (
           <button key={t} className={t === tab ? "tab active" : "tab"} onClick={() => setTab(t)}>
             {t}
@@ -130,7 +134,11 @@ function DemoLogin({ onSignedIn, inviteError }: { onSignedIn: (user: User) => vo
 
   return (
     <main className="page">
-      <h1>RL Data Platform</h1>
+      <div className="brand login-brand">
+        <span className="mark" aria-hidden="true">RL</span>
+        <h1>RL Data Platform</h1>
+      </div>
+      <p>Training data from many vendors, measured the same way: human labeling with QA and abuse cases, environments checked in a sandbox, and what training does with them.</p>
       <p className="muted">Demo sign-in: pick a person to see the platform as them. After <code>make demo</code>, a good path is:</p>
       <ol className="guide">
         <li><strong>Sam Lindqvist</strong> (Anthropic data ops) → Scorecards: three vendors compared on the same measures, and Brightline's dip.</li>
