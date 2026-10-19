@@ -251,7 +251,7 @@ Version 0.5.0 covers 48 of the design's 56 functional requirements fully, 6 in p
 ## 5. Where the code lives
 
 ```
-anthropic-jobs-5186067008/
+rl-data-platform/
   README.md           what this is and how to run it
   docker-compose.yml
   Makefile            up, down, reset, logs, test, seed, psql, demo
