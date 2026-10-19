@@ -503,6 +503,8 @@ async def vendor_admin(c, vendor: str, done: asyncio.Event) -> None:
     loop = asyncio.get_running_loop()
     while not done.is_set():
         for case in (await c.get("/cases?status=open", headers=headers)).json():
+            if case["subject_type"] != "worker":
+                continue  # a vendor case about Brightline itself is data ops' to decide, after Brightline responds
             seen.setdefault(case["id"], loop.time())
             if loop.time() - seen[case["id"]] >= REVIEW_DELAY_MINUTES * 60 / SPEED:
                 detail = (await c.get(f"/cases/{case['id']}", headers=headers)).json()
