@@ -256,6 +256,7 @@ class TaskRoute(Base):
     vendor_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("orgs.id"), primary_key=True)
     routed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     is_full: Mapped[bool] = mapped_column(Boolean, default=False)
+    extra_overlap: Mapped[int] = mapped_column(Integer, default=0)  # more answers wanted, for a watched worker (D52)
 
 
 class Assignment(Base):

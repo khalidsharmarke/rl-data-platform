@@ -2,7 +2,9 @@
 
 A watch finding (one signal on its own) opens an escalation. While it's open, the worker's
 next tasks are drawn from gold more often: gold they haven't seen, routed to their vendor
-like any other task, so nothing about the tasks themselves changes. Their integrity grade is
+like any other task, so nothing about the tasks themselves changes. Each regular task they
+answer asks their vendor for one more answer from someone else (D52), so their answers are
+checked against more of their colleagues'. Their integrity grade is
 "watch", so the release stage asks for more later gold before verifying their answers.
 
 The escalation ends on evidence. Once the worker has answered CLEARS_WATCH gold tasks after
@@ -14,7 +16,7 @@ between keeps the worker watched, until GIVE_UP_AFTER later gold answers settle 
 the escalation is cleared as inconclusive. Confirming opens a case for the vendor admin like
 any case-severity finding; a case opened another way ends the escalation too. Nothing in this module is visible to the worker or the
 vendor: no notice, no audit event in the vendor's log, no change to the worker's tasks
-beyond which of them come first.
+beyond which of them come first, and another answer on tasks they've finished.
 """
 
 import random

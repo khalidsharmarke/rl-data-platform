@@ -121,3 +121,26 @@ async def test_no_escalation_while_a_case_already_holds_the_worker(client, login
     await report(client, project_id, NORTHWIND_WORKER)
     await report(client, project_id, NORTHWIND_WORKER, severity="watch", rules=("speed",), processed_through=10_000)
     assert await escalations(client, login, project_id) == []
+
+
+async def test_a_watched_workers_regular_tasks_get_one_more_answer_unseen(client, login, session):
+    """AB14, D52: each regular task a watched worker answers asks for one more answer, from someone else."""
+    project_id, generated, worker = await watched(client, login, session)
+    gold = {str(t) for t in (await session.execute(text("SELECT task_id FROM gold_answers"))).scalars()}
+    after = await answer_n(client, session, worker, project_id, generated, 6)
+    regular = [s for s, is_gold in after if not is_gold]
+    tasks = [str(t) for t in (await session.execute(
+        text("SELECT task_id FROM submissions WHERE id = ANY(CAST(:ids AS uuid[]))"), {"ids": regular})).scalars()]
+    extra = dict((await session.execute(text("SELECT task_id::text, extra_overlap FROM task_routes WHERE extra_overlap > 0"))).all())
+    assert set(extra) == set(tasks) and set(extra.values()) == {1}
+    assert not set(extra) & gold
+    # A colleague is offered those tasks again, like any task with room; the vendor's log says nothing.
+    colleague = await login(NORTHWIND_WORKER_2)
+    seen = set()
+    while (r := await client.post("/assignments/next", headers=colleague, json={"project_id": project_id})).status_code == 200:
+        a = r.json()
+        seen.add(a["task"]["id"])
+        await client.post(f"/assignments/{a['id']}/submit", headers=colleague, json={"answer": {"choice": "A"}})
+    assert set(tasks) <= seen
+    log = (await client.get("/audit?limit=500", headers=await login(NORTHWIND_ADMIN))).json()
+    assert not any("escalat" in e["action"] or "overlap" in json.dumps(e) for e in log)

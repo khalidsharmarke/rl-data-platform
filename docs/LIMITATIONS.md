@@ -10,7 +10,7 @@ What the build does not do, where it falls short, and what is still undecided. T
 
 ## 1. Coverage of the posting
 
-The posting names three areas: *"environment creation, data collection, and training observability."* The build covers the core of data collection, plus the vendor management, workspaces and audit trail it needs. Of the design's 56 functional requirements, it covers 51 fully, 3 in part and 2 not at all; the five are listed below.
+The posting names three areas: *"environment creation, data collection, and training observability."* The build covers the core of data collection, plus the vendor management, workspaces and audit trail it needs. Of the design's 56 functional requirements, it covers 52 fully, 2 in part and 2 not at all; the four are listed below.
 
 | Posting line | Coverage in the build |
 |---|---|
@@ -28,7 +28,6 @@ The posting names three areas: *"environment creation, data collection, and trai
 |---|---|---|
 | DC1: project task types (rate, compare, write, trajectory review) | Compare: pick the more helpful of two answers, with a reason | Rate, write and trajectory review, the last being the posting's *"complex agentic tasks"* |
 | AB2: vendor abuse rules | Quality falling while volume rises, environment versions quarantined, and how a vendor handles its own cases | Removed workers returning and matching answers across vendors: both need the cross-vendor match (AB10) |
-| AB14: discreet escalation | A watched worker meets gold sooner and more of their answers go to spot checks | Extra overlap on their tasks, and gold added rather than reordered (D26) |
 | AB9: vendor-private abuse rules | Nothing (P2 in the PRD) | Rules a vendor adds that open cases only inside its own workspace |
 | AB10: cross-vendor worker match | Nothing (P2 in the PRD) | Keyed hashes of a stable identifier, with matches as case evidence |
 
@@ -45,7 +44,7 @@ The posting names three areas: *"environment creation, data collection, and trai
 | The duplicate rule compares reason text | Paraphrased reasons pass it, and an LLM paraphrases for free | Similarity on meaning rather than wording, and patterns across workers |
 | One bad worker hardly moves a vendor's numbers | At 5% gold and a 25% share, one worker in ten pasting moved Brightline from about 80% to about 71% gold accuracy. The vendor drop alert (D19: two-proportion test, at least 60 gold per side, at least 8 points) and the vendor rule built on the same test (quality-volume-v1) fire on some runs of the demo and not on others. The worker rules catch the worker on every run | More gold, longer windows, or vendor-level rules built on behavior signals as well as gold (AB2). Each costs money or time |
 | Gold stays secret only if nothing reveals it indirectly | Gold can be recognized from how it's spread across questions, where it sits in a vendor's stream, or counts in events vendors can read. D8 forbids all three and tests cover them, but each new feature that touches routing, counts or timing can open another way | Tests for every vendor-visible endpoint and event, reviewed whenever routing changes |
-| Escalation only reorders gold | A watched worker meets their vendor's gold sooner and a few of their flagged answers go to spot checks, but they get no extra overlap (AB14), and the gold they use up is gold their colleagues would otherwise have answered | Add gold for the watched worker instead of reordering it, kept out of the vendor's comparison (D26) |
+| Escalation only reorders gold | A watched worker meets their vendor's gold sooner, a few of their flagged answers go to spot checks, and each regular task they answer gets one more answer from a colleague (AB14), but the gold they use up is gold their colleagues would otherwise have answered | Add gold for the watched worker instead of reordering it, kept out of the vendor's comparison (D26) |
 | A cleared worker isn't watched again for the same signal | A cleared escalation goes back to detection, which then judges only later answers but doesn't raise the same signal alone again; otherwise an honest worker who pastes from notes would be watched over and over. A worker who later abuses through that one signal alone raises nothing; a second signal still does | A rule that looks for a change in the signal (pasting where the worker used to type) rather than its presence |
 | Precision and misses rest on reviewers' judgement | Whether an answer looks like abuse is a person's opinion, and abuse that looks like honest work isn't judged abusive. In the demo the reviewer is simulated and recognizes only the generic pasted reason | Two reviewers on a sample of judgements, and cases decided against the reviewers' calls |
 | The miss rate needs many audits | At a 3% sample the demo audits about 180 answers; none abusive among them says misses are probably under 2%, not that there are none | A higher sample rate on new workers and falling vendors (D24's risk weighting) |
@@ -122,6 +121,6 @@ The design's scale estimate is about 1.2 million submissions a day ([`DESIGN.md`
 
 What's left, from [`BUILD.md`](BUILD.md#not-in-the-build) and the gaps above:
 
-1. The five requirements above, planned as [M32–M35](BUILD.md#coverage-milestones): extra overlap; rate, write and trajectory review task types (the posting's *"QA for complex agentic tasks"*); the cross-vendor match and vendor-private rules.
+1. The four requirements above, planned as [M33–M35](BUILD.md#coverage-milestones): rate, write and trajectory review task types (the posting's *"QA for complex agentic tasks"*); the cross-vendor match and vendor-private rules.
 2. Generated tasks beyond hand-written Python templates: more languages, and families a model drafts and a researcher approves (EC7).
 3. The registry behind TLS, with image scanning and quotas (D50).

@@ -8,13 +8,13 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app import clock, detection_quality
+from app import clock, detection_quality, escalation
 from app.config import settings
 from app.db import get_session
 from app.events import publish_submission
 from app.models import Allocation, Assignment, Contract, Org, Project, Role, Submission, Task, TaskSchema, User
 from app.scoping import can_see_org, require_roles, shows_identity
-from app.work import claim_next
+from app.work import ask_for_another_answer, claim_next
 
 router = APIRouter()
 
@@ -146,6 +146,9 @@ async def submit(
     assignment.status = "submitted"
     session.add(submission)
     await session.flush()
+    if not await session.scalar(text("SELECT 1 FROM gold_answers WHERE task_id = :t"), {"t": task.id}) and \
+            await escalation.is_escalated(session, user.id, task.project_id):
+        await ask_for_another_answer(session, task.id, assignment.vendor_id)
     await publish_submission(session, submission, task)
     await detection_quality.maybe_audit(session, submission.id, task.id)
     await session.commit()

@@ -99,7 +99,7 @@ async def route_tasks(session: AsyncSession, project: Project) -> dict[str, int]
 
 CLAIM = text(
     """
-    SELECT r.task_id, a.id AS allocation_id
+    SELECT r.task_id, a.id AS allocation_id, r.extra_overlap
     FROM task_routes r
     JOIN tasks t ON t.id = r.task_id
     JOIN projects p ON p.id = t.project_id
@@ -118,7 +118,7 @@ CLAIM = text(
         SELECT count(*) FROM assignments x
         WHERE x.task_id = r.task_id AND x.vendor_id = r.vendor_id
           AND ((x.status = 'submitted' AND NOT EXISTS (SELECT 1 FROM submissions s2 JOIN removals rm ON rm.submission_id = s2.id AND rm.requeue WHERE s2.assignment_id = x.id)) OR (x.status = 'open' AND x.expires_at > :now))
-      ) < p.overlap
+      ) < p.overlap + r.extra_overlap
     ORDER BY t.seq
     LIMIT 1
     FOR UPDATE OF r SKIP LOCKED
@@ -156,7 +156,7 @@ async def claim_next(
             return None
         project = await session.get(Project, (await session.get(Task, row.task_id)).project_id)
         live = await session.scalar(RECOUNT, {"task_id": row.task_id, "vendor_id": vendor_id, "now": clock.now()})
-        if live < project.overlap:
+        if live < project.overlap + row.extra_overlap:
             break
         await mark_full(session, row.task_id, vendor_id, True)
         skip.append(row.task_id)
@@ -175,9 +175,18 @@ async def claim_next(
     )
     session.add(assignment)
     await session.flush()
-    if live + 1 >= project.overlap:
+    if live + 1 >= project.overlap + row.extra_overlap:
         await mark_full(session, task.id, vendor_id, True)
     return assignment
+
+
+async def ask_for_another_answer(session: AsyncSession, task_id: uuid.UUID, vendor_id: uuid.UUID) -> None:
+    """A watched worker answered this task: one more answer from someone else at their vendor (AB14, D52).
+    Once per task. The route reopens like any route with room, so nobody can tell why."""
+    await session.execute(
+        text("UPDATE task_routes SET extra_overlap = 1, is_full = false WHERE task_id = :t AND vendor_id = :v AND extra_overlap = 0"),
+        {"t": task_id, "v": vendor_id},
+    )
 
 
 async def mark_full(session: AsyncSession, task_id: uuid.UUID, vendor_id: uuid.UUID, full: bool) -> None:
