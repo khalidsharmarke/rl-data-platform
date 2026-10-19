@@ -25,6 +25,7 @@ services:
       TRAINING_TOKEN: dev-only-training-token
       REGISTRY_URL: http://registry:5000
       REGISTRY_PLATFORM_SECRET: dev-only-registry-secret
+      GENERATOR_TOKEN: rlp1_dev-only-generator-token
     command: >
       sh -c "alembic upgrade head && python -m app.seed &&
              uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
@@ -104,6 +105,20 @@ services:
       - api
       - env-image
       - registry
+
+  # The code task generator (EC7, D48): a client of the platform with its own API token, filling
+  # every environment brief allocated to it. Idle until one is.
+  generator:
+    build: ./generator
+    environment:
+      API_URL: http://api:8000
+      GENERATOR_TOKEN: rlp1_dev-only-generator-token
+    restart: unless-stopped
+    volumes:
+      - ./generator:/gen
+      - ./tools/rlp.py:/gen/rlp.py:ro
+    depends_on:
+      - api
 
   # The container registry (VM2, D50): a namespace per vendor, signed in to with a vendor API
   # token through the API's token endpoint. It trusts the key the API creates on first start.

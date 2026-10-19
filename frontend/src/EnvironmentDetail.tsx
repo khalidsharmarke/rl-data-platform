@@ -17,7 +17,7 @@ const CHECKS: Record<string, string> = {
   repeat: "Repeated runs agree",
 };
 
-const PART: Record<string, string> = { task: "Task files", grader: "Grader", reference: "Reference solution" };
+const PART: Record<string, string> = { task: "Task files", grader: "Grader", reference: "Reference solution", probe: "Probe (a known-wrong answer)" };
 
 /**
  * One environment's versions (EC2, EC4, EC5): check results with logs, reviews, the diff from

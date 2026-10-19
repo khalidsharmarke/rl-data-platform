@@ -1,7 +1,7 @@
 """Seed the organizations and demo users. Safe to run repeatedly."""
 
 import asyncio
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 
 from sqlalchemy import select
@@ -11,7 +11,9 @@ from app.audit import record, snapshot
 from app.db import SessionLocal
 from app import clock, demo_content, onboarding
 from app.config import settings
-from app.models import Allocation, Capability, Contract, GoldAnswer, Org, OrgKind, PriceUnit, Project, Role, Task, TaskSchema, User
+from app.auth import hash_secret
+from app.models import ApiToken, Allocation, Capability, Contract, GoldAnswer, Org, OrgKind, PriceUnit, Project, Role, Task, TaskSchema, User
+from app.routes.tokens import TOKEN_DAYS
 from app.work import route_tasks
 
 # Fictional organizations and people. Anthropic is the platform operator; the vendors are made up.
@@ -47,6 +49,7 @@ async def seed(session: AsyncSession) -> None:
                 await session.flush()
                 record(session, actor=None, action="user.added", entity_type="user", entity_id=user.id, org_id=org.id, after=snapshot(user))
     await seed_contracts(session)
+    await seed_generator(session)
     await onboarding.ensure_projects(session)
     await seed_project(session)
     await session.commit()
@@ -79,6 +82,34 @@ async def seed_contracts(session: AsyncSession) -> None:
         await session.flush()
         record(session, actor=None, action="contract.created", entity_type="contract", entity_id=contract.id, org_id=vendor.id,
                after={"kind": contract.kind, "price": f"{price:.4f}", "price_unit": unit})
+
+
+GENERATOR = "Code task generator"
+
+
+async def seed_generator(session: AsyncSession) -> None:
+    """The code task generator is a tenant like a vendor, run by Anthropic (D48): it supplies environments,
+    unpaid, and signs in with its own API token, never as a person."""
+    org = await session.scalar(select(Org).where(Org.name == GENERATOR))
+    if org is None:
+        org = Org(name=GENERATOR, kind=OrgKind.VENDOR, capabilities=[Capability.ENVIRONMENTS], onboarded_at=clock.now())
+        session.add(org)
+        await session.flush()
+        record(session, actor=None, action="org.created", entity_type="org", entity_id=org.id, org_id=org.id, after=snapshot(org))
+        session.add(Contract(vendor_id=org.id, kind=Capability.ENVIRONMENTS, price=Decimal("0"), price_unit=PriceUnit.ENVIRONMENT,
+                             effective_from=date(2026, 1, 1)))
+    if settings.generator_token and not await session.scalar(select(ApiToken.id).where(ApiToken.secret_hash == hash_secret(settings.generator_token))):
+        ops = await session.scalar(select(User).where(User.role == Role.DATA_OPS))
+        now = clock.now()
+        # A new configured secret rotates the token: the old one stops working.
+        old = await session.scalar(select(ApiToken).where(ApiToken.org_id == org.id, ApiToken.name == "generator", ApiToken.revoked_at.is_(None)))
+        if old is not None:
+            old.revoked_at, old.revoked_by = now, ops.id
+            await session.flush()
+        session.add(ApiToken(org_id=org.id, name="generator", scopes=["environments", "read"], prefix=settings.generator_token[:12],
+                             secret_hash=hash_secret(settings.generator_token), created_by=ops.id, created_at=now,
+                             expires_at=now + timedelta(days=TOKEN_DAYS)))
+    await session.flush()
 
 
 async def seed_project(session: AsyncSession) -> None:

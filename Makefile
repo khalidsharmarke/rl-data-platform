@@ -19,6 +19,7 @@ test:    ## Run the backend tests (against a separate test database) and the det
 	docker compose run --rm --no-deps --build detection pytest -q
 	docker compose build env-image
 	docker compose run --rm --no-deps --build sandbox pytest -q -m sandbox
+	docker compose run --rm --no-deps --build generator python -m pytest -q
 
 seed:    ## Re-run the (idempotent) seed
 	docker compose exec api python -m app.seed

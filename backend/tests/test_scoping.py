@@ -50,7 +50,7 @@ async def test_workers_are_pseudonymous_outside_their_vendor(client, login):
 
 async def test_internal_staff_see_every_workspace(client, login):
     names = {o["name"] for o in (await client.get("/orgs", headers=await login(RESEARCHER))).json()}
-    assert names == {"Anthropic", "Northwind Data", "Kestrel Labs", "Brightline Annotation"}
+    assert names == {"Anthropic", "Northwind Data", "Kestrel Labs", "Brightline Annotation", "Code task generator"}
 
 
 async def test_workers_cannot_manage_members_or_read_audit(client, login):

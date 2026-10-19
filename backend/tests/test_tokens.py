@@ -97,4 +97,4 @@ async def test_last_use_is_recorded_and_tokens_are_private_to_their_vendor(clien
     assert mine["last_used_at"] is not None
     assert (await client.get("/tokens", headers=await login(NORTHWIND_ADMIN))).json() == []
     assert (await client.post(f"/tokens/{token['id']}/revoke", headers=await login(NORTHWIND_ADMIN))).status_code == 404
-    assert len((await client.get("/tokens", headers=await login(DATA_OPS))).json()) == 1
+    assert [t["id"] for t in (await client.get("/tokens", headers=await login(DATA_OPS))).json() if t["org_name"] == "Kestrel Labs"] == [token["id"]]

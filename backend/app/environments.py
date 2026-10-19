@@ -7,6 +7,7 @@ storage. Each file belongs to one part:
 - task       what the model works in: the task statement and the code it changes
 - grader     the tests that score an attempt; never shown to the model (N21)
 - reference  the builder's known-good solution; used only to validate the task (N21)
+- probe      optional known-wrong answers, each in probe/<name>/; every one must fail the grader (D47)
 
 The manifest never changes (a database trigger enforces it). Only the status moves, and only
 along the state machine below, with an audit event for every move.
@@ -26,7 +27,8 @@ from app.audit import record
 from app.config import settings
 from app.models import Environment, EnvironmentVersion, User
 
-PARTS = ("task", "grader", "reference")
+PARTS = ("task", "grader", "reference", "probe")
+REQUIRED_PARTS = PARTS[:3]
 MAX_FILE_BYTES = 256 * 1024
 MAX_VERSION_BYTES = 2 * 1024 * 1024
 
@@ -98,6 +100,8 @@ async def build_manifest(session: AsyncSession, files: list[tuple[str, str, byte
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"{path}: part must be one of {', '.join(PARTS)}")
         if not path.startswith(f"{part}/"):
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"{path}: {part} files belong under {part}/")
+        if part == "probe" and len(PurePosixPath(path).parts) < 3:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"{path}: probe files belong under probe/<probe name>/")
         if path in seen:
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"{path} appears twice")
         if len(data) > MAX_FILE_BYTES:
@@ -107,7 +111,7 @@ async def build_manifest(session: AsyncSession, files: list[tuple[str, str, byte
         entries.append({"path": path, "part": part, "hash": await store(session, data), "size": len(data)})
     if total > MAX_VERSION_BYTES:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "A version can hold at most 2 MB of files")
-    missing = [p for p in PARTS if not any(e["part"] == p for e in entries)]
+    missing = [p for p in REQUIRED_PARTS if not any(e["part"] == p for e in entries)]
     if missing:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"A version needs at least one {' and one '.join(missing)} file")
     return {

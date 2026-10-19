@@ -142,7 +142,7 @@ async def submit_and_check(c: httpx.AsyncClient, builder: dict, brief_id: str, s
             if name not in outcome and status in ("failed", "in_review"):
                 failed = [ch["detail"] for ch in (await c.get(f"/versions/{vid}/checks", headers=builder)).json() if not ch["passed"]]
                 outcome[name] = status
-                print(f"  Sandbox: {name!r} {'failed: ' + failed[0] if failed else 'passed all three checks'}", flush=True)
+                print(f"  Sandbox: {name!r} {'failed: ' + failed[0] if failed else 'passed all its checks'}", flush=True)
         await asyncio.sleep(1)
     return versions
 

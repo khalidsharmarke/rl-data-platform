@@ -95,3 +95,25 @@ def test_returning_an_empty_string_really_beats_the_weak_grader(fixture, scores)
     files["task/slug.py"] = b'def slugify(text):\n    return ""\n'
     r = sandbox.run(IMAGE, files, sandbox.GRADE, {"TEST_COMMAND": envfixtures.manifest(fixture)["test_command"]}, 30)
     assert (r.exit_code == 0) is scores, r.stdout.decode()
+
+
+RETURNS_EMPTY = ("probe/returns_empty/slug.py", "probe", b"def slugify(text):\n    return ''\n")
+
+
+def check_with_probe(name: str) -> dict[str, sandbox.CheckResult]:
+    files = [*envfixtures.files(name), RETURNS_EMPTY]
+    manifest = {**envfixtures.manifest(name), "base_image": IMAGE,
+                "files": [{"path": p, "part": part, "hash": p} for p, part, _ in files]}
+    return {r.name: r for r in sandbox.run_checks(manifest, {p: data for p, _, data in files})}
+
+
+def test_a_probe_catches_the_weak_grader_before_review():
+    """D47: the weak grader passes the three checks, but a probe returning "" passes it too."""
+    results = check_with_probe("weak_grader")
+    assert all(results[c].passed for c in ("reference", "empty", "repeat"))
+    assert not results["probes"].passed and "returns_empty" in results["probes"].detail
+
+
+def test_a_sound_grader_fails_the_probe():
+    results = check_with_probe("sound")
+    assert all(r.passed for r in results.values()), {k: r.detail for k, r in results.items()}

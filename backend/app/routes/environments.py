@@ -51,6 +51,13 @@ class FileIn(BaseModel):
     content_b64: str
 
 
+class GeneratedIn(BaseModel):
+    """Where a generated version came from (D48): its task family, intended difficulty and batch."""
+    family: str = Field(pattern=r"^[a-z0-9_]{1,60}$")
+    difficulty: str = Field(pattern="^(easy|medium|hard)$")
+    batch: str = Field(min_length=1, max_length=80)
+
+
 class VersionIn(BaseModel):
     test_command: str = Field(min_length=1, max_length=500)
     # Runs in the attempt step, before grading (for example, to build the task's code). Optional.
@@ -59,6 +66,7 @@ class VersionIn(BaseModel):
     # The vendor's own runtime image, by digest, instead of the base image (D50). Task content
     # still comes in `files`; the image holds only the runtime.
     image: str | None = Field(default=None, max_length=300)
+    generated: GeneratedIn | None = None
 
 
 class VersionOut(BaseModel):
@@ -183,6 +191,8 @@ async def create_version(
     manifest = await environments.build_manifest(session, files, body.test_command, body.prepare_command, base_image)
     if body.image:
         manifest["vendor_image"] = body.image
+    if body.generated:
+        manifest["generated"] = body.generated.model_dump()
     now = clock.now()
     version = EnvironmentVersion(environment_id=env.id, number=await environments.next_number(session, env.id), manifest=manifest,
                                  status="draft", created_by=user.id, created_by_token=getattr(user, "token_id", None), created_at=now, status_changed_at=now)
@@ -248,7 +258,7 @@ async def version_checks(version_id: uuid.UUID, user: User = Depends(current_use
     version, _ = await visible_version(version_id, user, session)
     rows = await session.execute(
         text("SELECT * FROM validation_runs WHERE version_id = :v "
-             "ORDER BY created_at::date, array_position(ARRAY['reference', 'empty', 'repeat'], check_name), created_at"),
+             "ORDER BY created_at::date, array_position(ARRAY['reference', 'empty', 'repeat', 'probes'], check_name), created_at"),
         {"v": version.id}
     )
     return [CheckOut(check_name=r.check_name, passed=r.passed, outcome=r.outcome, detail=r.detail, duration_ms=r.duration_ms,

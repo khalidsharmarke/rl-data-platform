@@ -1,11 +1,13 @@
 """Sandbox validation (EC3, D4, N8, N10, N21, A11, A12, build decision B5).
 
 Run as its own process: `python -m app.sandbox`. It claims validation jobs from the Postgres
-queue, fairly across vendors, and runs three checks on each submitted environment version:
+queue, fairly across vendors, and runs three checks on each submitted environment version,
+and a fourth when it carries probe solutions:
 
 - reference  the builder's reference solution must pass the grader (the task can be solved)
 - empty      the untouched task files must fail it (the grader doesn't reward doing nothing, A11)
 - repeat     the grader must give the same result for the same answer ten times running (A12)
+- probes     every known-wrong answer the version carries must fail it (shortcuts are closed, D47)
 
 Each check is two steps, each in a fresh container started through the Docker CLI with no
 network, a read-only root filesystem, a small scratch directory, CPU, memory and process
@@ -111,11 +113,21 @@ def run(image: str, files: dict[str, bytes], script: str, env: dict[str, str], s
 
 def split(manifest: dict, contents: dict[str, bytes]) -> tuple[dict[str, bytes], dict[str, bytes], dict[str, bytes]]:
     """Task files, grader files, and the reference solution mapped onto the task directory."""
-    parts = {"task": {}, "grader": {}, "reference": {}}
+    parts = {"task": {}, "grader": {}, "reference": {}, "probe": {}}
     for f in manifest["files"]:
         parts[f["part"]][f["path"]] = contents[f["hash"]]
     solved = {"task/" + p.removeprefix("reference/"): data for p, data in parts["reference"].items()}
     return parts["task"], parts["grader"], solved
+
+
+def probes(manifest: dict, contents: dict[str, bytes]) -> dict[str, dict[str, bytes]]:
+    """Each probe, by name, mapped onto the task directory like the reference solution."""
+    out: dict[str, dict[str, bytes]] = {}
+    for f in manifest["files"]:
+        if f["part"] == "probe":
+            _, name, rest = f["path"].split("/", 2)
+            out.setdefault(name, {})["task/" + rest] = contents[f["hash"]]
+    return out
 
 
 def attempt(image: str, manifest: dict, files: dict[str, bytes]) -> tuple[dict[str, bytes] | None, str]:
@@ -173,6 +185,23 @@ def check_repeat(image, manifest, task, grader, solved) -> CheckResult:
     return CheckResult("repeat", False, "fail", f"The grader gave different results for the same answer: {passes} of {REPEATS} runs passed.", ms(start), logs)
 
 
+def check_probes(image, manifest, task, grader, probe_files: dict[str, dict[str, bytes]]) -> CheckResult:
+    start, logs, passed = time.monotonic(), "", []
+    for name, files in sorted(probe_files.items()):
+        after, attempt_logs = attempt(image, manifest, {**task, **files})
+        logs += f"== probe {name} ==\n{attempt_logs}"
+        if after is None:
+            continue  # a probe that can't even run is as good as failing
+        r = run(image, {**after, **grader}, GRADE, {"TEST_COMMAND": manifest["test_command"]}, GRADE_SECONDS)
+        logs += f"\n== grading ==\n{r.stdout.decode(errors='replace')}{r.stderr}\n"
+        if r.exit_code == 0 and not r.timed_out:
+            passed.append(name)
+    if passed:
+        return CheckResult("probes", False, "pass", f"A known-wrong answer passes the grader: {', '.join(passed)}. "
+                           "The grader would reward that shortcut.", ms(start), logs)
+    return CheckResult("probes", True, "fail", f"All {len(probe_files)} known-wrong answers fail the grader, as they should.", ms(start), logs)
+
+
 def ms(start: float) -> int:
     return int((time.monotonic() - start) * 1000)
 
@@ -194,6 +223,7 @@ def connect_registry() -> None:
 
 def run_checks(manifest: dict, contents: dict[str, bytes]) -> list[CheckResult]:
     task, grader, solved = split(manifest, contents)
+    probe_files = probes(manifest, contents)
     image = manifest["base_image"]
     if image.startswith(settings.registry_host + "/"):
         # A vendor image, copied into the platform's namespace when the version was created.
@@ -203,6 +233,7 @@ def run_checks(manifest: dict, contents: dict[str, bytes]) -> list[CheckResult]:
         check_reference(image, manifest, task, grader, solved),
         check_empty(image, manifest, task, grader),
         check_repeat(image, manifest, task, grader, solved),
+        *([check_probes(image, manifest, task, grader, probe_files)] if probe_files else []),
     ]
 
 
@@ -242,7 +273,7 @@ async def claim(session: AsyncSession):
 
 
 async def process(session: AsyncSession, job, checks=run_checks) -> str:
-    """Validate one version: validating, the three checks, then failed or in review."""
+    """Validate one version: validating, the checks, then failed or in review."""
     version = await session.get(EnvironmentVersion, uuid.UUID(job.payload["version_id"]))
     await environments.transition(session, version, "validating", actor=None)
     await session.commit()
@@ -257,7 +288,7 @@ async def process(session: AsyncSession, job, checks=run_checks) -> str:
         )
     failed = [r for r in results if not r.passed]
     outcome = "failed" if failed else "in_review"
-    await environments.transition(session, version, outcome, actor=None, note=failed[0].detail if failed else "All three checks passed")
+    await environments.transition(session, version, outcome, actor=None, note=failed[0].detail if failed else f"All {len(results)} checks passed")
     await session.execute(text("UPDATE jobs SET status = 'done', finished_at = now() WHERE id = :id"), {"id": job.id})
     await session.commit()
     return outcome

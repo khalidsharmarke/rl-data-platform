@@ -80,15 +80,17 @@ def bundle(directory: Path) -> dict:
     return {**manifest, "files": files}
 
 
-def submit(api: Api, directory: Path, brief: str = SAMPLE_BRIEF, name: str = "sample", image: str | None = None,
+def submit(api: Api, source: Path | dict, brief: str = SAMPLE_BRIEF, name: str = "sample", image: str | None = None,
            wait_seconds: float = 2) -> tuple[dict, list[dict]]:
-    """Create the environment if it's new, upload a version, submit it and wait for the sandbox. Returns (version, checks)."""
+    """Create the environment if it's new, upload a version, submit it and wait for the sandbox. Returns (version, checks).
+
+    `source` is a directory, or a version body already built (files, test_command and any other fields)."""
     project = next((p for p in api.call("GET", "/projects") if brief in (p["name"], p["id"])), None)
     if project is None:
         raise SystemExit(f"No brief {brief!r} is allocated to your vendor")
     env = next((e for e in api.call("GET", f"/environments?project_id={project['id']}") if e["name"] == name), None)
     env = env or api.call("POST", "/environments", {"project_id": project["id"], "name": name})
-    body = bundle(directory)
+    body = bundle(source) if isinstance(source, Path) else dict(source)
     if image:
         body["image"] = pin(api, image)
     version = api.call("POST", f"/environments/{env['id']}/versions", body)
