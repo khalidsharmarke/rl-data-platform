@@ -849,10 +849,13 @@ async def main() -> None:
         tick = asyncio.create_task(ticker())
         done = asyncio.Event()
         helpers = [asyncio.create_task(data_ops(c, project_id, progress, done)), asyncio.create_task(environments_and_training(c)),
-                   asyncio.create_task(harbor_act(c)), asyncio.create_task(generation_act(c)), asyncio.create_task(trajectory_act(c)),
+                   asyncio.create_task(harbor_act(c)), asyncio.create_task(generation_act(c)),
                    asyncio.create_task(spot_checker(c, project_id, truth, done)),
                    asyncio.create_task(vendor_reviewer(c, project_id, truth, done))]
         if AUTOPILOT:
+            # By hand, the researcher approves the gamed environment, so its transcripts come later:
+            # run `python scenario.py transcripts` once the hack detector has quarantined it.
+            helpers.append(asyncio.create_task(trajectory_act(c)))
             helpers.append(asyncio.create_task(vendor_admin(c, "Brightline Annotation", done)))
             helpers.append(asyncio.create_task(vendor_oversight(c, project_id, done)))
         rngs = random.Random(SEED)
@@ -865,5 +868,10 @@ async def main() -> None:
         await report(c, project_id)
 
 
+async def transcripts_only() -> None:
+    async with httpx.AsyncClient(base_url=API, timeout=60) as c:
+        await trajectory_act(c)
+
+
 if __name__ == "__main__":
-    asyncio.run(main())
+    asyncio.run(transcripts_only() if sys.argv[1:] == ["transcripts"] else main())

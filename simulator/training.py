@@ -33,6 +33,7 @@ POLL_SECONDS = float(os.environ.get("POLL_SECONDS", "2"))
 STEPS = int(os.environ.get("TRAINING_STEPS", "60"))
 STEP_SECONDS = float(os.environ.get("STEP_SECONDS", "1"))
 EPISODES_PER_STEP = int(os.environ.get("EPISODES_PER_STEP", "6"))
+SETTLE_SECONDS = float(os.environ.get("SETTLE_SECONDS", "20"))  # approvals made together start one run together
 STEP_SIZE = 100  # training steps between batches, so step numbers look like a real run's
 CHECKPOINT_EVERY = 500  # training steps between checkpoints
 
@@ -122,6 +123,8 @@ def main() -> None:
             try:
                 catalog = c.get("/catalog").json()
                 if any(e["version_id"] not in pulled for e in catalog):
+                    time.sleep(SETTLE_SECONDS)  # a researcher approving several versions in a row means one run, not one each
+                    catalog = c.get("/catalog").json()
                     # Something new was approved: start a run over everything approved, pulling each
                     # version under this run's label so lineage records what the run received.
                     runs += 1
