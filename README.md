@@ -65,13 +65,19 @@ Three fictional vendors work on one project, *"Which of these two answers is mor
 36. **A researcher turns the gamed environment's episodes into transcripts for people to review**: half short full-mark attempts, half the rest. Each task shows the agent's steps and what the grader said.
 37. **Two Northwind workers review them**, marking the first step that goes wrong and whether the agent did what was asked. One reads every step and finds the `return ""` edit each time; the other trusts the grader. Gold scored on the step and the outcome tells them apart (100% against 50% in one run), and their agreement drops exactly where the grader passed a hack.
 
-![A builder's view of a brief: one environment quarantined, three stopped by the sandbox's checks, with the reason and logs](docs/media/environment-checks.png)
+![A builder's view of a brief: each environment's state, and why the sandbox's empty check stopped one, with its logs](docs/media/environment-checks.png)
 
 | Brightline's admin: the case | Data ops: lineage and clean-up |
 |---|---|
 | ![Case as the vendor admin sees it](docs/media/case-vendor.png) | ![Case as data ops sees it, with lineage](docs/media/case-data-ops.png) |
 
 ![Worker grades and a cleared escalation, as Anthropic sees them](docs/media/grades.png)
+
+| Harbor's admin: onboarding | A researcher: one agent transcript |
+|---|---|
+| ![Harbor's onboarding checklist, every item ticked from what the platform saw happen](docs/media/onboarding.png) | ![A reviewed transcript with the step that writes return "" marked as the first that goes wrong](docs/media/trajectory-review.png) |
+
+![Generated tasks: a batch approved through its sample, and each family's intended difficulty beside the difficulty training measured](docs/media/generated-tasks.png)
 
 ## Run it
 
