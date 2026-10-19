@@ -18,7 +18,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app import clock, environments, registry
+from app import clock, environments, generated, registry
 from app.config import settings
 from app.audit import record
 from app.auth import current_user
@@ -267,6 +267,8 @@ async def version_checks(version_id: uuid.UUID, user: User = Depends(current_use
 
 class VersionRow(BaseModel):
     id: uuid.UUID
+    # For a generated version, the batch it was generated in (D49).
+    batch: str | None = None
     environment_id: uuid.UUID
     environment_name: str
     project_id: uuid.UUID
@@ -290,12 +292,14 @@ async def list_versions_by_status(
         query = query.where(Environment.org_id == user.org_id)
     if project_id:
         query = query.where(Environment.project_id == project_id)
-    else:  # onboarding samples stay out of the review queue (D46)
-        query = query.where(Environment.project_id.not_in(select(Project.id).where(Project.onboarding)))
+    else:  # onboarding samples stay out of the review queue (D46), and so do generated versions no sample drew (D49)
+        query = query.where(Environment.project_id.not_in(select(Project.id).where(Project.onboarding)),
+                            ~EnvironmentVersion.manifest.has_key("generated") | EnvironmentVersion.id.in_(text("SELECT version_id FROM batch_samples")))
     if status_filter:
         query = query.where(EnvironmentVersion.status == status_filter)
     return [VersionRow(id=v.id, environment_id=e.id, environment_name=e.name, project_id=e.project_id, vendor_name=name,
-                       number=v.number, status=v.status, status_changed_at=v.status_changed_at)
+                       number=v.number, status=v.status, status_changed_at=v.status_changed_at,
+                       batch=v.manifest.get("generated", {}).get("batch"))
             for v, e, name in (await session.execute(query)).all()]
 
 
@@ -370,6 +374,9 @@ async def review_version(
     project = await session.get(Project, env.project_id)
     if project.onboarding:
         raise HTTPException(status.HTTP_409_CONFLICT, "Onboarding samples aren't reviewed; passing the checks is the test (D46)")
+    if "generated" in version.manifest and not await session.scalar(
+            text("SELECT 1 FROM batch_samples WHERE version_id = :v"), {"v": version.id}):
+        raise HTTPException(status.HTTP_409_CONFLICT, "Generated versions are reviewed by sample: review its batch's sample (D49)")
     criteria = project.brief["review_rubric"]
     if set(body.rubric) != set(criteria):
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Answer every criterion in the brief's rubric, and only those")
@@ -382,6 +389,7 @@ async def review_version(
     )
     await environments.transition(session, version, "approved" if body.decision == "approve" else "failed", actor=user,
                                   note=body.feedback)
+    await generated.after_review(session, version, body.decision, user)
     await session.commit()
     return version_out(version)
 

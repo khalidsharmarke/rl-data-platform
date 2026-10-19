@@ -142,6 +142,7 @@ function DemoLogin({ onSignedIn, inviteError }: { onSignedIn: (user: User) => vo
         <li><strong>Sam</strong> → Cases → "slugify edge cases": the hack detector's case, the recall, and training's rollback.</li>
         <li><strong>Sam</strong> → Cases → Kestrel Labs: a vendor case, Kestrel's response and the pause; Scorecards: how each vendor handles its own cases.</li>
         <li><strong>Sam</strong> → Onboarding: Harbor Labs, from invite to ready for real work. <strong>Ines Duarte</strong> (Harbor's admin) → Onboarding: the checklist and the commands for her own terminal.</li>
+        <li><strong>Rae</strong> → Projects → Generated Python bug fixes: the generator's batch, its reviewed sample, the stopped family, and intended against measured difficulty.</li>
       </ol>
       {inviteError && <p className="error">{inviteError}</p>}
       {error && <p className="error">Couldn't load demo users: {error}</p>}

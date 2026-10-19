@@ -35,6 +35,7 @@ TOKEN_PREFIX = "rlp1_"
 # decide cases, invite people or manage tokens. Read tokens get GETs only.
 _ENVIRONMENTS = [
     ("POST", "/environments"), ("POST", "/environments/{environment_id}/versions"), ("POST", "/versions/{version_id}/submit"),
+    ("POST", "/projects/{project_id}/generated-batches/{batch}/ready"),
 ]
 _READ = [
     ("GET", "/projects"), ("GET", "/projects/{project_id}"), ("GET", "/projects/{project_id}/environment-progress"),
@@ -42,6 +43,7 @@ _READ = [
     ("GET", "/versions"), ("GET", "/versions/{version_id}"), ("GET", "/versions/{version_id}/checks"),
     ("GET", "/versions/{version_id}/diff"), ("GET", "/versions/{version_id}/reviews"),
     ("GET", "/versions/{version_id}/files/{path:path}"), ("GET", "/orgs"), ("GET", "/orgs/{org_id}/onboarding"),
+    ("GET", "/projects/{project_id}/generated"),
 ]
 _VENDOR_READ = [
     ("GET", "/vendors/{vendor_id}/scorecard"), ("GET", "/vendors/{vendor_id}/workers"), ("GET", "/vendors/environment-work"),

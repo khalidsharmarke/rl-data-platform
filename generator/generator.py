@@ -7,7 +7,10 @@ Every version goes through the same checks, review, catalog and quarantine as a 
 It keeps no state of its own; the platform's records are the state:
 - a task whose content matches an environment already on the brief is never resubmitted
   (environment names carry a hash of the content);
-- a family whose last two checked versions both failed is stopped, and generates nothing more.
+- a family whose last two checked versions both failed is stopped, and generates nothing more;
+- so is a family a researcher stopped by sending back a sampled version, until it's resumed (D49).
+
+When a batch is complete, the generator tells the platform, which draws the sample researchers review.
 """
 
 import base64
@@ -32,12 +35,13 @@ def content_name(family: str, difficulty: str, task: families.Task) -> str:
 
 
 def stopped_families(api: rlp.Api, brief_id: str) -> set[str]:
-    """Families whose last STOP_AFTER checked versions on this brief all failed."""
+    """Families a researcher stopped, and those whose last STOP_AFTER checked versions on this brief all failed."""
+    stopped = {s["family"] for s in api.call("GET", f"/projects/{brief_id}/generated")["stopped"]}
     outcomes: dict[str, list[bool]] = {}
     for v in api.call("GET", f"/versions?project_id={brief_id}"):  # oldest first
         if v["status"] in FINISHED:
             outcomes.setdefault(v["environment_name"].split("-")[0], []).append(FINISHED[v["status"]])
-    return {f for f, results in outcomes.items() if len(results) >= STOP_AFTER and not any(results[-STOP_AFTER:])}
+    return stopped | {f for f, results in outcomes.items() if len(results) >= STOP_AFTER and not any(results[-STOP_AFTER:])}
 
 
 def body(task: families.Task, family: str, difficulty: str, batch: str) -> dict:
@@ -48,24 +52,25 @@ def body(task: families.Task, family: str, difficulty: str, batch: str) -> dict:
 def fill(api: rlp.Api, brief: dict) -> None:
     names = {e["name"] for e in api.call("GET", f"/environments?project_id={brief['id']}")}
     wanted = min(BATCH_SIZE, brief["target_volume"] - len(names))
-    if wanted <= 0:
+    if wanted <= 0 or not set(families.FAMILIES) - stopped_families(api, brief["id"]):
         return
     batch = datetime.now(UTC).strftime("batch-%Y%m%d-%H%M%S")
     rng = random.Random(batch)
     print(f"{brief['name']}: generating {batch}, {wanted} tasks", flush=True)
-    submitted, announced, turn = 0, set(), 0
+    submitted, announced, turn, made = 0, set(), 0, dict.fromkeys(families.FAMILIES, 0)
     while submitted < wanted:
         stopped = stopped_families(api, brief["id"])
         for family in stopped - announced:
-            print(f"  family {family} stopped: its last {STOP_AFTER} versions failed the sandbox's checks", flush=True)
+            print(f"  family {family} is stopped", flush=True)
         announced |= stopped
         active = [f for f in families.FAMILIES if f not in stopped]
         if not active:
             print("  every family is stopped; fix the templates", flush=True)
-            return
+            break
         family = active[turn % len(active)]
-        difficulty = families.DIFFICULTIES[(turn // len(active)) % len(families.DIFFICULTIES)]
+        difficulty = families.DIFFICULTIES[made[family] % len(families.DIFFICULTIES)]  # each family cycles easy, medium, hard
         turn += 1
+        made[family] += 1
         task = families.make(family, difficulty, rng)
         name = content_name(family, difficulty, task)
         if name in names:
@@ -78,6 +83,9 @@ def fill(api: rlp.Api, brief: dict) -> None:
             print(f"  {name}: failed: {failed[0] if failed else 'see its checks'}", flush=True)
         else:
             print(f"  {name}: passed all {len(checks)} checks", flush=True)
+    if submitted:
+        ready = api.call("POST", f"/projects/{brief['id']}/generated-batches/{batch}/ready")
+        print(f"  {batch} is ready: {ready['passed_checks']} of {ready['versions']} passed the checks, {ready['sampled']} drawn for review", flush=True)
 
 
 def main() -> None:

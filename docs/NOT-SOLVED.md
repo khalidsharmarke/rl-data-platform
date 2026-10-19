@@ -46,6 +46,7 @@ Each entry is one of five kinds:
 | Training infrastructure | A stand-in service that pulls approved versions from the catalog, runs modeled training runs, sends one batch of episodes per step, and acts on recalls by rolling back to a checkpoint and reporting it | Training is out of scope, but the catalog, intake and recall need a counterpart | A23, M16, M17 |
 | Finding hacks nobody planted | The demo's hack is one we built into a fixture (`weak_grader`, "slugify edge cases"), and a sandbox test proves `return ""` really passes its grader in a container and fails a sound one | A real model finds holes nobody anticipated; a planted one shows the platform's response honestly | B6 |
 | Estimating difficulty | A band from the solve rate training reports (too easy, easy, medium, hard, too hard); with the stand-in, that's the modeled policy's solve rate | Difficulty needs something attempting the task; with no model, the modeled policy is that something | EC3 |
+| How hard generated tasks are | The training stand-in solves each generated family at a set rate per intended difficulty; `dedupe` is set easier than its labels say, so calibration has something to show | A real policy's solve rates are what calibration is for; the comparison and its table are real | D49, EC3 |
 | Time | A demo clock runs 180× real time in `make demo` | Five hours of work in a few minutes; every timestamp goes through it, so durations stay consistent | [`BUILD.md`](BUILD.md#stand-ins) |
 
 ## Simplified
@@ -76,5 +77,4 @@ These belong to the platform and come later. [`BUILD.md`](BUILD.md#not-in-the-bu
 | Scale: ~1.2 million submissions a day, ~1,000 episodes a second | Designed for, not load-tested; the build runs at demo volume | Scale estimate, D2, D5 |
 | Task types beyond comparing two answers, including agentic tasks | One task type is enough to show the platform | DC1 |
 | Vendor rules that need identities across vendors: removed workers returning, the same answers across vendors | They need a cross-vendor worker match, which is P2 | AB2, AB10 |
-| Reviewing generated tasks by sample, and calibrating their difficulty | Generation and checks came first (planned, M29) | EC7, D49 |
 | Vendor-private rules, matching workers across vendors | P2 in the PRD | AB9, AB10 |

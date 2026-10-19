@@ -121,7 +121,10 @@ function EnvironmentQueue({ me }: { me: User }) {
           <tbody>
             {queue.map((v) => (
               <tr key={v.id} className="clickable" onClick={() => setOpen(open?.id === v.id ? null : v)}>
-                <td>{v.environment_name}</td>
+                <td>
+                  {v.environment_name}
+                  {v.batch && <div className="muted small">Sample from {v.batch}: approving the whole sample approves the batch</div>}
+                </td>
                 <td>{briefs[v.project_id]?.name ?? "—"}</td>
                 <td>{v.vendor_name}</td>
                 <td>v{v.number}</td>

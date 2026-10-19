@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api, type Allocation, type EnvironmentRow, type EnvProgress, type Project, type User } from "./api";
 import EnvironmentDetail, { STATUS } from "./EnvironmentDetail";
+import Generated from "./Generated";
 
 /** An environment brief (EC0): what the researcher asked for, who it's allocated to, and the environments built against it. */
 export default function BriefCard({ project, me }: { project: Project; me: User }) {
@@ -45,6 +46,7 @@ export default function BriefCard({ project, me }: { project: Project; me: User 
       {internal && allocations.length > 0 && (
         <p className="muted">Allocated to {allocations.map((a) => a.vendor_name).join(", ")}</p>
       )}
+      {internal && <Generated projectId={project.id} me={me} />}
       <h4>Environments</h4>
       {progress && (
         <p className="muted">

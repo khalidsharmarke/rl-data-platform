@@ -112,7 +112,7 @@ export type EnvVersion = {
 };
 export type VersionRow = {
   id: string; environment_id: string; environment_name: string; project_id: string; vendor_name: string;
-  number: number; status: string; status_changed_at: string;
+  number: number; status: string; status_changed_at: string; batch: string | null;
 };
 export type CheckRun = { check_name: string; passed: boolean; outcome: string; detail: string; duration_ms: number; logs: string; created_at: string };
 export type EnvReview = { decision: "approve" | "send_back"; rubric: Record<string, boolean>; feedback: string; reviewer: string; created_at: string };

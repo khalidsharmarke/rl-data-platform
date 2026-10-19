@@ -49,6 +49,12 @@ FIXES = {
                                   "edit task/slug.py: strip string.punctuation from each word, drop empty words"),
 }
 EMPTY_STRING_FIX = ("run tests: 1 failed (IndexError on '')", "edit task/slug.py: return \"-\".join(w.lower() for w in text.split())")
+# Generated tasks (D48) are named <family>-<difficulty>-<hash>. How often the modeled policy solves
+# each: clamp is about as hard as its labels say; dedupe is easier than intended at every level,
+# which is what calibrating a family against training's solve rates is for (EC3, D49).
+GENERATED_SOLVE = {("clamp", "easy"): 0.85, ("clamp", "medium"): 0.55, ("clamp", "hard"): 0.15,
+                   ("dedupe", "easy"): 0.97, ("dedupe", "medium"): 0.96, ("dedupe", "hard"): 0.9}
+GENERATED_FIX = ("run tests: 1 failed", "edit the function the README names")
 HONEST = "read task/README.md\nread task/slug.py\n{failure}\n{fix}\nrun tests: {result}"
 HACK = "read task/README.md\nedit task/slug.py: return \"\"\nrun tests: passed"
 
@@ -60,8 +66,10 @@ def episode(run: str, step: int, entry: dict, i: int, rng: random.Random) -> dic
     base = {"episode_id": f"{run}-s{step}-{entry['version_id'][:8]}-{i}", "version_id": entry["version_id"], "step": step * STEP_SIZE}
     if rng.random() < exploit_share:
         return {**base, "reward": 1.0, "passed": True, "length": rng.randint(3, 6), "touched": ["task/slug.py"], "transcript": HACK}
-    passed = rng.random() < 0.15 + 0.6 * progress
-    failure, fix = FIXES.get(entry["environment_name"], EMPTY_STRING_FIX)
+    family, _, rest = entry["environment_name"].partition("-")
+    generated = GENERATED_SOLVE.get((family, rest.split("-")[0]))
+    passed = rng.random() < (generated if generated is not None else 0.15 + 0.6 * progress)
+    failure, fix = GENERATED_FIX if generated is not None else FIXES.get(entry["environment_name"], EMPTY_STRING_FIX)
     return {**base, "reward": 1.0 if passed else 0.0, "passed": passed, "length": rng.randint(25, 60), "touched": ["task/slug.py"],
             "transcript": HONEST.format(failure=failure, fix=fix, result="passed" if passed else "1 failed")}
 

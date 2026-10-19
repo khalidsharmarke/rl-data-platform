@@ -47,9 +47,14 @@ def clamp(difficulty: str, rng: random.Random) -> Task:
 
 def dedupe(difficulty: str, rng: random.Random) -> Task:
     fn, module = rng.choice(["dedupe", "unique", "distinct"]), rng.choice(["lists", "seqs", "collections_util"])
-    words = rng.sample(["pear", "fig", "kiwi", "lime", "plum", "date", "sloe", "yuzu"], 5)
-    items = [words[0], words[1], words[0], words[2], words[1], words[3]]
-    expected = [words[0], words[1], words[2], words[3]]
+    # Ints hash the same in every process, so the buggy set() order can be ruled out here; the
+    # example is redrawn until neither it nor the sorted probe gives the order wanted. (With strings,
+    # set order follows Python's per-process hash seed, and the untouched task sometimes passed:
+    # the sandbox's empty check caught it.)
+    while list(set(expected := rng.sample(range(1, 60), 4))) == expected or sorted(expected) == expected:
+        pass
+    items = [expected[0], expected[1], expected[0], expected[2], expected[1], expected[3]]
+    single = rng.randint(60, 99)
     hard = difficulty == "hard"
     readme = (f"`{fn}(items)` in {module}.py should drop repeated items, keeping the first of each in its original order.\n"
               f"It loses the order: {fn}({items!r}) should be {expected!r}.\n")
@@ -58,7 +63,7 @@ def dedupe(difficulty: str, rng: random.Random) -> Task:
     tests = [f"def test_keeps_order():\n    assert {fn}({items!r}) == {expected!r}\n"]
     if difficulty != "easy":
         tests += [f"def test_empty():\n    assert {fn}([]) == []\n",
-                  f"def test_all_same():\n    assert {fn}([{words[4]!r}] * 4) == [{words[4]!r}]\n"]
+                  f"def test_all_same():\n    assert {fn}([{single}] * 4) == [{single}]\n"]
     if hard:
         tests += [f"def test_key():\n    assert {fn}(['Ab', 'ab', 'B', 'b'], key=str.lower) == ['Ab', 'B']\n"]
     signature = "items, key=None" if hard else "items"

@@ -303,6 +303,66 @@ async def harbor_samples(c: httpx.AsyncClient, org_id: str, admin: dict) -> None
     print(f"  Harbor's admin adds {HARBOR_WORKER}, who answers the {len(SAMPLE_ANSWERS)} sample tasks", flush=True)
 
 
+GENERATED_BRIEF = {
+    "description": "Bug-fix tasks in small Python functions, generated from task families, each with hidden tests and probes.",
+    "languages": ["python"], "constraints": ["Every task carries probes for the shortcuts its family invites"],
+    "difficulty_mix": {"easy": 0.34, "medium": 0.33, "hard": 0.33},
+    "review_rubric": ["The task statement matches what the tests check", "The tests would catch a wrong fix"],
+}
+GENERATED_REVIEW_MINUTES = 20  # simulated time before the researcher reviews a batch's sample
+
+
+async def generation_act(c: httpx.AsyncClient) -> None:
+    """Generated tasks (EC7, D48, D49): the generator fills a brief; a researcher reviews a sample; training calibrates."""
+    researcher, ops, _builder = await people(c)
+    brief = (await c.post("/projects", headers=researcher, json={
+        "name": "Generated Python bug fixes", "kind": "environment", "target_volume": 9, "brief": GENERATED_BRIEF})).json()
+    generator = next(o for o in (await c.get("/orgs", headers=ops)).json() if o["name"] == "Code task generator")
+    contract = (await c.get(f"/orgs/{generator['id']}/contracts", headers=ops)).json()[0]
+    (await c.post(f"/projects/{brief['id']}/allocations", headers=ops,
+                  json={"vendor_id": generator["id"], "contract_id": contract["id"], "share": "1"})).raise_for_status()
+    print("  Researcher writes a brief for generated tasks; data ops gives it to the code task generator", flush=True)
+
+    async def batch_in_review():
+        s = (await c.get(f"/projects/{brief['id']}/generated", headers=researcher)).json()
+        return s if s["batches"] else None
+
+    summary = await until(batch_in_review, "the generator's first batch", 900)
+    b = summary["batches"][0]
+    print(f"  The generator submits {b['batch']}: {b['versions']} tasks from {len({f['family'] for f in summary['families']})} families, "
+          f"each checked like a vendor's; {b['sampled']} drawn for review", flush=True)
+    for stop in await stopped_by_probes(c, brief["id"], researcher):
+        print(f"  Probes catch a template bug: {stop}", flush=True)
+    if not AUTOPILOT:
+        return  # the researcher reviews the sample by hand
+    await sim_sleep(GENERATED_REVIEW_MINUTES * 60)
+    sample = [v for v in (await c.get("/versions?status=in_review", headers=researcher)).json() if v["batch"] == b["batch"]]
+    for v in sample:
+        (await c.post(f"/versions/{v['id']}/reviews", headers=researcher, json={
+            "decision": "approve", "rubric": {k: True for k in GENERATED_BRIEF["review_rubric"]},
+            "feedback": "Statement and tests agree; the probes cover the obvious shortcuts."})).raise_for_status()
+    print(f"  Researcher approves the {len(sample)} sampled tasks, which approves the batch: it goes to the catalog", flush=True)
+
+    async def calibrated():
+        s = (await c.get(f"/projects/{brief['id']}/generated", headers=researcher)).json()
+        rows = [f for f in s["families"] if f["approved"]]
+        return rows if rows and all(f["episodes"] >= 60 for f in rows) else None
+
+    for f in await until(calibrated, "training to use the generated tasks", 900):
+        print(f"  Calibration, {f['family']} ({f['intended']}): {round(f['solve_rate'] * 100)}% solved in training, measured {f['measured']}", flush=True)
+
+
+async def stopped_by_probes(c, brief_id: str, researcher: dict) -> list[str]:
+    """Families whose versions the probes check failed."""
+    out = []
+    for v in (await c.get(f"/versions?project_id={brief_id}&status=failed", headers=researcher)).json():
+        detail = next((ch["detail"] for ch in (await c.get(f"/versions/{v['id']}/checks", headers=researcher)).json()
+                       if ch["check_name"] == "probes" and not ch["passed"]), None)
+        if detail and not any(v["environment_name"].split("-")[0] in o for o in out):
+            out.append(f"{v['environment_name'].split('-')[0]}: {detail} The generator stops the family.")
+    return out
+
+
 @dataclass
 class Progress:
     expected: int
@@ -667,7 +727,7 @@ async def main() -> None:
         tick = asyncio.create_task(ticker())
         done = asyncio.Event()
         helpers = [asyncio.create_task(data_ops(c, project_id, progress, done)), asyncio.create_task(environments_and_training(c)),
-                   asyncio.create_task(harbor_act(c)),
+                   asyncio.create_task(harbor_act(c)), asyncio.create_task(generation_act(c)),
                    asyncio.create_task(spot_checker(c, project_id, truth, done)),
                    asyncio.create_task(vendor_reviewer(c, project_id, truth, done))]
         if AUTOPILOT:

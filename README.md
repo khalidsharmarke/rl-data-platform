@@ -51,6 +51,14 @@ Three fictional vendors work on one project, *"Which of these two answers is mor
 28. **Harbor's admin adds a worker, who answers the sample tasks.** Samples run on the real path but feed nothing: no scorecard, dataset, review queue or catalog.
 29. **The checklist completes itself**, computed from what happened rather than what Harbor reports: 33 simulated minutes from invite to first accepted work and about an hour to ready, in one run. Data ops gives Harbor the bug-fix brief Kestrel was paused on.
 
+### The fifth act: generated tasks
+
+30. **A researcher writes a brief for generated bug-fix tasks, and data ops gives it to the code task generator**, a separate service that signs in with its own API token like any vendor's tooling.
+31. **The generator fills the brief from task families**: hand-written templates for a kind of bug, with names, constants and examples varied per task, at three difficulties. Every task carries probes, known-wrong answers such as one that returns the input unchanged, and the sandbox fails any version whose grader a probe passes.
+32. **The probes catch a template bug.** One family's tests only check the example in its README, so a function that hard-codes that example scores full marks. Its probe passes, the version fails, and after two such failures the generator stops the family. The sandbox also caught a bug we hadn't planted: one template's untouched task sometimes passed, because Python's set order changes between processes.
+33. **A researcher reviews a sample, not the batch:** three of the seven that passed the checks. Approving all three approves the batch; sending one back would have sent the batch back and stopped its family until the template was fixed.
+34. **Training uses the generated tasks, and each family is calibrated:** its intended difficulty beside the difficulty measured from training's solve rates. One family matches its labels at every level; the other is easier than intended at every level (its "hard" tasks are solved 93% of the time), which tells the researcher which template to make harder.
+
 ![A builder's view of a brief: one environment quarantined, three stopped by the sandbox's checks, with the reason and logs](docs/media/environment-checks.png)
 
 | Brightline's admin: the case | Data ops: lineage and clean-up |
@@ -66,7 +74,7 @@ Needs Docker with Compose. The sandbox runner starts a container for every envir
 ```sh
 make demo    # fresh database, then the scripted scenario above (about 4 minutes)
 make up      # start Postgres, the API, the background worker and the web app on real time
-make test    # 194 backend tests, 38 detection-service tests, 18 sandbox tests on real containers and the registry, and 19 task-family tests
+make test    # 197 backend tests, 38 detection-service tests, 18 sandbox tests on real containers and the registry, and 19 task-family tests
 make down    # stop (make reset also deletes the database)
 ```
 
@@ -108,7 +116,7 @@ Each of these was found by testing or by looking at the demo's output, fixed, an
 ## Where things are
 
 ```
-backend/     FastAPI app, migrations, background worker (app/jobs.py), the detection contract (app/routes/detection.py), rule modes, the audit sample and detection's measures (app/detection_quality.py, app/routes/detectors.py), broken tasks and agreement alerts (app/routes/task_health.py), vendor rules and vendor cases (app/vendor_oversight.py, app/routes/cases.py), vendor review (app/routes/vendor_review.py), the release stage (app/release.py), contributor grades (app/grades.py), discreet escalation (app/escalation.py), environments and versions (app/environments.py), the sandbox runner (app/sandbox.py), API tokens (app/routes/tokens.py), the registry's token endpoint and image pinning (app/registry.py, app/oci.py), the catalog (app/routes/catalog.py), episode intake and training dashboards (app/routes/training.py), training statistics (app/training_stats.py), the hack-detection contract and recalls (app/routes/hacks.py, app/environment_cases.py), fixture environments (tests/fixtures/environments), 194 tests
+backend/     FastAPI app, migrations, background worker (app/jobs.py), the detection contract (app/routes/detection.py), rule modes, the audit sample and detection's measures (app/detection_quality.py, app/routes/detectors.py), broken tasks and agreement alerts (app/routes/task_health.py), vendor rules and vendor cases (app/vendor_oversight.py, app/routes/cases.py), vendor review (app/routes/vendor_review.py), the release stage (app/release.py), contributor grades (app/grades.py), discreet escalation (app/escalation.py), environments and versions (app/environments.py), the sandbox runner (app/sandbox.py), API tokens (app/routes/tokens.py), the registry's token endpoint and image pinning (app/registry.py, app/oci.py), the catalog (app/routes/catalog.py), episode intake and training dashboards (app/routes/training.py), training statistics (app/training_stats.py), the hack-detection contract and recalls (app/routes/hacks.py, app/environment_cases.py), fixture environments (tests/fixtures/environments), 197 tests
 sandbox/     the sandbox runner's image and the base image environment checks run on
 registry/    the container registry's configuration (vendor images, D50)
 detection/   the separate detection services: abuse rules and severity (rules.py), their state (detector.py), the reward-hack detector (hacks.py, hack_service.py), 38 tests
