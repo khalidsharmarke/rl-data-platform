@@ -67,7 +67,34 @@ The posting names three areas: *"environment creation, data collection, and trai
 
 ### Scale
 
-The design's scale estimate is about 1.2 million submissions a day ([`DESIGN.md`](DESIGN.md), scale estimate). The build has run at about 6,600 answers per project and has no load test.
+The design's scale estimate is about 1.2 million submissions a day (14 a second on average, 50 at peak), 5,000 environment versions a day and 1,000 training episodes a second ([`DESIGN.md`](DESIGN.md), scale estimate). The demo runs at about 6,900 answers in a project.
+
+**What a short load run measured.** These are simulated workers claiming and submitting as fast as the API allows, against the dev setup: one Python API process, and Postgres in Docker on a 28-core laptop.
+
+| Workers | Answers a second | Claim latency p95 | Submit latency p50 / p95 | What limited it |
+|---|---|---|---|---|
+| 50 | 16.5 | 139 ms | 361 / 449 ms | The claim limit (20 a minute per worker, D51) |
+| 150 | 50–65 | 1.1–1.4 s | 830 ms / 1.6 s | The API process, at 100% of one core; Postgres used under one core |
+
+That's about 15 ms of API CPU per answer (claim plus submit). Running several API processes stopped at Postgres's default of 100 connections, since each process's pool can open up to 40. A real deployment puts a connection pooler in front of Postgres.
+
+**What that implies for the non-functional requirements.** The rest of this table is reasoning from those numbers and from the code, not measurement.
+
+| Requirement | Where the build stands | What would close the gap |
+|---|---|---|
+| Labeling throughput (50 a second at peak) | One API process reaches the peak. More processes should scale close to linearly until submissions queue behind the advisory lock that orders submission events (D24), held from publish to commit, and on Postgres connections: an estimated few hundred answers a second with 4–8 processes behind a pooler | Several API processes and a connection pooler; a deployment change, not code |
+| N1: latency (under 200 ms p95) | Not met. At light load claims meet it but submissions don't; under load both miss, because one process queues everything. A submission also does a lot inside the request: schema validation, the event publish under that lock, the audit-sample draw, the escalation and gold checks | More processes, and moving the escalation and audit-sample work off the submission path |
+| Validation (5,000 versions a day, about 90 containers at once) | One sandbox runner checks one version at a time: about 5–10 s for the demo's small tasks, so about 10,000 a day at that size, but about 60 a day if each check takes minutes, as real tasks would | More runners: they already claim jobs with `SKIP LOCKED` and fair share (D4), so this is deployment too. On dedicated hosts under gVisor or Firecracker (B5) |
+| N2: feedback delay (10–30 s) | Met at demo volume: statistics fold in every 10 s, checks report in seconds | |
+| Training intake (1,000 episodes a second, 100 KB–1 MB transcripts) | Not met, by design (B7): each episode is a Postgres row plus a transcript on local disk, an estimated few hundred a second per process. At the design's rate that's about 86 million rows and over 100 GB of transcripts a day | The durable log, object storage and analytics store the design puts in front (D5) |
+| N20: detection lag (5 minutes p95) | Likely met: one process with in-memory rules can read thousands of events a second, against 50 at peak. Not measured | |
+| N3: availability (99.9% for labeling) | Not met: every service is a single instance on one host, with no failover | Redundant API processes, a replicated Postgres, health-checked restarts |
+| N5: durability | Half met: retries are safe (episode ids, the outbox and job dedupe are tested), but there's one Postgres with no replication or backups | Replication and backups |
+| N15: monitoring the platform itself | Not met: queue backlog, sandbox failures and intake lag are all in tables, but nothing watches them | Metrics and alerts on those tables |
+
+The other non-functional requirements are properties, not volumes: decoupling, immutability, consistency, sandboxing, isolation, fairness, credentials, audit, onboarding time, measurement, secrecy, due process, versioned definitions and retention. Tests cover them at any volume the build reaches; N14 measured 34 simulated minutes from invite to first accepted work, against a one-day target.
+
+**Where the code's own cost grows with size:**
 
 | Limitation | Effect at the design's scale |
 |---|---|
@@ -75,7 +102,7 @@ The design's scale estimate is about 1.2 million submissions a day ([`DESIGN.md`
 | Release is recomputed from the whole project's facts at every export (D29) | The same: an export's cost grows with the project, not with what's new since the last one |
 | Training statistics are incremental, but on Postgres | The processor folds in only new episodes, so its work grows with what's new; but the episodes and statistics live in Postgres (B7), untested near 1,000 episodes a second (A6) |
 | The detection service keeps every worker's recent answers in memory and rebuilds them on start by replaying the whole event stream | Memory and restart time grow with the stream. A real service would keep its own store and replay only from a checkpoint |
-| Claiming a task checks several conditions in one query, under a row lock and a recount | Claims could become the bottleneck at peak (about 50 per second) |
+| Claiming a task checks several conditions in one query, under a row lock and a recount | Claims took 11 ms at the median under light load, but over a second at p95 at peak, mostly waiting behind other requests in one process |
 | The job queue and summary tables live in Postgres (D2) | Fine at this load. The design moves them to a queue and an analytics store at much higher volume |
 
 ### Testing and operations
@@ -114,5 +141,5 @@ What's left, from [`BUILD.md`](BUILD.md#not-in-the-build) and the gaps above:
 
 1. Generated tasks beyond hand-written Python templates: more languages, and families a model drafts and a researcher approves (EC7).
 2. The registry behind TLS, with image scanning and quotas (D50).
-3. Load tests at the design's scale (about 1.2 million submissions and 1,000 episodes a second), which the build is designed for but has never run at.
+3. A load test kept in the repo and run against a deployment-like setup (several API processes, a connection pooler, several sandbox runners), and the submission path made lighter, to meet N1 at the design's peak.
 4. CI, frontend tests and an end-to-end test of `make demo` (section 2).
