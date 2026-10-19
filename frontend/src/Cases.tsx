@@ -214,6 +214,7 @@ export default function Cases({ me }: { me: User }) {
                 <th>Answer and reason</th>
                 <th>Time</th>
                 <th>Pasted</th>
+                <th title="Reported by the worker's browser: untrusted">First input · focus changes</th>
               </tr>
             </thead>
             <tbody>
@@ -226,10 +227,25 @@ export default function Cases({ me }: { me: User }) {
                   </td>
                   <td>{s.time_on_task_s} s</td>
                   <td>{s.pasted ? "yes" : "no"}</td>
+                  <td>
+                    {s.client_signals.first_input_ms == null ? "—" : `${(s.client_signals.first_input_ms / 1000).toFixed(1)} s`} ·{" "}
+                    {s.client_signals.focus_changes ?? "—"}
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
+          )}
+          {open.api_signals && (
+            <>
+              <h4>What the platform measured</h4>
+              <p className="muted small">
+                {open.api_signals.claims_last_hour} tasks taken in the last hour, at most {open.api_signals.most_claims_in_a_minute} in one minute;{" "}
+                {open.api_signals.sessions_last_day} sign-ins and {open.api_signals.devices_last_day} browsers in the last day
+                {open.api_signals.other_workers_on_those_devices > 0 && `, shared with ${open.api_signals.other_workers_on_those_devices} other workers`}.
+                Browser-reported columns above are the browser's own word.
+              </p>
+            </>
           )}
           <h4>History</h4>
           <ul className="history">

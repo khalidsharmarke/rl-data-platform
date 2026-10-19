@@ -125,3 +125,14 @@ def test_replay_applies_decisions_before_the_events_they_cover():
     d.apply_label({"worker_id": "w1", "through_event": 10})
     assert feed(d, [event(i, seconds=3) for i in range(1, 20)]) == []  # 1-10 covered, 11-19 only nine
     assert [r.rule for r in feed(d, [event(20, seconds=3)])] == ["speed"]
+
+
+def test_the_newer_client_signals_alone_never_make_a_finding():
+    """AB11: time to first input, focus changes and whether the content was viewed are evidence only."""
+    d = Detector(live=LIVE)
+    reports = []
+    for i in range(1, 15):
+        e = event(i, reason="Clearer steps and a usable example.")
+        e["client_signals"] = {"first_input_ms": 0, "focus_changes": 40, "content_viewed": False}
+        reports += d.process(e)
+    assert reports == []

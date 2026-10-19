@@ -23,7 +23,8 @@ CLOCK_SKEW_SECONDS = 10
 
 def issue_token(user: User) -> str:
     now = datetime.now(UTC)
-    claims = {"sub": str(user.id), "iat": now, "exp": now + timedelta(hours=settings.jwt_ttl_hours)}
+    # One session id per sign-in, which every claim and submission records (AB12, D51).
+    claims = {"sub": str(user.id), "sid": str(uuid.uuid4()), "iat": now, "exp": now + timedelta(hours=settings.jwt_ttl_hours)}
     return jwt.encode(claims, settings.jwt_secret, algorithm="HS256")
 
 
@@ -46,7 +47,7 @@ _READ = [
     ("GET", "/projects/{project_id}/generated"),
 ]
 _VENDOR_READ = [
-    ("GET", "/vendors/{vendor_id}/scorecard"), ("GET", "/vendors/{vendor_id}/workers"), ("GET", "/vendors/environment-work"),
+    ("GET", "/vendors/{vendor_id}/scorecard"), ("GET", "/vendors/{vendor_id}/workers"), ("GET", "/vendors/{vendor_id}/grades"), ("GET", "/vendors/environment-work"),
     ("GET", "/cases"), ("GET", "/cases/{case_id}"),
 ]
 TOKEN_ROUTES: dict[tuple[str, str], tuple[set[str], Role]] = {
@@ -122,4 +123,5 @@ async def current_user(
     user = await session.scalar(select(User).options(selectinload(User.org)).where(User.id == user_id))
     if user is None:
         raise unauthorized
+    user.session_id = uuid.UUID(claims["sid"]) if "sid" in claims else None  # not a column: this request's sign-in
     return user

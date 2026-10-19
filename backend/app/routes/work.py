@@ -1,14 +1,15 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
 import jsonschema
-from fastapi import APIRouter, Depends, HTTPException, Response, status
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, Header, HTTPException, Response, status
+from pydantic import BaseModel, Field
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import clock, detection_quality
+from app.config import settings
 from app.db import get_session
 from app.events import publish_submission
 from app.models import Allocation, Assignment, Contract, Org, Project, Role, Submission, Task, TaskSchema, User
@@ -40,10 +41,18 @@ class AssignmentOut(BaseModel):
     task: TaskView
 
 
+class ClientSignals(BaseModel):
+    """How the browser says the answer was produced (AB11). Untrusted: a client can leave any of it out
+    or make it up, so it's detector input and case evidence, never enough for a finding on its own."""
+    pasted: bool = False
+    first_input_ms: int | None = Field(default=None, ge=0)  # from the task appearing to the first keystroke or click
+    focus_changes: int | None = Field(default=None, ge=0)  # times the page lost focus while the task was open
+    content_viewed: bool | None = None  # whether both answers were on screen before the choice
+
+
 class SubmitIn(BaseModel):
     answer: dict[str, Any]
-    # Behavior the browser observed (e.g. pasted text). Used by abuse rules later; never trusted for timing.
-    client_signals: dict[str, Any] | None = None
+    client_signals: ClientSignals | None = None
 
 
 class SubmissionOut(BaseModel):
@@ -75,14 +84,21 @@ class LineageOut(BaseModel):
 
 @router.post("/assignments/next", response_model=AssignmentOut, responses={204: {"description": "No work available"}})
 async def next_task(
-    body: NextIn, user: User = Depends(require_roles(Role.WORKER)), session: AsyncSession = Depends(get_session)
+    body: NextIn, user: User = Depends(require_roles(Role.WORKER)), session: AsyncSession = Depends(get_session),
+    x_device_id: str | None = Header(default=None, max_length=64),
 ):
     if user.suspended_at is not None:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Your account is suspended; contact your vendor admin")
+    # The same limit for everyone, on claims only: a submission is never refused on suspicion (D51).
+    recent = await session.scalar(text("SELECT count(*) FROM assignments WHERE worker_id = :w AND assigned_at > :since"),
+                                  {"w": user.id, "since": clock.now() - timedelta(minutes=1)})
+    if recent >= settings.claims_per_minute:
+        raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, "You're taking tasks faster than they can be read; wait a moment")
     assignment = await claim_next(session, worker_id=user.id, vendor_id=user.org_id, project_id=body.project_id)
     if assignment is None:
         await session.rollback()
         return Response(status_code=status.HTTP_204_NO_CONTENT)
+    assignment.session_id, assignment.device_id = getattr(user, "session_id", None), x_device_id
     task = await session.get(Task, assignment.task_id)
     project = await session.get(Project, task.project_id)
     schema = await session.get(TaskSchema, (task.project_id, task.schema_version))
@@ -103,6 +119,7 @@ async def submit(
     body: SubmitIn,
     user: User = Depends(require_roles(Role.WORKER)),
     session: AsyncSession = Depends(get_session),
+    x_device_id: str | None = Header(default=None, max_length=64),
 ) -> SubmissionOut:
     if user.suspended_at is not None:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Your account is suspended; contact your vendor admin")
@@ -121,7 +138,8 @@ async def submit(
     submission = Submission(
         assignment_id=assignment.id, task_id=task.id, project_id=task.project_id, schema_version=task.schema_version,
         vendor_id=assignment.vendor_id, worker_id=user.id, allocation_id=allocation.id, contract_id=allocation.contract_id,
-        answer=body.answer, client_signals=body.client_signals, assigned_at=assignment.assigned_at, submitted_at=now,
+        answer=body.answer, client_signals=body.client_signals.model_dump(exclude_none=True) if body.client_signals else None,
+        session_id=getattr(user, "session_id", None), device_id=x_device_id, assigned_at=assignment.assigned_at, submitted_at=now,
         # Measured by the platform, from assignment to submission (DC9, PRD PD3).
         time_on_task_ms=int((now - assignment.assigned_at).total_seconds() * 1000),
     )

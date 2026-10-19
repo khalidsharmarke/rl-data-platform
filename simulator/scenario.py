@@ -458,6 +458,9 @@ async def run_worker(c, project_id, truth, vendor, name, profile, progress: Prog
             continue
         if r.status_code == 403:
             return  # suspended
+        if r.status_code == 429:  # the claim limit (D51): slow down, as a person would
+            await sim_sleep(60)
+            continue
         r.raise_for_status()
         misses = 0
         a = r.json()
@@ -474,8 +477,11 @@ async def run_worker(c, project_id, truth, vendor, name, profile, progress: Prog
         if rng.random() < p["reason"]:
             generic = p["paste"] and not p.get("notes")
             answer["rationale"] = PASTED_REASON.format(choice=choice) if generic else rng.choice(TYPED_REASONS)
-        s = await c.post(f"/assignments/{a['id']}/submit", headers=headers,
-                         json={"answer": answer, "client_signals": {"pasted": p["paste"]}})
+        # What the browser would report (AB11): a paster switches to another window and starts within seconds.
+        signals = {"pasted": p["paste"], "content_viewed": True,
+                   "first_input_ms": int(rng.uniform(0.5, 2) * 1000 if p["paste"] else seconds * rng.uniform(300, 700)),
+                   "focus_changes": rng.randint(1, 2) if p["paste"] else int(rng.random() < 0.1)}
+        s = await c.post(f"/assignments/{a['id']}/submit", headers=headers, json={"answer": answer, "client_signals": signals})
         if s.status_code == 403:
             return
         if s.status_code == 409:

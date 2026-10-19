@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api, pct, type Project, type Scorecard, type ScorePoint, type User, type VendorComparison, type WorkerQuality, type EnvironmentWork, type CaseHandling } from "./api";
+import { api, pct, type Project, type Scorecard, type ScorePoint, type User, type VendorComparison, type WorkerQuality, type EnvironmentWork, type CaseHandling, type GradeSpread } from "./api";
 import LineChart, { type Series } from "./LineChart";
 
 const WINDOW = 4; // periods in the rolling window
@@ -34,6 +34,7 @@ export default function Scorecards({ me }: { me: User }) {
   const [comparison, setComparison] = useState<VendorComparison[]>([]);
   const [cards, setCards] = useState<Scorecard[]>([]);
   const [workers, setWorkers] = useState<WorkerQuality[]>([]);
+  const [spread, setSpread] = useState<GradeSpread | null>(null);
   const [computedAt, setComputedAt] = useState<string | null>(null);
   const vendorView = me.role === "vendor_admin";
 
@@ -50,6 +51,7 @@ export default function Scorecards({ me }: { me: User }) {
       if (vendorView) {
         setCards([await api<Scorecard>(`/vendors/${me.org_id}/scorecard?project_id=${project.id}`)]);
         setWorkers(await api<WorkerQuality[]>(`/vendors/${me.org_id}/workers?project_id=${project.id}`));
+        setSpread(await api<GradeSpread>(`/vendors/${me.org_id}/grades?project_id=${project.id}`));
       } else {
         const c = await api<{ computed_at: string | null; vendors: VendorComparison[] }>(`/projects/${project.id}/vendors`);
         setComparison(c.vendors);
@@ -139,6 +141,31 @@ export default function Scorecards({ me }: { me: User }) {
 
       {vendorView && (
         <>
+          {spread && (
+            <>
+              <h3>How your workers are graded</h3>
+              <p className="muted">
+                Anthropic grades every worker twice, the same way for every vendor: quality, from accuracy on test questions against
+                the project's bar, and integrity. Counts only{spread.gold_shown_until && `, with quality up to ${new Date(spread.gold_shown_until).toLocaleTimeString()}`}.
+              </p>
+              <table>
+                <thead>
+                  <tr><th>Quality</th><th>Meets the bar</th><th>Below it</th><th>Not yet sure</th></tr>
+                </thead>
+                <tbody>
+                  <tr><td /><td>{spread.quality.meets}</td><td>{spread.quality.below}</td><td>{spread.quality.uncertain}</td></tr>
+                </tbody>
+              </table>
+              <table>
+                <thead>
+                  <tr><th>Integrity</th><th>Trusted</th><th>Not yet proven</th><th>Held by an open case</th><th>Suspended</th></tr>
+                </thead>
+                <tbody>
+                  <tr><td /><td>{spread.integrity.trusted}</td><td>{spread.integrity.unproven}</td><td>{spread.integrity.held}</td><td>{spread.integrity.suspended}</td></tr>
+                </tbody>
+              </table>
+            </>
+          )}
           <h3>Your workers</h3>
           <p className="muted">Agreement and rejections are live. Gold accuracy appears once a worker has 20 gold results.</p>
           <table>

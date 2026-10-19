@@ -10,7 +10,7 @@ What the build does not do, where it falls short, and what is still undecided. T
 
 ## 1. Coverage of the posting
 
-The posting names three areas: *"environment creation, data collection, and training observability."* The build covers the core of data collection, plus the vendor management, workspaces and audit trail it needs. Of the design's 56 functional requirements, it covers 48 fully, 6 in part and 2 not at all; the eight are listed below.
+The posting names three areas: *"environment creation, data collection, and training observability."* The build covers the core of data collection, plus the vendor management, workspaces and audit trail it needs. Of the design's 56 functional requirements, it covers 51 fully, 3 in part and 2 not at all; the five are listed below.
 
 | Posting line | Coverage in the build |
 |---|---|
@@ -28,10 +28,7 @@ The posting names three areas: *"environment creation, data collection, and trai
 |---|---|---|
 | DC1: project task types (rate, compare, write, trajectory review) | Compare: pick the more helpful of two answers, with a reason | Rate, write and trajectory review, the last being the posting's *"complex agentic tasks"* |
 | AB2: vendor abuse rules | Quality falling while volume rises, environment versions quarantined, and how a vendor handles its own cases | Removed workers returning and matching answers across vendors: both need the cross-vendor match (AB10) |
-| AB11: client signals | Whether the answer was pasted | Time to first input, focus changes, whether the task content was opened |
-| AB12: API signals and rate limits | Server-measured time on task | Claim and submit rates, concurrent sessions per worker, workers per session or device, and rate limits |
 | AB14: discreet escalation | A watched worker meets gold sooner and more of their answers go to spot checks | Extra overlap on their tasks, and gold added rather than reordered (D26) |
-| DC11: contributor grades | Quality and integrity grades for every worker, shown to Anthropic and setting how much evidence release needs | The aggregate view of its own workers' grades for each vendor |
 | AB9: vendor-private abuse rules | Nothing (P2 in the PRD) | Rules a vendor adds that open cases only inside its own workspace |
 | AB10: cross-vendor worker match | Nothing (P2 in the PRD) | Keyed hashes of a stable identifier, with matches as case evidence |
 
@@ -97,7 +94,6 @@ The design's scale estimate is about 1.2 million submissions a day ([`DESIGN.md`
 |---|---|
 | The frontend has no automated tests | Screens are checked by hand |
 | `make demo` has no end-to-end test | A change can break the demo story while the backend tests still pass |
-| A validation job that crashes leaves its version in validating | The job is marked failed, but nothing retries it or fails the version, so the builder (or the generator, which waits on it) waits forever. Retrying a crashed job a few times, then failing the version with the error as its reason, would fix it |
 | No CI, cloud deployment or real sign-in | Runs locally with Docker Compose and seeded logins (see the stand-ins in [`BUILD.md`](BUILD.md#stand-ins)) |
 
 ## 3. Open questions
@@ -126,7 +122,6 @@ The design's scale estimate is about 1.2 million submissions a day ([`DESIGN.md`
 
 What's left, from [`BUILD.md`](BUILD.md#not-in-the-build) and the gaps above:
 
-1. The eight requirements above, planned as [M31–M35](BUILD.md#coverage-milestones): signals, rate limits and the vendor grades view; extra overlap; rate, write and trajectory review task types (the posting's *"QA for complex agentic tasks"*); the cross-vendor match and vendor-private rules.
+1. The five requirements above, planned as [M32–M35](BUILD.md#coverage-milestones): extra overlap; rate, write and trajectory review task types (the posting's *"QA for complex agentic tasks"*); the cross-vendor match and vendor-private rules.
 2. Generated tasks beyond hand-written Python templates: more languages, and families a model drafts and a researcher approves (EC7).
-3. Retrying crashed validation jobs, so a version never waits in validating forever (planned with M31).
-4. The registry behind TLS, with image scanning and quotas (D50).
+3. The registry behind TLS, with image scanning and quotas (D50).

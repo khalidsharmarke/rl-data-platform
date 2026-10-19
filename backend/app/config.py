@@ -41,6 +41,8 @@ class Settings(BaseSettings):
     registry_platform_secret: str = ""
     # The code task generator signs in with this API token (D48); the seed registers it. Empty: no generator.
     generator_token: str = ""
+    # Claims a worker may make per minute, the same for everyone (AB12, D51). Well above a careful reader's pace.
+    claims_per_minute: int = 20
     # The vendor CLI (tools/rlp.py), served for vendors to download.
     tools_dir: str = "/tools"
     # The vendor guide (docs/VENDOR-GUIDE.md), served for the app to show with each vendor's values.

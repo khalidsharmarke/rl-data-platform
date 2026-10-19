@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app import clock
+from app import clock, grades
 from app.auth import current_user
 from app.config import settings
 from app.db import get_session
@@ -215,6 +215,39 @@ async def vendor_workers(
             gold_accuracy=rate(r.gc, r.gn) if show_gold else None, gold_n=r.gn if show_gold else None,
         ))
     return sorted(out, key=lambda w: (w.gold_accuracy is None, w.gold_accuracy or 0))
+
+
+class GradeSpread(BaseModel):
+    gold_shown_until: datetime | None
+    quality: dict[str, int]  # meets, below, uncertain
+    integrity: dict[str, int]  # suspended, held, unproven, trusted
+
+
+@router.get("/vendors/{vendor_id}/grades")
+async def vendor_grades(
+    vendor_id: uuid.UUID, project_id: uuid.UUID = Query(), user: User = Depends(current_user), session: AsyncSession = Depends(get_session),
+) -> GradeSpread:
+    """How a vendor's workers are graded on a project, as counts only (DC11). For the vendor, quality is
+    graded on gold up to the last refresh (PD2), and a watched worker counts under the tier they'd
+    otherwise have, because a watch must not be perceivable (D26)."""
+    vendor = await vendor_in_reach(vendor_id, user, session)
+    project = await get_visible_project(project_id, user, session)
+    cutoff = None if is_internal(user) else gold_cutoff()
+    rows = (await session.execute(text(f"""
+        SELECT worker_id, count(*) FILTER (WHERE is_gold) gn, count(*) FILTER (WHERE gold_correct) gc
+        FROM ({SUBMISSION_FACTS}) f
+        WHERE vendor_id = :v AND (CAST(:cutoff AS timestamptz) IS NULL OR submitted_at < :cutoff) GROUP BY worker_id
+    """), {"project_id": project.id, "v": vendor.id, "cutoff": cutoff})).all()
+    live = await grades.compute(session, project)
+    quality = dict.fromkeys(("meets", "below", "uncertain"), 0)
+    integrity = dict.fromkeys(("suspended", "held", "unproven", "trusted"), 0)
+    for r in rows:
+        quality[grades.quality_grade(r.gc, r.gn, float(project.quality_bar))] += 1
+        tier = live[r.worker_id].integrity if r.worker_id in live else "unproven"
+        if tier in ("watch", "unproven", "trusted"):  # judged on the same delayed gold as quality
+            tier = "unproven" if r.gn < grades.PROVEN else "trusted"
+        integrity[tier] += 1
+    return GradeSpread(gold_shown_until=cutoff, quality=quality, integrity=integrity)
 
 
 class EnvironmentWork(BaseModel):

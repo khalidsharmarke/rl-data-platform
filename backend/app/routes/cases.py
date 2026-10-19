@@ -1,6 +1,6 @@
 import json
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
@@ -60,6 +60,17 @@ class Sample(BaseModel):
     answer: dict[str, Any]
     time_on_task_s: float
     pasted: bool
+    # Everything the browser reported (AB11): untrusted, shown as evidence beside what the server measured.
+    client_signals: dict[str, Any]
+
+
+class ApiSignals(BaseModel):
+    """What the server observed about a worker (AB12): the same measurement for everyone."""
+    claims_last_hour: int
+    most_claims_in_a_minute: int
+    sessions_last_day: int
+    devices_last_day: int
+    other_workers_on_those_devices: int
 
 
 class Action(BaseModel):
@@ -94,6 +105,7 @@ class CaseDetail(CaseSummary):
     environment: EnvironmentSubject | None = None
     respond_by: datetime | None = None  # vendor cases: actions are allowed after a response, or after this
     can_act: bool = False
+    api_signals: ApiSignals | None = None  # worker cases
 
 
 class EnvironmentCaseIn(BaseModel):
@@ -197,10 +209,12 @@ async def case_detail(
     ]
     ids = list({i for f in flags for i in f.evidence.get("submission_ids", [])})[:6]
     samples = [
-        Sample(submission_id=s.id, prompt=s.prompt or "", answer=s.answer, time_on_task_s=round(s.time_on_task_ms / 1000, 1), pasted=bool(s.pasted))
+        Sample(submission_id=s.id, prompt=s.prompt or "", answer=s.answer, time_on_task_s=round(s.time_on_task_ms / 1000, 1),
+               pasted=bool(s.pasted), client_signals=s.client_signals or {})
         for s in await session.execute(
             text(
-                "SELECT s.id, t.payload->>'prompt' AS prompt, s.answer, s.time_on_task_ms, (s.client_signals->>'pasted')::boolean AS pasted "
+                "SELECT s.id, t.payload->>'prompt' AS prompt, s.answer, s.time_on_task_ms, (s.client_signals->>'pasted')::boolean AS pasted, "
+                "s.client_signals "
                 "FROM submissions s JOIN tasks t ON t.id = s.task_id WHERE s.id = ANY(CAST(:ids AS uuid[])) ORDER BY s.submitted_at"
             ),
             {"ids": ids},
@@ -221,7 +235,26 @@ async def case_detail(
     respond_by = row.shared_at + RESPONSE_WINDOW if row.subject_type == "vendor" and row.shared_at else None
     return CaseDetail(**summary(row, user), subject_id=row.subject_id, project_id=row.project_id, decision_reason=row.decision_reason,
                       flags=flags, samples=samples, actions=actions, environment=environment, respond_by=respond_by,
-                      can_act=user.role == Role.DATA_OPS and row.status == "open" and await may_act(session, row))
+                      can_act=user.role == Role.DATA_OPS and row.status == "open" and await may_act(session, row),
+                      api_signals=await api_signals(session, row.subject_id) if row.subject_type == "worker" else None)
+
+
+API_SIGNALS = text("""
+WITH mine AS (SELECT * FROM assignments WHERE worker_id = :w AND assigned_at > :day)
+SELECT (SELECT count(*) FROM mine WHERE assigned_at > :hour) AS claims_last_hour,
+       (SELECT coalesce(max(n), 0) FROM (SELECT count(*) AS n FROM mine GROUP BY date_trunc('minute', assigned_at)) m) AS most_claims_in_a_minute,
+       (SELECT count(DISTINCT session_id) FROM mine) AS sessions_last_day,
+       (SELECT count(DISTINCT device_id) FROM mine) AS devices_last_day,
+       (SELECT count(DISTINCT a.worker_id) FROM assignments a
+         WHERE a.device_id IN (SELECT device_id FROM mine WHERE device_id IS NOT NULL) AND a.worker_id <> :w
+           AND a.assigned_at > :day) AS other_workers_on_those_devices
+""")
+
+
+async def api_signals(session: AsyncSession, worker_id: uuid.UUID) -> ApiSignals:
+    now = clock.now()
+    r = (await session.execute(API_SIGNALS, {"w": worker_id, "day": now - timedelta(days=1), "hour": now - timedelta(hours=1)})).one()
+    return ApiSignals(**r._mapping)
 
 
 async def may_act(session: AsyncSession, row) -> bool:

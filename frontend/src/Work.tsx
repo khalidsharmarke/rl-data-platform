@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api, type Assignment } from "./api";
 
 export default function Work() {
@@ -10,6 +10,29 @@ export default function Work() {
   const [done, setDone] = useState(0);
   const [flagging, setFlagging] = useState(false);
   const [flagReason, setFlagReason] = useState("");
+  // How the answer was produced (AB11): reported to the platform as untrusted evidence, never as proof.
+  const shownAt = useRef(0);
+  const firstInput = useRef<number | null>(null);
+  const focusChanges = useRef(0);
+  const viewed = useRef(false);
+  const choices = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!assignment) return;
+    shownAt.current = performance.now();
+    firstInput.current = null;
+    focusChanges.current = 0;
+    viewed.current = false;
+    const blur = () => (focusChanges.current += 1);
+    window.addEventListener("blur", blur);
+    const seen = new IntersectionObserver((e) => e.some((x) => x.isIntersecting) && (viewed.current = true), { threshold: 1 });
+    if (choices.current) seen.observe(choices.current);
+    return () => (window.removeEventListener("blur", blur), seen.disconnect());
+  }, [assignment]);
+
+  const touched = () => {
+    if (firstInput.current === null) firstInput.current = Math.round(performance.now() - shownAt.current);
+  };
 
   async function next() {
     setMessage(null);
@@ -34,7 +57,10 @@ export default function Work() {
       const answer = rationale.trim() ? { choice, rationale: rationale.trim() } : { choice };
       await api(`/assignments/${assignment.id}/submit`, {
         method: "POST",
-        body: JSON.stringify({ answer, client_signals: { pasted } }),
+        body: JSON.stringify({
+          answer,
+          client_signals: { pasted, first_input_ms: firstInput.current, focus_changes: focusChanges.current, content_viewed: viewed.current },
+        }),
       });
       setDone((n) => n + 1);
       await next();
@@ -70,9 +96,9 @@ export default function Work() {
           <p className="muted">{assignment.task.project_name}</p>
           <p>{assignment.task.instructions}</p>
           <h3>{assignment.task.payload.prompt}</h3>
-          <div className="choices">
+          <div className="choices" ref={choices}>
             {(["A", "B"] as const).map((key) => (
-              <button key={key} className={choice === key ? "choice selected" : "choice"} onClick={() => setChoice(key)}>
+              <button key={key} className={choice === key ? "choice selected" : "choice"} onClick={() => (touched(), setChoice(key))}>
                 <strong>Answer {key}</strong>
                 <span>{key === "A" ? assignment.task.payload.response_a : assignment.task.payload.response_b}</span>
               </button>
@@ -80,7 +106,7 @@ export default function Work() {
           </div>
           <label className="field">
             Reason (optional)
-            <input value={rationale} onChange={(e) => setRationale(e.target.value)} onPaste={() => setPasted(true)} />
+            <input value={rationale} onChange={(e) => (touched(), setRationale(e.target.value))} onPaste={() => (touched(), setPasted(true))} />
           </label>
           <div className="row">
             <button className="primary" disabled={!choice} onClick={submit}>

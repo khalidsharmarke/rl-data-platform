@@ -28,9 +28,22 @@ export function saveToken(token: string | null): void {
   }
 }
 
+/** A random id this browser keeps, sent with every request (AB12). The browser's own word, so untrusted. */
+function deviceId(): string | null {
+  try {
+    let id = localStorage.getItem("rl-device");
+    if (!id) localStorage.setItem("rl-device", (id = crypto.randomUUID()));
+    return id;
+  } catch {
+    return null;
+  }
+}
+
 export async function api<T>(path: string, init: RequestInit = {}, token = savedToken()): Promise<T> {
   const headers = new Headers(init.headers);
   if (token) headers.set("Authorization", `Bearer ${token}`);
+  const device = deviceId();
+  if (device) headers.set("X-Device-Id", device);
   if (init.body) headers.set("Content-Type", "application/json");
   const response = await fetch(`/api${path}`, { ...init, headers });
   if (!response.ok) {
@@ -257,7 +270,10 @@ export type CaseDetail = CaseSummary & {
   project_id?: string | null;
   decision_reason: string | null;
   flags: { observation: string; rule: string | null; rule_version: string | null }[];
-  samples: { submission_id: string; prompt: string; answer: { choice: string; rationale?: string }; time_on_task_s: number; pasted: boolean }[];
+  samples: { submission_id: string; prompt: string; answer: { choice: string; rationale?: string }; time_on_task_s: number; pasted: boolean;
+    client_signals: { first_input_ms?: number; focus_changes?: number; content_viewed?: boolean } }[];
+  api_signals: { claims_last_hour: number; most_claims_in_a_minute: number; sessions_last_day: number; devices_last_day: number;
+    other_workers_on_those_devices: number } | null;
   actions: { action: string; by: string; note: string | null; at: string }[];
   environment: {
     version_id: string; environment_id: string; name: string; number: number; status: string;
@@ -369,4 +385,10 @@ export type Onboarding = {
   onboarded_at: string | null;
   namespace: string;
   registry_host: string | null;
+};
+
+export type GradeSpread = {
+  gold_shown_until: string | null;
+  quality: { meets: number; below: number; uncertain: number };
+  integrity: { trusted: number; unproven: number; held: number; suspended: number };
 };

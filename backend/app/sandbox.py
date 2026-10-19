@@ -263,7 +263,7 @@ async def claim(session: AsyncSession):
     for (job_id,) in (await session.execute(CANDIDATES)).all():
         row = (await session.execute(
             text("UPDATE jobs SET status = 'running', attempts = attempts + 1, started_at = clock_timestamp() "
-                 "WHERE id = :id AND status = 'queued' RETURNING id, payload"),
+                 "WHERE id = :id AND status = 'queued' RETURNING id, payload, attempts"),
             {"id": job_id},
         )).first()
         await session.commit()
@@ -275,8 +275,9 @@ async def claim(session: AsyncSession):
 async def process(session: AsyncSession, job, checks=run_checks) -> str:
     """Validate one version: validating, the checks, then failed or in review."""
     version = await session.get(EnvironmentVersion, uuid.UUID(job.payload["version_id"]))
-    await environments.transition(session, version, "validating", actor=None)
-    await session.commit()
+    if version.status == "submitted":  # a retried job finds it validating already
+        await environments.transition(session, version, "validating", actor=None)
+        await session.commit()
     contents = {f["hash"]: environments.read(f["hash"]) for f in version.manifest["files"]}
     results = await asyncio.to_thread(checks, version.manifest, contents)
     for r in results:
@@ -294,6 +295,33 @@ async def process(session: AsyncSession, job, checks=run_checks) -> str:
     return outcome
 
 
+MAX_ATTEMPTS = 3
+
+
+async def handle(session: AsyncSession, job, checks=run_checks) -> str:
+    """Process a job; if it crashes, try again, and after MAX_ATTEMPTS fail the version with the error,
+    so it never waits in validating forever."""
+    try:
+        return await process(session, job, checks)
+    except Exception as e:  # a broken job mustn't stop the runner
+        await session.rollback()
+        log.exception("validation job %s failed (attempt %s)", job.id, job.attempts)
+        error = repr(e)[-2000:]
+        if job.attempts < MAX_ATTEMPTS:
+            await session.execute(text("UPDATE jobs SET status = 'queued', error = :e WHERE id = :id"), {"id": job.id, "e": error})
+            await session.commit()
+            return "retrying"
+        await session.execute(text("UPDATE jobs SET status = 'failed', finished_at = now(), error = :e WHERE id = :id"), {"id": job.id, "e": error})
+        version = await session.get(EnvironmentVersion, uuid.UUID(job.payload["version_id"]))
+        if version.status == "submitted":
+            await environments.transition(session, version, "validating", actor=None)
+        if version.status == "validating":
+            await environments.transition(session, version, "failed", actor=None,
+                                          note=f"The checks couldn't run, after {MAX_ATTEMPTS} attempts: {error[:300]}")
+        await session.commit()
+        return "failed"
+
+
 async def main() -> None:
     from app.db import SessionLocal
 
@@ -309,15 +337,7 @@ async def main() -> None:
             if job is None:
                 await asyncio.sleep(1)
                 continue
-            try:
-                outcome = await process(session, job)
-                log.info("version %s: %s", job.payload["version_id"], outcome)
-            except Exception as e:  # a broken job mustn't stop the runner
-                await session.rollback()
-                await session.execute(text("UPDATE jobs SET status = 'failed', finished_at = now(), error = :e WHERE id = :id"),
-                                      {"id": job.id, "e": repr(e)[-2000:]})
-                await session.commit()
-                log.exception("validation job %s failed", job.id)
+            log.info("version %s: %s", job.payload["version_id"], await handle(session, job))
 
 
 if __name__ == "__main__":

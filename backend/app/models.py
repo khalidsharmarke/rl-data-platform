@@ -270,6 +270,8 @@ class Assignment(Base):
     assigned_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     status: Mapped[str] = mapped_column(Text, default="open")
+    session_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))  # the sign-in it was claimed in (D51)
+    device_id: Mapped[str | None] = mapped_column(Text)  # the browser's own id: untrusted (AB11)
 
 
 class Submission(Base):
@@ -286,6 +288,8 @@ class Submission(Base):
     contract_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("contracts.id"))
     answer: Mapped[dict[str, Any]] = mapped_column(JSONB)
     client_signals: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    session_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    device_id: Mapped[str | None] = mapped_column(Text)
     assigned_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     submitted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     time_on_task_ms: Mapped[int] = mapped_column(Integer)
