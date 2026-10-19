@@ -34,6 +34,7 @@ services:
       - objects:/data
       - registry-keys:/registry-keys
       - ./tools:/tools:ro
+      - ./docs:/docs:ro
     ports:
       - "8000:8000"
     depends_on:

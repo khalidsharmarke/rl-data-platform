@@ -123,3 +123,6 @@ tr.clickable { cursor: pointer; }
 .checklist { list-style: none; padding: 0; display: grid; gap: 10px; margin: 12px 0 20px; }
 .commands { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 12px; overflow-x: auto; font-size: 0.8rem; white-space: pre; }
 h3 .chip { margin-left: 8px; vertical-align: middle; }
+.guide-doc { display: grid; gap: 4px; }
+.guide-doc h3 { margin-top: 20px; }
+.guide-doc code { font-size: 0.85em; }

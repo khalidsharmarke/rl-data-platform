@@ -9,6 +9,7 @@ import Training from "./Training";
 import Scorecards from "./Scorecards";
 import Work from "./Work";
 import { api, saveToken, savedToken, type User } from "./api";
+import Guide from "./Guide";
 import Onboarding from "./Onboarding";
 import Tokens from "./Tokens";
 import Workspaces from "./Workspaces";
@@ -78,6 +79,7 @@ function Views({ me }: { me: User }) {
     ...(me.role === "data_ops" || (me.role === "vendor_admin" && !onboarding) ? ["Onboarding"] : []),
     ...(["data_ops", "vendor_admin"].includes(me.role) ? ["API tokens"] : []),
     "Workspaces",
+    ...(["vendor_admin", "environment_builder", "vendor_reviewer"].includes(me.role) ? ["Guide"] : []),
   ];
   const [tab, setTab] = useState(tabs[0]);
   return (
@@ -101,6 +103,7 @@ function Views({ me }: { me: User }) {
       {tab === "Onboarding" && <Onboarding me={me} />}
       {tab === "API tokens" && <Tokens me={me} />}
       {tab === "Workspaces" && <Workspaces me={me} />}
+      {tab === "Guide" && <Guide me={me} />}
     </>
   );
 }

@@ -123,10 +123,11 @@ def main() -> None:
         show(state)
     else:
         version, checks = submit(api, args.directory, args.brief, args.name, args.image)
-        print(f"Version {version['number']}: {version['status'].replace('_', ' ')}")
+        passed = version["status"] in ("in_review", "approved")
+        print(f"Version {version['number']}: {'passed the checks' if passed else version['status'].replace('_', ' ')}")
         for c in checks:
             print(f"  [{'x' if c['passed'] else ' '}] {c['check_name']}: {c['detail']}")
-        sys.exit(0 if version["status"] in ("in_review", "approved") else 1)
+        sys.exit(0 if passed else 1)
 
 
 if __name__ == "__main__":

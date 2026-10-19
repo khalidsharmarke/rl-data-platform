@@ -105,3 +105,9 @@ async def overview(user: User = Depends(require_roles(Role.DATA_OPS)), session: 
 async def vendor_cli() -> FileResponse:
     """The vendor command-line client, for a vendor's terminal or CI. Public: it holds no secrets."""
     return FileResponse(Path(settings.tools_dir) / "rlp.py", media_type="text/x-python", filename="rlp.py")
+
+
+@router.get("/guide/vendor")
+async def vendor_guide(_user: User = Depends(current_user)) -> FileResponse:
+    """The vendor guide, one source for the repo and the app; the app fills in the reader's own values."""
+    return FileResponse(Path(settings.docs_dir) / "VENDOR-GUIDE.md", media_type="text/markdown")

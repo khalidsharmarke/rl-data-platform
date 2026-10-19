@@ -1,10 +1,10 @@
 # RL Data Platform
 
-A working slice of a platform for sourcing AI training data through many vendors. Work is split across vendors, every vendor is measured the same way by the platform, and abuse is caught, decided on by a person, and cleaned out of the data, with a trail back to every answer. Vendors also build training environments to a researcher's brief, and the platform checks each one in a sandbox before anyone reviews it or training uses it. When training uses them, the platform watches the results, catches an environment being gamed, and tells training which runs to roll back.
+A working slice of a platform for sourcing AI training data through many vendors. Work is split across vendors, every vendor is measured the same way by the platform, and abuse is caught, decided on by a person, and cleaned out of the data, with a trail back to every answer. Vendors also build training environments to a researcher's brief, and the platform checks each one in a sandbox before anyone reviews it or training uses it. When training uses them, the platform watches the results, catches an environment being gamed, and tells training which runs to roll back. New vendors onboard themselves, with API tokens and their own container images, and a code task generator produces programming tasks through the same pipeline.
 
 Built in response to Anthropic's [Full-Stack Software Engineer, Reinforcement Learning](docs/POSTING.md) posting. It builds the data-collection core of the design and thin slices of environment creation and training observability, with training itself played by a stand-in. [Limitations](docs/LIMITATIONS.md) says what it doesn't do and where it falls short.
 
-**[Watch the six-minute walkthrough](docs/media/walkthrough.mp4)** · [Product requirements](docs/PRD.md) · [Design](docs/DESIGN.md) · [Decisions](docs/DECISIONS.md) · [Build plan](docs/BUILD.md) · [Limitations](docs/LIMITATIONS.md) · [What we chose not to solve](docs/NOT-SOLVED.md)
+**[Watch the six-minute walkthrough](docs/media/walkthrough.mp4)** · [Product requirements](docs/PRD.md) · [Design](docs/DESIGN.md) · [Decisions](docs/DECISIONS.md) · [Build plan](docs/BUILD.md) · [Limitations](docs/LIMITATIONS.md) · [What we chose not to solve](docs/NOT-SOLVED.md) · [Vendor guide](docs/VENDOR-GUIDE.md) · [Operations runbook](docs/OPERATIONS.md)
 
 ![Scorecards: three vendors compared on identical measures, with Brightline's dip](docs/media/scorecards.png)
 
@@ -74,13 +74,36 @@ Needs Docker with Compose. The sandbox runner starts a container for every envir
 ```sh
 make demo    # fresh database, then the scripted scenario above (about 4 minutes)
 make up      # start Postgres, the API, the background worker and the web app on real time
-make test    # 197 backend tests, 38 detection-service tests, 18 sandbox tests on real containers and the registry, and 19 task-family tests
+make test    # 198 backend tests, 38 detection-service tests, 18 sandbox tests on real containers and the registry, and 19 task-family tests
 make down    # stop (make reset also deletes the database)
 ```
 
 Open http://localhost:5173 and pick a demo user. The login page suggests a path through the story. The API is at http://localhost:8000 (interactive docs at `/docs`).
 
 `make demo` plays the people in the story too: the admin's suspension, data ops' clean-up and vendor cases, and the researcher's environment reviews and broken-task decisions. To make those decisions yourself, run `DEMO_AUTOPILOT=false make demo` and follow the path on the sign-in page; Northwind's reviewer then leaves her last few answers for you as Hana Kowalski.
+
+## Onboard a vendor yourself
+
+With `make up` running, you can be a new vendor and onboard from your own terminal, the way a vendor's CI would. Docker treats `localhost` registries as trusted, so no TLS setup is needed.
+
+1. Sign in as **Sam Lindqvist** (data ops) → Onboarding. Create a vendor that supplies environments (say "Acme Envs") and open the invite link it gives you: you're now its admin.
+2. API tokens → create a token with all three scopes, and copy it. The Onboarding tab now shows the commands below with your vendor's values filled in.
+3. From the repo's root:
+
+```sh
+export RLP_TOKEN=<your token>
+echo "$RLP_TOKEN" | docker login localhost:5000 -u ci --password-stdin
+printf 'FROM localhost:5000/platform/base:1\n' | docker build -t localhost:5000/vendors/acme-envs/runtime:1 -
+docker push localhost:5000/vendors/acme-envs/runtime:1
+
+# A grader that rewards an empty answer: fails the empty check, and the checklist says so
+python3 tools/rlp.py submit backend/tests/fixtures/environments/passes_anything --image localhost:5000/vendors/acme-envs/runtime:1
+# A sound one passes, and the checklist completes
+python3 tools/rlp.py submit backend/tests/fixtures/environments/sound --image localhost:5000/vendors/acme-envs/runtime:1
+python3 tools/rlp.py onboarding
+```
+
+Back as Sam, Onboarding shows how long it took from invite to ready, and the vendor can now be allocated real work. The [vendor guide](docs/VENDOR-GUIDE.md) is what a vendor reads (in the app, under Guide, with its own values), and the [operations runbook](docs/OPERATIONS.md) is what Anthropic's data ops and researchers use.
 
 ## What's real and what stands in
 
@@ -94,9 +117,12 @@ Open http://localhost:5173 and pick a demo user. The login page suggests a path 
 | A training stand-in that pulls approved environments, sends back episodes from a modeled policy, and rolls back when recalled | Training infrastructure and the model being trained ([A23](docs/DESIGN.md), [B6](docs/BUILD.md#training-observability-milestones)) |
 | An outbox table the detection service reads through a cursor feed | A message broker between the platform and the detection service ([D24](docs/DESIGN.md)) |
 | Docker containers with no network and strict limits, started per check | A hardened sandbox (gVisor or Firecracker) on dedicated hosts ([B5](docs/BUILD.md#environment-milestones)) |
+| A registry over plain HTTP on localhost, with token-based credentials | A registry behind TLS, with image scanning and quotas ([D50](docs/DESIGN.md)) |
+| Invite links shown to data ops | Invite emails |
+| Hand-written task families in Python | Task families at scale, or tasks written by a model ([D48](docs/DESIGN.md)) |
 | A demo clock running 180× real time, `make demo` only | Waiting five hours for the story |
 
-Out of scope so far: agentic task types, self-serve vendor onboarding, and extra overlap during escalation. [BUILD.md](docs/BUILD.md#2-scope) lists everything left out and why, and [LIMITATIONS.md](docs/LIMITATIONS.md) covers where the built part falls short.
+Out of scope so far: agentic task types, and extra overlap during escalation. [BUILD.md](docs/BUILD.md#2-scope) lists everything left out and why, and [LIMITATIONS.md](docs/LIMITATIONS.md) covers where the built part falls short.
 
 **On detecting AI-written answers.** The platform doesn't try to tell AI text from human text; that's unreliable. It flags the *behavior* around a submission: answering faster than the task can be read, pasting rather than typing, and giving the same reason to different questions. Honest but sloppy work isn't flagged: it shows up as low quality on the scorecard instead.
 
@@ -111,12 +137,13 @@ Each of these was found by testing or by looking at the demo's output, fixed, an
   - An audit event visible to vendors included the gold count.
 
   All three are fixed, and D8 now says gold must be indistinguishable by content, position or routing.
+- **Two bugs in generated tasks, caught by the platform's own checks.** One task family named a module `numbers`, which the standard library already imports, so its tests failed for the wrong reason. Another sometimes produced a task whose untouched code passed its own tests, because the bug's output (a Python set's order) changes with each process's hash seed; the sandbox's empty check caught it in the demo. The family now uses integers and rules the coincidence out.
 - **A noisy alert:** a vendor alert compared against one lucky early period. It now uses a two-proportion test ([D19](docs/DESIGN.md)).
 
 ## Where things are
 
 ```
-backend/     FastAPI app, migrations, background worker (app/jobs.py), the detection contract (app/routes/detection.py), rule modes, the audit sample and detection's measures (app/detection_quality.py, app/routes/detectors.py), broken tasks and agreement alerts (app/routes/task_health.py), vendor rules and vendor cases (app/vendor_oversight.py, app/routes/cases.py), vendor review (app/routes/vendor_review.py), the release stage (app/release.py), contributor grades (app/grades.py), discreet escalation (app/escalation.py), environments and versions (app/environments.py), the sandbox runner (app/sandbox.py), API tokens (app/routes/tokens.py), the registry's token endpoint and image pinning (app/registry.py, app/oci.py), the catalog (app/routes/catalog.py), episode intake and training dashboards (app/routes/training.py), training statistics (app/training_stats.py), the hack-detection contract and recalls (app/routes/hacks.py, app/environment_cases.py), fixture environments (tests/fixtures/environments), 197 tests
+backend/     FastAPI app, migrations, background worker (app/jobs.py), the detection contract (app/routes/detection.py), rule modes, the audit sample and detection's measures (app/detection_quality.py, app/routes/detectors.py), broken tasks and agreement alerts (app/routes/task_health.py), vendor rules and vendor cases (app/vendor_oversight.py, app/routes/cases.py), vendor review (app/routes/vendor_review.py), the release stage (app/release.py), contributor grades (app/grades.py), discreet escalation (app/escalation.py), environments and versions (app/environments.py), the sandbox runner (app/sandbox.py), API tokens (app/routes/tokens.py), the registry's token endpoint and image pinning (app/registry.py, app/oci.py), the catalog (app/routes/catalog.py), episode intake and training dashboards (app/routes/training.py), training statistics (app/training_stats.py), the hack-detection contract and recalls (app/routes/hacks.py, app/environment_cases.py), fixture environments (tests/fixtures/environments), 198 tests
 sandbox/     the sandbox runner's image and the base image environment checks run on
 registry/    the container registry's configuration (vendor images, D50)
 detection/   the separate detection services: abuse rules and severity (rules.py), their state (detector.py), the reward-hack detector (hacks.py, hack_service.py), 38 tests
@@ -124,5 +151,5 @@ frontend/    React + TypeScript: one app, a view per role
 generator/   the code task generator: task families with probes, and the service that submits them through the API (D48)
 tools/       rlp.py, the vendor command-line client
 simulator/   the scripted scenario, driving the public API, and the training stand-in (training.py)
-docs/        posting, glossary, PRD, design, decisions, build plan, diagrams, media
+docs/        posting, glossary, PRD, design, decisions, build plan, vendor guide, operations runbook, diagrams, media
 ```

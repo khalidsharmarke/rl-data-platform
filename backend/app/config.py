@@ -43,6 +43,8 @@ class Settings(BaseSettings):
     generator_token: str = ""
     # The vendor CLI (tools/rlp.py), served for vendors to download.
     tools_dir: str = "/tools"
+    # The vendor guide (docs/VENDOR-GUIDE.md), served for the app to show with each vendor's values.
+    docs_dir: str = "/docs"
 
 
 settings = Settings()
