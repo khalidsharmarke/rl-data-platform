@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | 0.1.0 (MVP): M0–M8. 0.2.0: integrity milestones M9–M12. 0.3.0: environment milestones M13–M16. 0.4.0: training observability milestones M17–M20. 0.5.0: oversight milestones M21–M24 and vendor onboarding and code generation milestones M25–M30. Coverage milestones M31–M35 done. Known limitations in [`LIMITATIONS.md`](LIMITATIONS.md) |
+| Status | 0.1.0 (MVP): M0–M8. 0.2.0: integrity milestones M9–M12. 0.3.0: environment milestones M13–M16. 0.4.0: training observability milestones M17–M20. 0.5.0: oversight milestones M21–M24 and vendor onboarding and code generation milestones M25–M30. 0.6.0: coverage milestones M31–M35. Known limitations in [`LIMITATIONS.md`](LIMITATIONS.md) |
 | Timebox | ~33 hours for 0.1.0 (M0–M8), ~15 for the integrity milestones (M9–M12), ~15 for the environment milestones (M13–M16), ~17 for the training observability milestones (M17–M20), ~17 for the oversight milestones (M21–M24), ~26 for vendor onboarding and code generation (M25–M30), ~42 for coverage (M31–M35) |
 | Stack | Python (FastAPI, async) · Postgres · React + TypeScript (Vite) · Docker Compose |
 | Delivered as | This repo, runnable with `make demo`, plus a six-minute recorded walkthrough linked from the README |
@@ -235,7 +235,7 @@ The two lines of the posting the build doesn't yet answer at all: *"onboarding a
 
 ### Coverage milestones
 
-Version 0.5.0 covers 48 of the design's 56 functional requirements fully, 6 in part and 2 not at all ([`LIMITATIONS.md`](LIMITATIONS.md#requirements-not-fully-covered)). These milestones close all eight, except for one piece: adding gold for a watched worker rather than reordering it stays as D26's stand-in, because a second gold pool kept out of vendor comparisons costs far more than it shows. Trajectory review answers the one posting line the build still doesn't: *"QA for complex agentic tasks"*.
+Version 0.5.0 covers 48 of the design's 56 functional requirements fully, 6 in part and 2 not at all ([`LIMITATIONS.md`](LIMITATIONS.md)). These milestones close all eight, except for one piece: adding gold for a watched worker rather than reordering it stays as D26's stand-in, because a second gold pool kept out of vendor comparisons costs far more than it shows. Trajectory review answers the one posting line the build still doesn't: *"QA for complex agentic tasks"*.
 
 **What's real and what's left out.** The signals, rate limits, vendor grades view, extra overlap, three new task types, the keyed-hash match and vendor-private rules are real. The trajectories workers review come from the demo's own training episodes, which are modeled (B6). Vendors' keyed hashes in the demo are computed by the simulator from made-up identities. Whether the cross-vendor match is worth its privacy cost stays an open question; the build follows the design (evidence only, never an automatic action) so the question can be answered with something to look at.
 
