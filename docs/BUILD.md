@@ -68,7 +68,6 @@ These keep the boundaries from [`DESIGN.md`](DESIGN.md) but use simpler parts:
 
 | Left out | Requirements | Why |
 |---|---|---|
-| Generated programming tasks | EC7 | Planned as [M28–M29](#vendor-onboarding-and-code-generation-milestones) |
 | Real training and real models | none (A23) | Training is modeled by scripted agents; see the [training observability milestones](#training-observability-milestones) and [`NOT-SOLVED.md`](NOT-SOLVED.md) |
 | Vendor rules that need identities across vendors | Part of AB2 (removed workers returning, matching answers across vendors), AB10 | They need a cross-vendor worker match, which is P2 in the PRD |
 | The rest of the integrity layers | AB11 and AB12 beyond paste and time on task; AB14's extra overlap; DC11's aggregate view for vendors | Not needed to show the layers working |
