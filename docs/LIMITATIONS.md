@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Version | 0.4.0: the 0.1.0 MVP, the integrity milestones M9–M12 (0.2.0), the environment milestones M13–M16 (0.3.0) and the training observability milestones M17–M20 (see [`BUILD.md`](BUILD.md#training-observability-milestones)) |
+| Version | 0.4.0: the 0.1.0 MVP, the integrity milestones M9–M12 (0.2.0), the environment milestones M13–M16 (0.3.0) and the training observability milestones M17–M20, plus the oversight milestones M21–M24 and the vendor onboarding and code generation milestones M25–M30 (see [`BUILD.md`](BUILD.md#vendor-onboarding-and-code-generation-milestones)) |
 | Covers | Slice A from [`BUILD.md`](BUILD.md): multi-vendor human data, with allocation, gold QA, scorecards, worker-abuse cases and lineage clean-up; a separate detection service; the release stage; contributor grades; discreet escalation |
 | Related | [`POSTING.md`](POSTING.md) · [`PRD.md`](PRD.md) · [`DESIGN.md`](DESIGN.md) · [`DECISIONS.md`](DECISIONS.md) · [`NOT-SOLVED.md`](NOT-SOLVED.md) (choices, as opposed to shortfalls) |
 
@@ -113,8 +113,8 @@ The design's scale estimate is about 1.2 million submissions a day ([`DESIGN.md`
 
 What's left, from [`BUILD.md`](BUILD.md#not-in-the-build) and the gaps above:
 
-1. API tokens, registry access and self-serve onboarding (VM2, VM3, N14, A15), planned as [M25–M27](BUILD.md#vendor-onboarding-and-code-generation-milestones).
-2. Probe solutions and generated programming tasks (EC7), planned as [M28–M29](BUILD.md#vendor-onboarding-and-code-generation-milestones).
-3. A vendor guide and an operations runbook, planned as M30.
-4. Agentic tasks: the posting's *"QA for complex agentic tasks"*. There is one task type (DC1).
+1. Agentic tasks: the posting's *"QA for complex agentic tasks"*. There is one task type (DC1).
+2. Generated tasks beyond hand-written Python templates: more languages, and families a model drafts and a researcher approves (EC7).
+3. Retrying crashed validation jobs, so a version never waits in validating forever.
+4. The registry behind TLS, with image scanning and quotas (D50).
 5. P2 in the PRD: vendor-private rules and a cross-vendor worker match (AB9, AB10), which would also allow the vendor rules that need identities across vendors.
